@@ -76,7 +76,10 @@
 
 <div class="wrap">
   <header class="bar">
-    <div class="brand">kanzi<span class="tag">漢</span></div>
+    <div class="brand">
+      <span class="mark">文文</span>
+      <span class="word">Wenbun</span>
+    </div>
     <div class="controls">
       <div class="toggle" role="group" aria-label="primary script">
         <button aria-pressed={pref === 'trad'} onclick={() => (pref = 'trad')}>繁</button>
@@ -152,8 +155,9 @@
 <style>
   .wrap { max-width: 760px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
   .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.2rem; }
-  .brand { font-weight: 700; font-size: 1.3rem; letter-spacing: 0.04em; display: flex; align-items: center; gap: 0.4rem; }
-  .brand .tag { font-family: var(--han); color: var(--accent); border: 1px solid var(--accent-dim); padding: 0 0.3rem; font-size: 1rem; }
+  .brand { display: flex; align-items: baseline; gap: 0.5rem; }
+  .brand .mark { font-family: var(--han); font-weight: 500; font-size: 1.5rem; letter-spacing: -0.04em; line-height: 1; }
+  .brand .word { font-family: var(--sans); font-size: 1.15rem; letter-spacing: 0.02em; color: var(--muted); }
   .controls { display: flex; gap: 0.5rem; }
   .iconbtn { display: inline-flex; align-items: center; gap: 0.3rem; }
   .searchrow { position: relative; }

@@ -3,6 +3,7 @@ docs/
 
 # --- Rust backend ---
 /backend/target/
+/bin/
 **/*.rs.bk
 
 # --- Node / frontend ---
