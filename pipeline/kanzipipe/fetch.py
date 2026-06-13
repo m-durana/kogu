@@ -73,6 +73,12 @@ SOURCES: dict[str, Source] = {
     "opencc-tw": Source("opencc-tw", OPENCC_RAW + "TWVariants.txt", "TWVariants.txt", "Apache-2.0"),
     "opencc-hk": Source("opencc-hk", OPENCC_RAW + "HKVariants.txt", "HKVariants.txt", "Apache-2.0"),
     "opencc-jp": Source("opencc-jp", OPENCC_RAW + "JPShinjitaiCharacters.txt", "JPShinjitaiCharacters.txt", "Apache-2.0"),
+    # Cantonese (Phase 3.3): CC-Canto colloquial dict + Cantonese readings for CC-CEDICT entries
+    "cccanto": Source(
+        "cccanto", "https://cantonese.org/cccanto-170202.zip", "cccanto.zip", "CC-BY-SA"),
+    "cccanto-readings": Source(
+        "cccanto-readings", "https://cantonese.org/cccedict-canto-readings-150923.zip",
+        "cccanto-readings.zip", "CC-BY-SA"),
 }
 
 

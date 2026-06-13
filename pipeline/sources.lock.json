@@ -1,4 +1,18 @@
 {
+  "cccanto": {
+    "filename": "cccanto.zip",
+    "licence": "CC-BY-SA",
+    "sha256": "0cc9e600a19c02405064d6d227d96563c09da1a0af1c7717508c0f231028af27",
+    "size": 1282537,
+    "url": "https://cantonese.org/cccanto-170202.zip"
+  },
+  "cccanto-readings": {
+    "filename": "cccanto-readings.zip",
+    "licence": "CC-BY-SA",
+    "sha256": "f6d99991791f49aaf96d97b2838a3ba9e057e060a5a9e24311cf851f8f71a950",
+    "size": 1874027,
+    "url": "https://cantonese.org/cccedict-canto-readings-150923.zip"
+  },
   "cedict": {
     "filename": "cedict.txt.gz",
     "licence": "CC-BY-SA",

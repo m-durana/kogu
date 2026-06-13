@@ -187,11 +187,14 @@ pub fn search(
             }
         }
         Kind::Latin => {
-            // pinyin (toneless fold) — tolerant of tone marks / numbers / no tone
+            // phonetic (toneless fold) — tolerant of tone marks / numbers / no tone.
+            // pinyin_plain and jyutping_plain share the same fold (letters only), so one key
+            // matches Mandarin *and* Cantonese readings (jyutping was the original's blind spot).
             let plain = pinyin_plain(q);
             if !plain.is_empty() {
                 let mut stmt = conn.prepare(
-                    "SELECT lexeme_id FROM lexeme_reading WHERE kind='pinyin_plain' AND value = ?1",
+                    "SELECT lexeme_id FROM lexeme_reading \
+                     WHERE kind IN ('pinyin_plain','jyutping_plain') AND value = ?1",
                 )?;
                 let ids: Vec<i64> =
                     stmt.query_map([&plain], |r| r.get(0))?.collect::<Result<_, _>>()?;

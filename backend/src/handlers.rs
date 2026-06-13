@@ -85,7 +85,7 @@ fn build_entry(
     // readings (hide internal normalisation forms)
     let mut s = conn.prepare(
         "SELECT kind, value FROM lexeme_reading WHERE lexeme_id=?1 \
-         AND kind NOT IN ('pinyin_num','pinyin_plain')",
+         AND kind NOT IN ('pinyin_num','pinyin_plain','jyutping_plain')",
     )?;
     let readings: Vec<ReadingKV> = s
         .query_map([id], |r| Ok(ReadingKV { kind: r.get(0)?, value: r.get(1)? }))?

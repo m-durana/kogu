@@ -285,6 +285,39 @@ async fn translate_unknown_empty() {
     assert!(v["concepts"].as_array().unwrap().is_empty());
 }
 
+// --- Phase 3.3: Cantonese ---
+
+// C1. Cantonese colloquial words / 粵字 exist as first-class yue lexemes.
+#[tokio::test]
+async fn cantonese_lexemes() {
+    let hw = headwords(&search("唔該").await);
+    assert!(hw.contains(&"唔該".to_string()), "missing Cantonese 唔該");
+    let var = varieties(&search("唔該").await);
+    assert!(var.iter().any(|v| v == "yue"));
+}
+
+// C2. jyutping search works (the original rejected it): toneless jyutping finds the word.
+#[tokio::test]
+async fn jyutping_search() {
+    // 唔該 = m4 goi1 -> toneless "mgoi"
+    let hw = headwords(&search("mgoi").await);
+    assert!(hw.contains(&"唔該".to_string()), "jyutping 'mgoi' should find 唔該");
+}
+
+// C3. shared vocab carries a jyutping reading (學校 = hok6 haau6).
+#[tokio::test]
+async fn shared_vocab_has_jyutping() {
+    let hit = entry_of(&search("學校").await, "zh", "學校");
+    let id = hit["lexeme_id"].as_i64().unwrap();
+    let e = get(&format!("/entry/{id}")).await.1;
+    let has = e["readings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|r| r["kind"] == "jyutping" && r["value"].as_str().unwrap().contains("hok6"));
+    assert!(has, "學校 should carry a jyutping reading");
+}
+
 // E5. entry endpoint returns full structure; unknown id is 404.
 #[tokio::test]
 async fn entry_and_404() {
