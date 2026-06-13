@@ -180,8 +180,8 @@
   .tags { display: flex; gap: 0.3rem; flex: none; }
   .rg { font-size: 0.65rem; color: var(--faint); border: 1px solid var(--border); padding: 0 0.25rem; font-family: var(--mono); }
   .mt { font-size: 0.65rem; padding: 0 0.25rem; border: 1px solid var(--border); font-family: var(--mono); color: var(--faint); }
-  .m-exact { color: var(--yue); border-color: #2f5a37; }
-  .m-english { color: var(--ja); }
+  .m-exact { color: var(--text); border-color: var(--border-strong); }
+  .m-english { color: var(--muted); }
   .back { margin-bottom: 0.8rem; }
   .empty { color: var(--faint); padding: 1rem 0; }
 </style>

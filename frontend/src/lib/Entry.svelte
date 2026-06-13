@@ -109,8 +109,8 @@
   .cmeta { flex: 1; }
   .cline { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
   .badge { font-size: 0.7rem; padding: 0.05rem 0.3rem; border: 1px solid var(--border-strong); }
-  .b-orth { color: var(--yue); }
-  .b-deriv { color: var(--accent); }
+  .b-orth { color: #fff; border-color: var(--border-strong); }
+  .b-deriv { color: var(--muted); border-style: dashed; }
   .ids { font-family: var(--han); color: var(--muted); }
   .cgloss { font-size: 0.85rem; color: var(--muted); margin-top: 0.2rem; }
   .variants { margin-top: 0.3rem; display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.8rem; }
