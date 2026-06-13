@@ -40,8 +40,10 @@ pub struct Entry {
     pub readings: Vec<ReadingKV>,
     pub senses: Vec<Sense>,
     pub characters: Vec<CharInfo>,
-    /// 同字 — other lexemes sharing this word's backbone form (incl. cross-language false friends).
+    /// 同字 — other lexemes sharing this word's backbone form, each labelled cognate / false-friend.
     pub same_form: Vec<LinkLite>,
+    /// 同義 — lexemes sharing a concept (a different word, same meaning) across the systems.
+    pub translations: Vec<LinkLite>,
 }
 
 #[derive(Serialize)]
@@ -81,5 +83,23 @@ pub struct LinkLite {
     pub lexeme_id: i64,
     pub variety: String,
     pub headword: String,
+    pub reading: Option<String>,
     pub glosses: Vec<String>,
+    /// relation to the anchor word: "cognate" | "false-friend" | "synonym"
+    pub relation: String,
+    /// the shared concept label (for 同義 links), when known
+    pub concept: Option<String>,
+}
+
+/// /translate response: an English term → concepts → equivalents across all systems.
+#[derive(Serialize)]
+pub struct TranslateResponse {
+    pub query: String,
+    pub concepts: Vec<ConceptGroup>,
+}
+
+#[derive(Serialize)]
+pub struct ConceptGroup {
+    pub concept: String,
+    pub members: Vec<LinkLite>,
 }

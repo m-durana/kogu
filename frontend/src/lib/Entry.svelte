@@ -74,12 +74,30 @@
 
   {#if entry.same_form.length}
     <section class="links">
-      <h3>同字 <span class="dim">same backbone form</span></h3>
+      <h3>同字 <span class="dim">same form</span></h3>
       {#each entry.same_form as l}
         <button class="link" onclick={() => onsearch(l.headword)}>
           <span class="var v-{l.variety}">{varietyLabel(l.variety)}</span>
           <span class="lhead">{l.headword}</span>
-          <span class="dim">{l.glosses[0] ?? ''}</span>
+          {#if l.reading}<span class="lread">{l.reading}</span>{/if}
+          <span class="rel {l.relation === 'false-friend' ? 'ff' : 'cog'}">
+            {l.relation === 'false-friend' ? 'false friend' : 'cognate'}
+          </span>
+          <span class="dim lg">{l.glosses[0] ?? ''}</span>
+        </button>
+      {/each}
+    </section>
+  {/if}
+
+  {#if entry.translations.length}
+    <section class="links">
+      <h3>同義 <span class="dim">same meaning</span></h3>
+      {#each entry.translations as l}
+        <button class="link" onclick={() => onsearch(l.headword)}>
+          <span class="var v-{l.variety}">{varietyLabel(l.variety)}</span>
+          <span class="lhead">{l.headword}</span>
+          {#if l.reading}<span class="lread">{l.reading}</span>{/if}
+          {#if l.concept}<span class="concept">{l.concept}</span>{/if}
         </button>
       {/each}
     </section>
@@ -116,7 +134,15 @@
   .variants { margin-top: 0.3rem; display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.8rem; }
   .vedge { display: inline-flex; align-items: center; gap: 0.2rem; }
   .vedge b { font-family: var(--han); }
-  .links { display: flex; flex-direction: column; gap: 0.3rem; }
-  .link { display: flex; gap: 0.6rem; align-items: baseline; text-align: left; }
-  .lhead { font-family: var(--han); font-size: 1.1rem; }
+  .links { display: flex; flex-direction: column; gap: 0.2rem; }
+  .link { display: flex; gap: 0.6rem; align-items: baseline; text-align: left; padding: 0.35rem 0.4rem; }
+  .link:hover { background: var(--surface-2); border: none; }
+  .lhead { font-family: var(--han); font-size: 1.15rem; flex: none; }
+  .lread { font-family: var(--mono); color: var(--muted); font-size: 0.8rem; flex: none; }
+  .lg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rel { font-size: 0.65rem; padding: 0.05rem 0.35rem; border-radius: 5px; flex: none; text-transform: uppercase; letter-spacing: 0.04em; }
+  .rel.cog { border: 1px solid var(--border-strong); color: var(--muted); }
+  /* false friend stands out (monochrome): inverted chip */
+  .rel.ff { background: var(--text); color: var(--bg); font-weight: 700; }
+  .concept { font-size: 0.7rem; color: var(--faint); border: 1px solid var(--border); border-radius: 5px; padding: 0 0.3rem; flex: none; }
 </style>

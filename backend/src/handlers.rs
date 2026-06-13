@@ -111,16 +111,47 @@ fn build_entry(
         }
     }
 
-    // 同字 — other lexemes sharing the backbone key
+    // 同字 — other lexemes sharing the backbone key, each labelled cognate / false-friend
     let mut same_form = Vec::new();
+    let mut same_form_ids = std::collections::HashSet::new();
     for &other in st.graph.lexemes_by_key(&primary) {
         if other == id {
             continue;
         }
-        if let Some(l) = link_lite(conn, other)? {
+        same_form_ids.insert(other);
+        let relation = if shares_concept(conn, id, other)? { "cognate" } else { "false-friend" };
+        if let Some(l) = link_lite(conn, other, relation, None)? {
             same_form.push(l);
         }
         if same_form.len() >= 25 {
+            break;
+        }
+    }
+
+    // 同義 — lexemes sharing a concept (different word, same meaning), excluding same-form ones
+    let mut translations = Vec::new();
+    let mut seen = same_form_ids;
+    seen.insert(id);
+    let mut s = conn.prepare(
+        "SELECT DISTINCT s2.lexeme_id, co.label_en \
+         FROM sense_concept sc1 \
+         JOIN sense_concept sc2 ON sc2.concept_id = sc1.concept_id \
+         JOIN sense s1 ON s1.id = sc1.sense_id \
+         JOIN sense s2 ON s2.id = sc2.sense_id \
+         JOIN concept co ON co.id = sc1.concept_id \
+         WHERE s1.lexeme_id = ?1 AND s2.lexeme_id <> ?1 \
+         LIMIT 120",
+    )?;
+    let rows: Vec<(i64, String)> =
+        s.query_map([id], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<Result<_, _>>()?;
+    for (other, concept) in rows {
+        if !seen.insert(other) {
+            continue;
+        }
+        if let Some(l) = link_lite(conn, other, "synonym", Some(concept))? {
+            translations.push(l);
+        }
+        if translations.len() >= 30 {
             break;
         }
     }
@@ -136,7 +167,23 @@ fn build_entry(
         senses,
         characters,
         same_form,
+        translations,
     }))
+}
+
+/// Do two lexemes share any concept? (cognate vs false-friend discriminator)
+fn shares_concept(conn: &rusqlite::Connection, a: i64, b: i64) -> rusqlite::Result<bool> {
+    let n: i64 = conn.query_row(
+        "SELECT EXISTS( \
+           SELECT 1 FROM sense_concept x \
+           JOIN sense_concept y ON y.concept_id = x.concept_id \
+           JOIN sense sx ON sx.id = x.sense_id \
+           JOIN sense sy ON sy.id = y.sense_id \
+           WHERE sx.lexeme_id = ?1 AND sy.lexeme_id = ?2)",
+        [a, b],
+        |r| r.get(0),
+    )?;
+    Ok(n != 0)
 }
 
 fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<CharInfo>> {
@@ -189,20 +236,67 @@ fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<C
     }))
 }
 
-fn link_lite(conn: &rusqlite::Connection, id: i64) -> rusqlite::Result<Option<LinkLite>> {
+fn link_lite(
+    conn: &rusqlite::Connection,
+    id: i64,
+    relation: &str,
+    concept: Option<String>,
+) -> rusqlite::Result<Option<LinkLite>> {
     let row = conn.query_row(
-        "SELECT variety, headword FROM lexeme WHERE id=?1",
+        "SELECT variety, headword, reading FROM lexeme WHERE id=?1",
         [id],
-        |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+        |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?)),
     );
-    let (variety, headword) = match row {
+    let (variety, headword, reading) = match row {
         Ok(v) => v,
         Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
         Err(e) => return Err(e),
     };
     let mut s = conn.prepare("SELECT gloss_en FROM sense WHERE lexeme_id=?1 ORDER BY sense_order LIMIT 3")?;
     let glosses: Vec<String> = s.query_map([id], |r| r.get(0))?.collect::<Result<_, _>>()?;
-    Ok(Some(LinkLite { lexeme_id: id, variety, headword, glosses }))
+    Ok(Some(LinkLite { lexeme_id: id, variety, headword, reading, glosses, relation: relation.to_string(), concept }))
+}
+
+#[derive(Deserialize)]
+pub struct TranslateParams {
+    pub q: String,
+}
+
+/// English-pivot translation: term → concepts → equivalents across all four systems.
+pub async fn translate_handler(
+    State(st): State<AppState>,
+    Query(p): Query<TranslateParams>,
+) -> Result<Json<TranslateResponse>, (StatusCode, Json<Value>)> {
+    let conn = st.pool.get().map_err(internal)?;
+    let resp = build_translate(&conn, &p.q).map_err(internal)?;
+    Ok(Json(resp))
+}
+
+fn build_translate(conn: &rusqlite::Connection, q: &str) -> rusqlite::Result<TranslateResponse> {
+    let term = q.trim().to_lowercase();
+    // concepts whose label matches the term (exact label is the gloss-pivot key)
+    let mut s = conn.prepare("SELECT id, label_en FROM concept WHERE label_en = ?1 LIMIT 8")?;
+    let concepts: Vec<(i64, String)> =
+        s.query_map([&term], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<Result<_, _>>()?;
+
+    let mut groups = Vec::new();
+    for (cid, label) in concepts {
+        let mut ms = conn.prepare(
+            "SELECT DISTINCT s.lexeme_id FROM sense_concept sc \
+             JOIN sense s ON s.id = sc.sense_id WHERE sc.concept_id = ?1 LIMIT 40",
+        )?;
+        let ids: Vec<i64> = ms.query_map([cid], |r| r.get(0))?.collect::<Result<_, _>>()?;
+        let mut members = Vec::new();
+        for id in ids {
+            if let Some(l) = link_lite(conn, id, "synonym", Some(label.clone()))? {
+                members.push(l);
+            }
+        }
+        // order by variety so all systems are visible together
+        members.sort_by(|a, b| a.variety.cmp(&b.variety));
+        groups.push(ConceptGroup { concept: label, members });
+    }
+    Ok(TranslateResponse { query: q.to_string(), concepts: groups })
 }
 
 fn internal<E: std::fmt::Display>(e: E) -> (StatusCode, Json<Value>) {

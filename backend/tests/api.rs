@@ -104,7 +104,9 @@ async fn english_ranked_by_relevance() {
     let v = search("airport").await;
     let hw = headwords(&v);
     let top = &hw[0];
-    assert!(top == "空港" || top == "機場", "top airport result was {top:?}, expected 空港/機場");
+    // top must be a word that *is* airport/airfield, not an incidental compound
+    let exact = ["空港", "機場", "飛行場", "飛機場"];
+    assert!(exact.contains(&top.as_str()), "top airport result was {top:?}, expected an exact airport word");
     // an exact-gloss airport word must outrank デッキ ("deck (of a ship)")
     let pos = |w: &str| hw.iter().position(|h| h == w);
     if let (Some(a), Some(d)) = (pos("空港"), pos("デッキ")) {
@@ -161,6 +163,88 @@ async fn english_order_independent() {
     a.sort();
     b.sort();
     assert_eq!(a, b);
+}
+
+// --- Phase 2: concept layer / translation / relation labels ---
+
+async fn translate(q: &str) -> Value {
+    get(&format!("/translate?q={}", enc(q))).await.1
+}
+
+fn entry_of(results: &Value, variety: &str, headword: &str) -> Value {
+    results["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["variety"] == variety && r["headword"] == headword)
+        .expect("result present")
+        .clone()
+}
+
+// P1. English pivot: /translate groups equivalents across systems under a concept.
+#[tokio::test]
+async fn translate_airport_groups_systems() {
+    let v = translate("airport").await;
+    let group = v["concepts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|g| g["concept"] == "airport")
+        .expect("airport concept");
+    let members: Vec<(String, String)> = group["members"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| (m["variety"].as_str().unwrap().into(), m["headword"].as_str().unwrap().into()))
+        .collect();
+    assert!(members.contains(&("ja".into(), "空港".into())), "missing ja 空港");
+    assert!(members.contains(&("zh".into(), "機場".into())), "missing zh 機場");
+}
+
+// P2. cognate: 學校(zh) and 学校(ja) share the school concept -> labelled cognate.
+#[tokio::test]
+async fn cognate_label() {
+    let hit = entry_of(&search("學校").await, "zh", "學校");
+    let id = hit["lexeme_id"].as_i64().unwrap();
+    let e = get(&format!("/entry/{id}")).await.1;
+    let sf = &e["same_form"].as_array().unwrap()[0];
+    assert_eq!(sf["headword"], "学校");
+    assert_eq!(sf["relation"], "cognate");
+}
+
+// P3. false friend: 手紙 is zh "toilet paper" / ja "letter" -> same form, no shared concept.
+#[tokio::test]
+async fn false_friend_label() {
+    let hit = entry_of(&search("手紙").await, "zh", "手紙");
+    let id = hit["lexeme_id"].as_i64().unwrap();
+    let e = get(&format!("/entry/{id}")).await.1;
+    let ja = e["same_form"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|l| l["variety"] == "ja" && l["headword"] == "手紙")
+        .expect("ja 手紙 in same_form");
+    assert_eq!(ja["relation"], "false-friend");
+}
+
+// P4. 同義: an entry surfaces same-meaning different-word equivalents (incl. cross-language).
+#[tokio::test]
+async fn translations_same_meaning() {
+    let hit = entry_of(&search("手紙").await, "zh", "手紙");
+    let id = hit["lexeme_id"].as_i64().unwrap();
+    let e = get(&format!("/entry/{id}")).await.1;
+    let trans = e["translations"].as_array().unwrap();
+    assert!(!trans.is_empty(), "expected 同義 translations for 手紙");
+    // every translation carries a concept label and is not the anchor word itself
+    assert!(trans.iter().all(|t| t["concept"].is_string()));
+    assert!(trans.iter().any(|t| t["variety"] == "ja"), "expected a cross-language synonym");
+}
+
+// P5 (edge). a nonsense English term yields no concepts (never errors).
+#[tokio::test]
+async fn translate_unknown_empty() {
+    let v = translate("zzzznotaword").await;
+    assert!(v["concepts"].as_array().unwrap().is_empty());
 }
 
 // E5. entry endpoint returns full structure; unknown id is 404.

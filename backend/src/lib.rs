@@ -24,7 +24,7 @@ pub fn build_router(st: AppState) -> Router {
         .route("/search", get(handlers::search_handler))
         .route("/entry/:id", get(handlers::entry_handler))
         .route("/recognize", post(recognize::recognize_handler))
-        .route("/translate", get(not_implemented))
+        .route("/translate", get(handlers::translate_handler))
         .route("/why/:id", get(not_implemented))
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())

@@ -53,7 +53,10 @@ export interface LinkLite {
   lexeme_id: number
   variety: Variety
   headword: string
+  reading: string | null
   glosses: string[]
+  relation: string // 'cognate' | 'false-friend' | 'synonym'
+  concept: string | null
 }
 export interface Entry {
   lexeme_id: number
@@ -66,4 +69,14 @@ export interface Entry {
   senses: Sense[]
   characters: CharInfo[]
   same_form: LinkLite[]
+  translations: LinkLite[]
+}
+
+export interface ConceptGroup {
+  concept: string
+  members: LinkLite[]
+}
+export interface TranslateResponse {
+  query: string
+  concepts: ConceptGroup[]
 }
