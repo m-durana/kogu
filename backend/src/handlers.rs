@@ -1,0 +1,210 @@
+//! Axum handlers for the read-only API.
+
+use axum::{
+    extract::{Path, Query, State},
+    http::StatusCode,
+    Json,
+};
+use serde::Deserialize;
+use serde_json::{json, Value};
+
+use crate::model::*;
+use crate::search;
+use crate::state::AppState;
+
+pub async fn health() -> Json<Value> {
+    Json(json!({ "status": "ok", "service": "kanzi", "version": env!("CARGO_PKG_VERSION") }))
+}
+
+#[derive(Deserialize)]
+pub struct SearchParams {
+    pub q: String,
+    pub script: Option<String>,
+    pub limit: Option<usize>,
+}
+
+pub async fn search_handler(
+    State(st): State<AppState>,
+    Query(p): Query<SearchParams>,
+) -> Result<Json<SearchResponse>, (StatusCode, Json<Value>)> {
+    let conn = st.pool.get().map_err(internal)?;
+    let limit = p.limit.unwrap_or(50).clamp(1, 200);
+    let resp = search::search(&st, &conn, &p.q, p.script.as_deref(), limit).map_err(internal)?;
+    Ok(Json(resp))
+}
+
+pub async fn entry_handler(
+    State(st): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Json<Entry>, (StatusCode, Json<Value>)> {
+    let conn = st.pool.get().map_err(internal)?;
+    match build_entry(&st, &conn, id).map_err(internal)? {
+        Some(e) => Ok(Json(e)),
+        None => Err((StatusCode::NOT_FOUND, Json(json!({ "error": "not_found" })))),
+    }
+}
+
+fn build_entry(
+    st: &AppState,
+    conn: &rusqlite::Connection,
+    id: i64,
+) -> rusqlite::Result<Option<Entry>> {
+    let row = conn.query_row(
+        "SELECT variety, headword, reading, freq FROM lexeme WHERE id = ?1",
+        [id],
+        |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, Option<String>>(2)?,
+                r.get::<_, Option<f64>>(3)?,
+            ))
+        },
+    );
+    let (variety, headword, reading, freq) = match row {
+        Ok(v) => v,
+        Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
+        Err(e) => return Err(e),
+    };
+
+    // forms
+    let mut s = conn.prepare(
+        "SELECT form, script, region, is_primary FROM surface_form WHERE lexeme_id=?1 ORDER BY is_primary DESC",
+    )?;
+    let forms: Vec<Form> = s
+        .query_map([id], |r| {
+            Ok(Form {
+                form: r.get(0)?,
+                script: r.get(1)?,
+                region: r.get(2)?,
+                is_primary: r.get::<_, i64>(3)? != 0,
+            })
+        })?
+        .collect::<Result<_, _>>()?;
+
+    // readings (hide internal normalisation forms)
+    let mut s = conn.prepare(
+        "SELECT kind, value FROM lexeme_reading WHERE lexeme_id=?1 \
+         AND kind NOT IN ('pinyin_num','pinyin_plain')",
+    )?;
+    let readings: Vec<ReadingKV> = s
+        .query_map([id], |r| Ok(ReadingKV { kind: r.get(0)?, value: r.get(1)? }))?
+        .collect::<Result<_, _>>()?;
+
+    // senses
+    let mut s = conn
+        .prepare("SELECT pos, gloss_en FROM sense WHERE lexeme_id=?1 ORDER BY sense_order")?;
+    let senses: Vec<Sense> = s
+        .query_map([id], |r| Ok(Sense { pos: r.get(0)?, gloss_en: r.get(1)? }))?
+        .collect::<Result<_, _>>()?;
+
+    // per-character backbone (use the primary form, else headword)
+    let primary = forms.iter().find(|f| f.is_primary).map(|f| f.form.clone()).unwrap_or(headword.clone());
+    let mut characters = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for ch in primary.chars() {
+        if !seen.insert(ch) {
+            continue;
+        }
+        if let Some(ci) = char_info(conn, ch)? {
+            characters.push(ci);
+        }
+    }
+
+    // 同字 — other lexemes sharing the backbone key
+    let mut same_form = Vec::new();
+    for &other in st.graph.lexemes_by_key(&primary) {
+        if other == id {
+            continue;
+        }
+        if let Some(l) = link_lite(conn, other)? {
+            same_form.push(l);
+        }
+        if same_form.len() >= 25 {
+            break;
+        }
+    }
+
+    Ok(Some(Entry {
+        lexeme_id: id,
+        variety,
+        headword,
+        reading,
+        freq,
+        forms,
+        readings,
+        senses,
+        characters,
+        same_form,
+    }))
+}
+
+fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<CharInfo>> {
+    let cp = ch as i64;
+    let row = conn.query_row(
+        "SELECT is_orthodox, strokes, radical, ids, gloss_en FROM character WHERE cp=?1",
+        [cp],
+        |r| {
+            Ok((
+                r.get::<_, i64>(0)? != 0,
+                r.get::<_, Option<i64>>(1)?,
+                r.get::<_, Option<i64>>(2)?,
+                r.get::<_, Option<String>>(3)?,
+                r.get::<_, Option<String>>(4)?,
+            ))
+        },
+    );
+    let (is_orthodox, strokes, radical, ids, gloss_en) = match row {
+        Ok(v) => v,
+        Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
+        Err(e) => return Err(e),
+    };
+
+    let mut s = conn.prepare("SELECT kind, value FROM char_reading WHERE cp=?1")?;
+    let readings: Vec<ReadingKV> = s
+        .query_map([cp], |r| Ok(ReadingKV { kind: r.get(0)?, value: r.get(1)? }))?
+        .collect::<Result<_, _>>()?;
+
+    // identity edges to orthodox parents (the orthographic "why" seed)
+    let mut s = conn.prepare(
+        "SELECT p.char, e.type, e.reform_id FROM glyph_edge e \
+         JOIN character p ON p.cp = e.parent_cp \
+         WHERE e.child_cp = ?1 AND e.type IN ('simplification','shinjitai','z-variant')",
+    )?;
+    let variants: Vec<VariantEdge> = s
+        .query_map([cp], |r| {
+            Ok(VariantEdge { parent: r.get(0)?, edge_type: r.get(1)?, reform: r.get(2)? })
+        })?
+        .collect::<Result<_, _>>()?;
+
+    Ok(Some(CharInfo {
+        ch: ch.to_string(),
+        is_orthodox,
+        strokes,
+        radical,
+        ids,
+        gloss_en,
+        readings,
+        variants,
+    }))
+}
+
+fn link_lite(conn: &rusqlite::Connection, id: i64) -> rusqlite::Result<Option<LinkLite>> {
+    let row = conn.query_row(
+        "SELECT variety, headword FROM lexeme WHERE id=?1",
+        [id],
+        |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+    );
+    let (variety, headword) = match row {
+        Ok(v) => v,
+        Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
+        Err(e) => return Err(e),
+    };
+    let mut s = conn.prepare("SELECT gloss_en FROM sense WHERE lexeme_id=?1 ORDER BY sense_order LIMIT 3")?;
+    let glosses: Vec<String> = s.query_map([id], |r| r.get(0))?.collect::<Result<_, _>>()?;
+    Ok(Some(LinkLite { lexeme_id: id, variety, headword, glosses }))
+}
+
+fn internal<E: std::fmt::Display>(e: E) -> (StatusCode, Json<Value>) {
+    (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
+}

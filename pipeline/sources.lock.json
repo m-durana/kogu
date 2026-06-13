@@ -1,0 +1,72 @@
+{
+  "cedict": {
+    "filename": "cedict.txt.gz",
+    "licence": "CC-BY-SA",
+    "sha256": "f272e767bcade089cbb3ecae99ae606bf8f6a09ac43e2b89314a2932dab92da3",
+    "size": 3975376,
+    "url": "https://www.mdbg.net/chinese/export/cedict/cedict_1_0_ts_utf-8_mdbg.txt.gz"
+  },
+  "cjkvi-ids": {
+    "filename": "ids.txt",
+    "licence": "CC-BY-SA",
+    "sha256": "bfc70a8c09f9f5616ebf0543bd6681e67314e9f7ae2307e5ae8c6f15bdc5c6a6",
+    "size": 2161631,
+    "url": "https://raw.githubusercontent.com/cjkvi/cjkvi-ids/master/ids.txt"
+  },
+  "jmdict": {
+    "filename": "jmdict-eng-common.json.zip",
+    "licence": "CC-BY-SA / EDRDG",
+    "sha256": "7615799df3c7421dbab45e8a5c4ba60828cf4fb5975dc2e432d9417bdfade3fd",
+    "size": 1426424,
+    "url": "https://github.com/scriptin/jmdict-simplified/releases/download/3.6.2%2B20260608153333/jmdict-eng-common-3.6.2%2B20260608153333.json.zip"
+  },
+  "kanjidic": {
+    "filename": "kanjidic2-en.json.zip",
+    "licence": "CC-BY-SA / EDRDG",
+    "sha256": "88ff2ef8b9a76c553fbc5777e4afd7a244d3fff48c559c6553c8589bfb31ac4d",
+    "size": 1253434,
+    "url": "https://github.com/scriptin/jmdict-simplified/releases/download/3.6.2%2B20260608153333/kanjidic2-en-3.6.2%2B20260608153333.json.zip"
+  },
+  "opencc-hk": {
+    "filename": "HKVariants.txt",
+    "licence": "Apache-2.0",
+    "sha256": "3a06c3619d17d739203be6452045786b2298b0eec81b8a2a4b9a372b6346ecb2",
+    "size": 774,
+    "url": "https://raw.githubusercontent.com/BYVoid/OpenCC/master/data/dictionary/HKVariants.txt"
+  },
+  "opencc-jp": {
+    "filename": "JPShinjitaiCharacters.txt",
+    "licence": "Apache-2.0",
+    "sha256": "3f042ecfaa9a0616747c1d392e1c90152844d07240de755b14645589dfa17132",
+    "size": 3382,
+    "url": "https://raw.githubusercontent.com/BYVoid/OpenCC/master/data/dictionary/JPShinjitaiCharacters.txt"
+  },
+  "opencc-st": {
+    "filename": "STCharacters.txt",
+    "licence": "Apache-2.0",
+    "sha256": "514ab394df8977a6e49ec767fd597485674f001cafc514d6405a8328b9959345",
+    "size": 34981,
+    "url": "https://raw.githubusercontent.com/BYVoid/OpenCC/master/data/dictionary/STCharacters.txt"
+  },
+  "opencc-ts": {
+    "filename": "TSCharacters.txt",
+    "licence": "Apache-2.0",
+    "sha256": "9467ae1c7c5cd40684b2d341e702424161dd3ce1aa1cde9b5c165131f9fec582",
+    "size": 103505,
+    "url": "https://raw.githubusercontent.com/BYVoid/OpenCC/master/data/dictionary/TSCharacters.txt"
+  },
+  "opencc-tw": {
+    "filename": "TWVariants.txt",
+    "licence": "Apache-2.0",
+    "sha256": "75d5c5b83220dfd0c22ff500081b553da4e447ff6b1822fec44f40e4b33c0a56",
+    "size": 554,
+    "url": "https://raw.githubusercontent.com/BYVoid/OpenCC/master/data/dictionary/TWVariants.txt"
+  },
+  "unihan": {
+    "filename": "Unihan.zip",
+    "licence": "Unicode-DFS",
+    "sha256": "f7a48b2b545acfaa77b2d607ae28747404ce02baefee16396c5d2d7a8ef34b5e",
+    "size": 8518517,
+    "url": "https://www.unicode.org/Public/UCD/latest/ucd/Unihan.zip"
+  }
+}
