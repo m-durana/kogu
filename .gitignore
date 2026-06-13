@@ -29,6 +29,11 @@ __pycache__/
 .env
 .env.*
 
+# --- Playwright MCP artifacts / stray screenshots ---
+.playwright-mcp/
+*.png
+!/frontend/public/**
+
 # --- OS / editor ---
 .DS_Store
 *.swp
