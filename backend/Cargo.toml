@@ -1,0 +1,28 @@
+[package]
+name = "kanzi"
+version = "0.0.0"
+edition = "2021"
+description = "Serving binary for the kanzi CJK dictionary (Axum + SQLite/FTS5)"
+license = "CC-BY-SA-4.0"
+publish = false
+
+[[bin]]
+name = "kanzi"
+path = "src/main.rs"
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.6", features = ["trace", "cors", "compression-br", "compression-gzip"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# DB + search: added when the data layer lands (Phase 0.2)
+# rusqlite = { version = "0.32", features = ["bundled", "functions"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
