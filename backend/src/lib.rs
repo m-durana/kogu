@@ -3,6 +3,7 @@
 pub mod graph;
 pub mod handlers;
 pub mod model;
+pub mod recognize;
 pub mod search;
 pub mod state;
 
@@ -22,9 +23,9 @@ pub fn build_router(st: AppState) -> Router {
         .route("/health", get(handlers::health))
         .route("/search", get(handlers::search_handler))
         .route("/entry/:id", get(handlers::entry_handler))
+        .route("/recognize", post(recognize::recognize_handler))
         .route("/translate", get(not_implemented))
         .route("/why/:id", get(not_implemented))
-        .route("/recognize", post(not_implemented))
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
         .with_state(st)

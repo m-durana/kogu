@@ -13,6 +13,8 @@ pub type Pool = r2d2::Pool<SqliteConnectionManager>;
 pub struct AppState {
     pub pool: Pool,
     pub graph: Arc<VariantGraph>,
+    /// shared HTTP client for the handwriting proxy (/recognize)
+    pub http: reqwest::Client,
 }
 
 impl AppState {
@@ -34,6 +36,10 @@ impl AppState {
             let conn = pool.get()?;
             VariantGraph::load(&conn)?
         };
-        Ok(AppState { pool, graph: Arc::new(graph) })
+        let http = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(8))
+            .user_agent("kanzi/0.0 (+https://miro.build)")
+            .build()?;
+        Ok(AppState { pool, graph: Arc::new(graph), http })
     }
 }
