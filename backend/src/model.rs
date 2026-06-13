@@ -76,6 +76,16 @@ pub struct VariantEdge {
     pub parent: String,
     pub edge_type: String,
     pub reform: Option<String>,
+    pub reform_name: Option<String>,
+    pub reform_year: Option<i64>,
+}
+
+/// /why response — the orthographic + phonological "why" for a word (DESIGN.md §4).
+#[derive(Serialize)]
+pub struct WhyResponse {
+    pub lexeme_id: i64,
+    pub headword: String,
+    pub characters: Vec<CharInfo>,
 }
 
 #[derive(Serialize)]

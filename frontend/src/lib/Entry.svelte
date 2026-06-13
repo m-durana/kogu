@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Entry, PrefScript } from './types'
+  import type { CharInfo } from './types'
   import { pickForms, varietyLabel } from './display'
   import { ArrowRight } from '@lucide/svelte'
 
@@ -10,13 +11,22 @@
   }: { entry: Entry; pref: PrefScript; onsearch: (q: string) => void } = $props()
 
   const disp = $derived(pickForms(entry.forms, entry.variety, pref))
-  const reformName: Record<string, string> = {
-    'prc-1956': 'PRC 1956',
-    'prc-1964': 'PRC 1964',
-    'jp-toyo': 'Tōyō',
-    'jp-joyo': 'Jōyō',
-    opencc: 'OpenCC',
-    'unihan-variant': 'Unihan',
+
+  // phonological "why": readings across varieties, side by side
+  const READING_ORDER: [string, string][] = [
+    ['pinyin', '拼'],
+    ['jyutping', '粵'],
+    ['onyomi', '音'],
+    ['kunyomi', '訓'],
+    ['zhuyin', 'ㄅ'],
+  ]
+  function readingLine(c: CharInfo) {
+    const out: { label: string; value: string }[] = []
+    for (const [kind, label] of READING_ORDER) {
+      const vals = c.readings.filter((r) => r.kind === kind).map((r) => r.value)
+      if (vals.length) out.push({ label, value: vals.join(' ') })
+    }
+    return out
   }
 </script>
 
@@ -57,12 +67,19 @@
             {#if c.ids}<span class="ids">{c.ids}</span>{/if}
           </div>
           {#if c.gloss_en}<div class="cgloss">{c.gloss_en}</div>{/if}
+          {#if readingLine(c).length}
+            <div class="creadings">
+              {#each readingLine(c) as r}
+                <span class="rd"><span class="rl">{r.label}</span> {r.value}</span>
+              {/each}
+            </div>
+          {/if}
           {#if c.variants.length}
             <div class="variants">
               {#each c.variants as v}
                 <span class="vedge">
                   <ArrowRight size={13} /> <b>{v.parent}</b>
-                  <span class="dim">{v.edge_type}{#if v.reform && reformName[v.reform]} · {reformName[v.reform]}{/if}</span>
+                  <span class="dim">{v.edge_type}{#if v.reform_name} · {v.reform_name}{#if v.reform_year} ({v.reform_year}){/if}{/if}</span>
                 </span>
               {/each}
             </div>
@@ -131,6 +148,9 @@
   .b-deriv { color: var(--muted); border-style: dashed; }
   .ids { font-family: var(--han); color: var(--muted); }
   .cgloss { font-size: 0.85rem; color: var(--muted); margin-top: 0.2rem; }
+  .creadings { display: flex; flex-wrap: wrap; gap: 0.7rem; margin-top: 0.3rem; font-family: var(--mono); font-size: 0.8rem; }
+  .creadings .rd { color: var(--text); }
+  .creadings .rl { font-family: var(--han); color: var(--faint); margin-right: 0.15rem; }
   .variants { margin-top: 0.3rem; display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.8rem; }
   .vedge { display: inline-flex; align-items: center; gap: 0.2rem; }
   .vedge b { font-family: var(--han); }

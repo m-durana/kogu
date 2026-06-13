@@ -34,6 +34,8 @@ export interface VariantEdge {
   parent: string
   edge_type: string
   reform: string | null
+  reform_name: string | null
+  reform_year: number | null
 }
 export interface CharInfo {
   ch: string

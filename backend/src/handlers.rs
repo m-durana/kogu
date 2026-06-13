@@ -186,6 +186,41 @@ fn shares_concept(conn: &rusqlite::Connection, a: i64, b: i64) -> rusqlite::Resu
     Ok(n != 0)
 }
 
+pub async fn why_handler(
+    State(st): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Json<WhyResponse>, (StatusCode, Json<Value>)> {
+    let conn = st.pool.get().map_err(internal)?;
+    match build_why(&conn, id).map_err(internal)? {
+        Some(w) => Ok(Json(w)),
+        None => Err((StatusCode::NOT_FOUND, Json(json!({ "error": "not_found" })))),
+    }
+}
+
+fn build_why(conn: &rusqlite::Connection, id: i64) -> rusqlite::Result<Option<WhyResponse>> {
+    let row = conn.query_row(
+        "SELECT headword, COALESCE((SELECT form FROM surface_form WHERE lexeme_id=l.id AND is_primary=1 LIMIT 1), headword) \
+         FROM lexeme l WHERE id=?1",
+        [id],
+        |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+    );
+    let (headword, primary) = match row {
+        Ok(v) => v,
+        Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
+        Err(e) => return Err(e),
+    };
+    let mut characters = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for ch in primary.chars() {
+        if seen.insert(ch) {
+            if let Some(ci) = char_info(conn, ch)? {
+                characters.push(ci);
+            }
+        }
+    }
+    Ok(Some(WhyResponse { lexeme_id: id, headword, characters }))
+}
+
 fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<CharInfo>> {
     let cp = ch as i64;
     let row = conn.query_row(
@@ -212,15 +247,22 @@ fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<C
         .query_map([cp], |r| Ok(ReadingKV { kind: r.get(0)?, value: r.get(1)? }))?
         .collect::<Result<_, _>>()?;
 
-    // identity edges to orthodox parents (the orthographic "why" seed)
+    // identity edges to orthodox parents (the orthographic "why": chain + which reform produced it)
     let mut s = conn.prepare(
-        "SELECT p.char, e.type, e.reform_id FROM glyph_edge e \
+        "SELECT p.char, e.type, e.reform_id, rf.name, rf.year FROM glyph_edge e \
          JOIN character p ON p.cp = e.parent_cp \
+         LEFT JOIN reform rf ON rf.id = e.reform_id \
          WHERE e.child_cp = ?1 AND e.type IN ('simplification','shinjitai','z-variant')",
     )?;
     let variants: Vec<VariantEdge> = s
         .query_map([cp], |r| {
-            Ok(VariantEdge { parent: r.get(0)?, edge_type: r.get(1)?, reform: r.get(2)? })
+            Ok(VariantEdge {
+                parent: r.get(0)?,
+                edge_type: r.get(1)?,
+                reform: r.get(2)?,
+                reform_name: r.get(3)?,
+                reform_year: r.get(4)?,
+            })
         })?
         .collect::<Result<_, _>>()?;
 

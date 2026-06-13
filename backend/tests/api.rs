@@ -240,6 +240,44 @@ async fn translations_same_meaning() {
     assert!(trans.iter().any(|t| t["variety"] == "ja"), "expected a cross-language synonym");
 }
 
+// P6. orthographic "why": 学 carries reform-tagged edges to orthodox 學 (simp + shinjitai),
+//     and readings across varieties are present (phonological why).
+#[tokio::test]
+async fn why_orthographic_and_phonological() {
+    let hit = entry_of(&search("学校").await, "ja", "学校");
+    let id = hit["lexeme_id"].as_i64().unwrap();
+    let w = get(&format!("/why/{id}")).await.1;
+    let gaku = w["characters"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["ch"] == "学")
+        .expect("学 in why");
+    // orthographic: edges to 學 labelled with reforms
+    let parents: Vec<String> =
+        gaku["variants"].as_array().unwrap().iter().map(|v| v["parent"].as_str().unwrap().into()).collect();
+    assert!(parents.contains(&"學".to_string()), "学 should chain to 學");
+    let types: Vec<String> =
+        gaku["variants"].as_array().unwrap().iter().map(|v| v["edge_type"].as_str().unwrap().into()).collect();
+    assert!(types.iter().any(|t| t == "simplification") && types.iter().any(|t| t == "shinjitai"));
+    assert!(gaku["variants"].as_array().unwrap().iter().any(|v| v["reform_name"].is_string()));
+    // phonological: 學 has readings across varieties
+    let xue = entry_of(&search("學校").await, "zh", "學校");
+    let xid = xue["lexeme_id"].as_i64().unwrap();
+    let we = get(&format!("/why/{xid}")).await.1;
+    let c = we["characters"].as_array().unwrap().iter().find(|c| c["ch"] == "學").unwrap();
+    let kinds: Vec<String> =
+        c["readings"].as_array().unwrap().iter().map(|r| r["kind"].as_str().unwrap().into()).collect();
+    assert!(kinds.iter().any(|k| k == "pinyin") && kinds.iter().any(|k| k == "jyutping") && kinds.iter().any(|k| k == "onyomi"));
+}
+
+// P7 (edge). /why for unknown id is 404.
+#[tokio::test]
+async fn why_unknown_404() {
+    let (st, _) = get("/why/99999999").await;
+    assert_eq!(st, StatusCode::NOT_FOUND);
+}
+
 // P5 (edge). a nonsense English term yields no concepts (never errors).
 #[tokio::test]
 async fn translate_unknown_empty() {
