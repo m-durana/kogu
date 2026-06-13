@@ -97,6 +97,21 @@ async fn english_pivot() {
     assert!(hw.contains(&"機場".to_string()), "missing zh 機場");
 }
 
+// 4b. English results are ranked by relevance: an exact "airport" word ranks at the very top,
+//     not an incidental match like デッキ (deck). Regression for the bad-ranking report.
+#[tokio::test]
+async fn english_ranked_by_relevance() {
+    let v = search("airport").await;
+    let hw = headwords(&v);
+    let top = &hw[0];
+    assert!(top == "空港" || top == "機場", "top airport result was {top:?}, expected 空港/機場");
+    // an exact-gloss airport word must outrank デッキ ("deck (of a ship)")
+    let pos = |w: &str| hw.iter().position(|h| h == w);
+    if let (Some(a), Some(d)) = (pos("空港"), pos("デッキ")) {
+        assert!(a < d, "空港 (#{a}) should rank above デッキ (#{d})");
+    }
+}
+
 // 5. toneless pinyin keeps many candidates instead of bailing.
 #[tokio::test]
 async fn toneless_pinyin_multi() {

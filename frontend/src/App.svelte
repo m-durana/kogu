@@ -5,6 +5,7 @@
   import Pad from './lib/Pad.svelte'
   import EntryView from './lib/Entry.svelte'
   import { Search, Brush, ArrowLeft } from '@lucide/svelte'
+  import { onMount } from 'svelte'
 
   let q = $state('')
   let results = $state<Hit[]>([])
@@ -21,20 +22,30 @@
   let timer: ReturnType<typeof setTimeout> | undefined
   let ctrl: AbortController | undefined
 
-  async function doSearch(query: string) {
+  // --- history-based navigation: makes the browser / PWA / device back button work ---
+  type NavMode = 'push' | 'replace' | 'none'
+
+  function resultsUrl(term: string) {
+    return term ? `?q=${encodeURIComponent(term)}` : location.pathname
+  }
+
+  async function doSearch(query: string, mode: NavMode = 'push') {
     const term = query.trim()
     q = query
+    view = 'results'
+    entry = null
     if (!term) {
       results = []
       searched = false
+      if (mode !== 'none') history.replaceState({ view: 'results', q: '' }, '', location.pathname)
       return
     }
+    if (mode === 'push') history.pushState({ view: 'results', q: term }, '', resultsUrl(term))
+    else if (mode === 'replace') history.replaceState({ view: 'results', q: term }, '', resultsUrl(term))
     ctrl?.abort()
     ctrl = new AbortController()
     loading = true
     err = ''
-    view = 'results'
-    entry = null
     try {
       const res = await search(term, pref, ctrl.signal)
       results = res.results
@@ -52,20 +63,47 @@
     q = v
     if (composing) return
     clearTimeout(timer)
-    timer = setTimeout(() => doSearch(v), 180)
+    // live typing updates the current history entry instead of stacking new ones
+    timer = setTimeout(() => doSearch(v, 'replace'), 180)
   }
 
-  async function openEntry(id: number) {
+  async function openEntry(id: number, mode: NavMode = 'push') {
     loading = true
     err = ''
     try {
       entry = await fetchEntry(id)
       view = 'entry'
+      if (mode === 'push') history.pushState({ view: 'entry', id, q }, '', `#/entry/${id}`)
     } catch {
       err = 'could not load entry'
     } finally {
       loading = false
     }
+  }
+
+  function onPop(e: PopStateEvent) {
+    const st = e.state as { view?: string; id?: number; q?: string } | null
+    if (!st || st.view === 'results') {
+      view = 'results'
+      entry = null
+      const term = st?.q ?? ''
+      if (term && term !== q) doSearch(term, 'none')
+      else q = term
+    } else if (st.view === 'entry' && st.id != null) {
+      openEntry(st.id, 'none')
+    }
+  }
+
+  onMount(() => {
+    window.addEventListener('popstate', onPop)
+    const term = new URLSearchParams(location.search).get('q')
+    if (term) doSearch(term, 'replace')
+    else history.replaceState({ view: 'results', q: '' }, '', location.pathname)
+    return () => window.removeEventListener('popstate', onPop)
+  })
+
+  function goBack() {
+    history.back()
   }
 
   function fromPad(ch: string) {
@@ -101,7 +139,7 @@
       oncompositionstart={() => (composing = true)}
       oncompositionend={(e) => {
         composing = false
-        doSearch((e.target as HTMLInputElement).value)
+        doSearch((e.target as HTMLInputElement).value, 'replace')
       }}
       onkeydown={(e) => e.key === 'Enter' && doSearch(q)}
       data-testid="search-input"
@@ -118,7 +156,7 @@
   {#if err}<div class="err">{err}</div>{/if}
 
   {#if view === 'entry' && entry}
-    <button class="back iconbtn" onclick={() => (view = 'results')} data-testid="back">
+    <button class="back iconbtn" onclick={goBack} data-testid="back">
       <ArrowLeft size={15} /> results
     </button>
     <EntryView {entry} {pref} onsearch={doSearch} />
@@ -160,20 +198,22 @@
   .brand .word { font-family: var(--sans); font-size: 1.15rem; letter-spacing: 0.02em; color: var(--muted); }
   .controls { display: flex; gap: 0.5rem; }
   .iconbtn { display: inline-flex; align-items: center; gap: 0.3rem; }
-  .searchrow { position: relative; }
-  .searchicon { position: absolute; left: 0.7rem; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; display: flex; }
-  .searchrow input { padding-left: 2.4rem; }
-  .toggle { display: flex; }
-  .toggle button { border-right: none; font-family: var(--han); }
-  .toggle button:last-child { border-right: 1px solid var(--border-strong); }
+  .searchrow { position: relative; margin-bottom: 1.4rem; }
+  .searchicon { position: absolute; left: 0.95rem; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; display: flex; }
+  .searchrow input { padding: 0.85rem 0.9rem 0.85rem 2.9rem; font-size: 1.35rem; background: var(--surface); border: 1px solid var(--border); }
+  .searchrow input:focus { border-color: var(--border-strong); background: var(--surface-2); }
+  .toggle { display: inline-flex; gap: 2px; padding: 3px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); }
+  .toggle button { border: none; background: transparent; color: var(--muted); font-family: var(--han); padding: 0.3rem 0.7rem; border-radius: calc(var(--r-lg) - 5px); }
+  .toggle button:hover { background: var(--surface-2); color: #fff; }
+  .toggle button[aria-pressed='true'] { background: var(--border-strong); color: #fff; }
   .padwrap { margin-bottom: 1.2rem; }
   .meta { color: var(--faint); font-size: 0.75rem; margin-bottom: 0.5rem; font-family: var(--mono); text-transform: uppercase; }
   .err { color: var(--accent); margin: 0.5rem 0; }
   .results { list-style: none; margin: 0; padding: 0; }
   .results li { border-bottom: 1px solid var(--border); }
-  .hit { display: flex; align-items: baseline; gap: 0.7rem; width: 100%; text-align: left; background: none; border: none; padding: 0.6rem 0.3rem; }
+  .hit { display: flex; align-items: baseline; gap: 0.7rem; width: 100%; text-align: left; background: none; border: none; border-radius: var(--r); padding: 0.6rem 0.5rem; }
   .hit:hover { background: var(--surface); border: none; color: var(--text); }
-  .var { font-size: 0.7rem; padding: 0.05rem 0.3rem; border: 1px solid var(--border-strong); color: var(--muted); flex: none; }
+  .var { font-size: 0.7rem; padding: 0.05rem 0.3rem; border: 1px solid var(--border-strong); border-radius: 5px; color: var(--muted); flex: none; }
   .v-zh { color: var(--zh); border-color: var(--accent-dim); }
   .v-ja { color: var(--ja); }
   .v-yue { color: var(--yue); }
@@ -182,8 +222,8 @@
   .rd { font-family: var(--mono); color: var(--accent); font-size: 0.85rem; flex: none; }
   .gl { color: var(--muted); font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
   .tags { display: flex; gap: 0.3rem; flex: none; }
-  .rg { font-size: 0.65rem; color: var(--faint); border: 1px solid var(--border); padding: 0 0.25rem; font-family: var(--mono); }
-  .mt { font-size: 0.65rem; padding: 0 0.25rem; border: 1px solid var(--border); font-family: var(--mono); color: var(--faint); }
+  .rg { font-size: 0.65rem; color: var(--faint); border: 1px solid var(--border); border-radius: 5px; padding: 0 0.25rem; font-family: var(--mono); }
+  .mt { font-size: 0.65rem; padding: 0 0.25rem; border: 1px solid var(--border); border-radius: 5px; font-family: var(--mono); color: var(--faint); }
   .m-exact { color: var(--text); border-color: var(--border-strong); }
   .m-english { color: var(--muted); }
   .back { margin-bottom: 0.8rem; }

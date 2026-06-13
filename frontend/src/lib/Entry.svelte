@@ -87,7 +87,7 @@
 </article>
 
 <style>
-  .entry { border: 1px solid var(--border); background: var(--surface); padding: 1.2rem; }
+  .entry { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); padding: 1.2rem; }
   header { border-bottom: 1px solid var(--border); padding-bottom: 0.8rem; margin-bottom: 0.8rem; }
   .var { font-size: 0.75rem; padding: 0.1rem 0.35rem; border: 1px solid var(--border-strong); color: var(--muted); }
   .v-zh { color: var(--zh); border-color: var(--accent-dim); }
@@ -108,7 +108,7 @@
   .glyph { font-family: var(--han); font-size: 2.4rem; padding: 0.2rem 0.5rem; line-height: 1; }
   .cmeta { flex: 1; }
   .cline { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
-  .badge { font-size: 0.7rem; padding: 0.05rem 0.3rem; border: 1px solid var(--border-strong); }
+  .badge { font-size: 0.7rem; padding: 0.05rem 0.3rem; border: 1px solid var(--border-strong); border-radius: 5px; }
   .b-orth { color: #fff; border-color: var(--border-strong); }
   .b-deriv { color: var(--muted); border-style: dashed; }
   .ids { font-family: var(--han); color: var(--muted); }

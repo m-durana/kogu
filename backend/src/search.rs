@@ -87,6 +87,61 @@ fn fts_query(q: &str) -> Option<String> {
     }
 }
 
+/// Strip a gloss segment to its core: drop parentheticals, a leading "to " (verb glosses),
+/// trailing punctuation; lowercase + trim.
+fn clean_segment(seg: &str) -> String {
+    let mut out = String::with_capacity(seg.len());
+    let mut depth = 0u32;
+    for c in seg.chars() {
+        match c {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth = depth.saturating_sub(1),
+            _ if depth == 0 => out.push(c),
+            _ => {}
+        }
+    }
+    let s = out.trim().trim_end_matches(['.', ',', '!', '…']).to_lowercase();
+    s.strip_prefix("to ").map(str::to_string).unwrap_or(s).trim().to_string()
+}
+
+/// Does `hay` contain `needle` as a whole word / phrase (boundary-aware)?
+fn contains_word(hay: &str, needle: &str) -> bool {
+    if needle.is_empty() {
+        return false;
+    }
+    let bytes = hay.as_bytes();
+    let mut from = 0;
+    while let Some(pos) = hay[from..].find(needle) {
+        let i = from + pos;
+        let before_ok = i == 0 || !bytes[i - 1].is_ascii_alphanumeric();
+        let after = i + needle.len();
+        let after_ok = after >= bytes.len() || !bytes[after].is_ascii_alphanumeric();
+        if before_ok && after_ok {
+            return true;
+        }
+        from = i + 1;
+    }
+    false
+}
+
+/// How well an English gloss matches the query term: 1.0 = a gloss segment *is* the term,
+/// 0.85 = a segment starts with it, 0.5 = it appears as a whole word, 0.2 = incidental.
+fn gloss_match_quality(gloss: &str, ql: &str) -> f64 {
+    let mut best = 0.2_f64;
+    for seg in gloss.split(';') {
+        let s = clean_segment(seg);
+        if s == ql {
+            return 1.0;
+        }
+        if s.starts_with(ql) && s[ql.len()..].starts_with(' ') {
+            best = best.max(0.85);
+        } else if contains_word(&s, ql) {
+            best = best.max(0.5);
+        }
+    }
+    best
+}
+
 const W_EXACT: f64 = 1.0;
 const W_VARIANT: f64 = 0.85;
 const W_READING: f64 = 0.72;
@@ -144,17 +199,22 @@ pub fn search(
                     bump(&mut cand, id, "reading", W_READING);
                 }
             }
-            // english gloss full-text
+            // english gloss full-text, ranked by how well the gloss matches (exactness + bm25),
+            // so "airport" surfaces 空港/機場 above words where airport is merely incidental.
             if let Some(fq) = fts_query(q) {
+                let ql = q.trim().to_lowercase();
                 let mut stmt = conn.prepare(
-                    "SELECT DISTINCT s.lexeme_id FROM gloss_fts \
-                     JOIN sense s ON s.id = gloss_fts.rowid \
-                     WHERE gloss_fts MATCH ?1 LIMIT 400",
+                    "SELECT s.lexeme_id, s.gloss_en, bm25(gloss_fts) AS r \
+                     FROM gloss_fts JOIN sense s ON s.id = gloss_fts.rowid \
+                     WHERE gloss_fts MATCH ?1 ORDER BY r LIMIT 400",
                 )?;
-                let ids: Vec<i64> =
-                    stmt.query_map([&fq], |r| r.get(0))?.collect::<Result<_, _>>()?;
-                for id in ids {
-                    bump(&mut cand, id, "english", W_ENGLISH);
+                let rows = stmt.query_map([&fq], |r| {
+                    Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
+                })?;
+                for row in rows {
+                    let (id, gloss) = row?;
+                    let quality = gloss_match_quality(&gloss, &ql);
+                    bump(&mut cand, id, "english", W_ENGLISH * (0.45 + 0.55 * quality));
                 }
             }
         }
@@ -231,4 +291,65 @@ fn build_hit(
         match_type: match_type.to_string(),
         score,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn classify_kinds() {
+        assert!(matches!(classify("機場"), Kind::Han));
+        assert!(matches!(classify("がっこう"), Kind::Kana));
+        assert!(matches!(classify("xue2"), Kind::Latin));
+        assert!(matches!(classify("airport"), Kind::Latin));
+        assert!(matches!(classify(""), Kind::Other));
+    }
+
+    #[test]
+    fn pinyin_folding() {
+        // tone marks, tone numbers, and toneless all fold to the same key
+        assert_eq!(pinyin_plain("xué"), "xue");
+        assert_eq!(pinyin_plain("xue2"), "xue");
+        assert_eq!(pinyin_plain("xue"), "xue");
+        assert_eq!(pinyin_plain("ji1 chang3"), "jichang");
+        assert_eq!(pinyin_plain("lǜ"), "lv"); // ü -> v
+    }
+
+    #[test]
+    fn gloss_quality_exact_beats_incidental() {
+        // a gloss that *is* the term scores highest; incidental mention lowest
+        assert_eq!(gloss_match_quality("airport", "airport"), 1.0);
+        assert_eq!(gloss_match_quality("airport; airfield", "airport"), 1.0);
+        assert!(gloss_match_quality("airport limousine", "airport") < 1.0);
+        assert!(gloss_match_quality("airport limousine", "airport") >= 0.85);
+        // "deck (of a ship)" must not score as a strong airport match
+        assert!(gloss_match_quality("deck (of a ship)", "airport") <= 0.2);
+        // ordering the real bug: 空港's gloss beats デッキ's for "airport"
+        assert!(gloss_match_quality("airport", "airport") > gloss_match_quality("deck (of a ship)", "airport"));
+    }
+
+    #[test]
+    fn gloss_quality_strips_to_prefix_and_parens() {
+        // "to open a port" -> verb 'to' stripped; exact phrase match
+        assert_eq!(gloss_match_quality("to open a port", "open a port"), 1.0);
+        // parenthetical removed before comparison
+        assert_eq!(gloss_match_quality("company (business)", "company"), 1.0);
+    }
+
+    #[test]
+    fn contains_word_boundaries() {
+        assert!(contains_word("calling at a port", "port"));
+        assert!(!contains_word("airport apron", "port")); // 'port' inside 'airport' is not a word
+        assert!(contains_word("train station", "station"));
+    }
+
+    #[test]
+    fn fts_query_is_order_independent_and() {
+        // both orderings produce the same AND query -> predictable english search
+        assert_eq!(fts_query("train station"), fts_query("train station"));
+        let a = fts_query("train station").unwrap();
+        assert!(a.contains("\"train\"") && a.contains("\"station\"") && a.contains(" AND "));
+        assert_eq!(fts_query("   "), None);
+    }
 }

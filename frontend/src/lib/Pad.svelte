@@ -100,13 +100,25 @@
 </div>
 
 <style>
-  .pad { display: flex; flex-direction: column; gap: 0.6rem; }
+  .pad {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
   canvas {
     width: 280px;
     height: 280px;
     background: var(--surface);
     border: 1px solid var(--border-strong);
+    border-radius: var(--r-lg);
     touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
     cursor: crosshair;
   }
   .pad-actions { display: flex; gap: 0.5rem; }
