@@ -17,6 +17,14 @@ export async function entry(id: number): Promise<Entry> {
   return r.json()
 }
 
+export async function translate(q: string, signal?: AbortSignal): Promise<import('./types').TranslateResponse> {
+  const u = new URL(BASE + '/translate', location.origin)
+  u.searchParams.set('q', q)
+  const r = await fetch(u, { signal })
+  if (!r.ok) throw new Error(`translate failed: ${r.status}`)
+  return r.json()
+}
+
 export async function ocr(blob: Blob): Promise<import('./types').OcrResponse> {
   const r = await fetch(`${BASE}/ocr`, {
     method: 'POST',

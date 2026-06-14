@@ -1,14 +1,16 @@
 <script lang="ts">
-  import { search, entry as fetchEntry } from './lib/api'
-  import type { Entry, Hit } from './lib/types'
+  import { search, entry as fetchEntry, translate } from './lib/api'
+  import type { Entry, Hit, ConceptGroup } from './lib/types'
   import { primaryForm, varietyLabel, regionsOf, shortGloss } from './lib/display'
   import InputSheet from './lib/InputSheet.svelte'
+  import Concepts from './lib/Concepts.svelte'
   import EntryView from './lib/Entry.svelte'
   import { Search, Plus, X, ArrowLeft } from '@lucide/svelte'
   import { onMount } from 'svelte'
 
   let q = $state('')
   let results = $state<Hit[]>([])
+  let concepts = $state<ConceptGroup[]>([])
   let classified = $state('')
   let entry = $state<Entry | null>(null)
   let view = $state<'results' | 'entry'>('results')
@@ -31,6 +33,7 @@
     entry = null
     if (!term) {
       results = []
+      concepts = []
       searched = false
       if (mode !== 'none') history.replaceState({ view: 'results', q: '' }, '', location.pathname)
       return
@@ -46,6 +49,15 @@
       results = res.results
       classified = res.classified_as
       searched = true
+      // English-pivot: for English queries, also fetch concept groups (translation across systems)
+      concepts = []
+      if (res.classified_as === 'latin') {
+        try {
+          concepts = (await translate(term, ctrl.signal)).concepts
+        } catch {
+          /* ignore: fall back to flat results */
+        }
+      }
     } catch (e) {
       if ((e as Error).name !== 'AbortError') err = 'search failed'
     } finally {
@@ -150,8 +162,12 @@
     <button class="back" onclick={goBack} data-testid="back"><ArrowLeft size={15} aria-hidden="true" /> back</button>
     <EntryView {entry} anchor={q} onsearch={doSearch} />
   {:else}
+    {#if concepts.length}
+      <div class="meta">translations · 同義</div>
+      <Concepts groups={concepts} onopen={openEntry} />
+    {/if}
     {#if searched && !loading}
-      <div class="meta">{results.length} · {classified}</div>
+      <div class="meta">{concepts.length ? 'all matches' : `${results.length} · ${classified}`}</div>
     {/if}
     <ul class="results" data-testid="results">
       {#each results as r (r.lexeme_id)}
