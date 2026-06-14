@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -138,6 +138,79 @@ describe('furiganaTokens — readings become ruby on the kanji', () => {
   })
   it('plain text passes through', () => {
     expect(furiganaTokens('no readings here')).toEqual([{ t: 'text', v: 'no readings here' }])
+  })
+})
+
+describe('pinyinMarks — numbered pinyin to tone marks', () => {
+  it('places tone on a/e first', () => {
+    expect(pinyinMarks('xue2')).toBe('xué')
+    expect(pinyinMarks('hao3')).toBe('hǎo')
+  })
+  it('o in ou gets the mark', () => {
+    expect(pinyinMarks('shou3 zhi3')).toBe('shǒu zhǐ')
+  })
+  it('last vowel when no a/e/ou', () => {
+    expect(pinyinMarks('gui4')).toBe('guì')
+  })
+  it('neutral tone (5) drops the digit, no mark', () => {
+    expect(pinyinMarks('ma5')).toBe('ma')
+  })
+  it('ü via v', () => {
+    expect(pinyinMarks('lv4')).toBe('lǜ')
+  })
+  it('multi-syllable joins with spaces', () => {
+    expect(pinyinMarks('ji1 chang3')).toBe('jī chǎng')
+  })
+  it('already-marked / non-pinyin passes through', () => {
+    expect(pinyinMarks('xué')).toBe('xué')
+    expect(pinyinMarks('')).toBe('')
+  })
+})
+
+describe('cleanIds — strip source tags + IDC operators, keep components', () => {
+  it('removes [GTV] tags and the ⿰ operator', () => {
+    expect(cleanIds('⿰糸氏[GTV]')).toBe('糸 氏')
+  })
+  it('removes interleaved source tags', () => {
+    expect(cleanIds('⿰亻[G]木[TV]')).toBe('亻 木')
+  })
+  it('strips the IDC operator from a plain IDS', () => {
+    expect(cleanIds('⿱艹心')).toBe('艹 心')
+  })
+  it('nested operators all stripped', () => {
+    expect(cleanIds('⿱⿰木木子')).toBe('木 木 子')
+  })
+  it('null/empty -> empty string', () => {
+    expect(cleanIds(null)).toBe('')
+    expect(cleanIds('')).toBe('')
+  })
+})
+
+describe('cleanGloss — strip CC-CEDICT markup', () => {
+  it('removes CL classifier clauses', () => {
+    expect(cleanGloss('telephone; CL:通[tong1]; phone number')).toBe('telephone; phone number')
+  })
+  it('removes bracketed romanisation', () => {
+    expect(cleanGloss('airport (abbr. for 航空港[hang2 kong1 gang3])')).toBe('airport (abbr. for 航空港)')
+  })
+  it('collapses trad|simp pipe pairs', () => {
+    expect(cleanGloss('variant of 繫|系[xi4]')).toBe('variant of 繫')
+  })
+  it('drops Taiwan pr. notes and trailing tags', () => {
+    expect(cleanGloss('hair; Taiwan pr. [fa3]')).toBe('hair')
+  })
+  it('trims dangling separators', () => {
+    expect(cleanGloss('to love; ')).toBe('to love')
+    expect(cleanGloss('; people; bunch; gang;')).toBe('people; bunch; gang')
+  })
+  it('plain gloss untouched', () => {
+    expect(cleanGloss('to study; to learn')).toBe('to study; to learn')
+  })
+  it('bracket removed before pipe collapse (no leftover tail)', () => {
+    expect(cleanGloss('used in 自個兒|自个儿[zi4 ge3 r5]')).toBe('used in 自個兒')
+  })
+  it('glossLine cleans, filters empties, caps count', () => {
+    expect(glossLine(['a', 'CL:个[ge4]', 'b', 'c', 'd', 'e'], 4)).toBe('a; b; c; d')
   })
 })
 

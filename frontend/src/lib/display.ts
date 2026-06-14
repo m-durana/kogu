@@ -77,8 +77,75 @@ export function regionsOf(hit: Hit): string[] {
 
 /** First gloss, trimmed for the results list (never shows internal placeholders — backend strips them). */
 export function shortGloss(glosses: string[], max = 90): string {
-  const g = glosses[0] ?? ''
+  const g = cleanGloss(glosses[0] ?? '')
   return g.length > max ? g.slice(0, max - 1) + '…' : g
+}
+
+// numbered-pinyin -> tone-marked, so the language rows match the tone-marked character cards
+// (e.g. "shou3 zhi3" -> "shǒu zhǐ"). Non-pinyin input passes through unchanged.
+const TONE_MARKS: Record<string, string[]> = {
+  a: ['a', 'ā', 'á', 'ǎ', 'à'],
+  e: ['e', 'ē', 'é', 'ě', 'è'],
+  i: ['i', 'ī', 'í', 'ǐ', 'ì'],
+  o: ['o', 'ō', 'ó', 'ǒ', 'ò'],
+  u: ['u', 'ū', 'ú', 'ǔ', 'ù'],
+  ü: ['ü', 'ǖ', 'ǘ', 'ǚ', 'ǜ'],
+}
+function markSyllable(syl: string): string {
+  const m = syl.match(/^([a-zü]+?)([1-5])$/i)
+  if (!m) return syl
+  let base = m[1].toLowerCase().replace(/u:|v/g, 'ü')
+  const tone = +m[2]
+  if (tone === 5 || tone === 0) return base // neutral tone, no mark
+  // tone placement: a or e first; else the o in "ou"; else the last vowel
+  let target = ''
+  if (base.includes('a')) target = 'a'
+  else if (base.includes('e')) target = 'e'
+  else if (base.includes('ou')) target = 'o'
+  else {
+    const vowels = base.match(/[aeiouü]/g)
+    target = vowels ? vowels[vowels.length - 1] : ''
+  }
+  if (!target) return base
+  const i = base.lastIndexOf(target)
+  return base.slice(0, i) + TONE_MARKS[target][tone] + base.slice(i + 1)
+}
+export function pinyinMarks(reading: string): string {
+  if (!reading) return reading
+  return reading.split(/\s+/).map(markSyllable).join(' ')
+}
+
+/** cjkvi-ids -> clean component list. Strips source tags ("[GTV]") and Ideographic Description
+ * Characters (⿰⿱… U+2FF0–2FFF, which many fonts render as tofu) so only the components show:
+ * "⿰糸氏[GTV]" -> "糸 氏". (DESIGN.md §6: no placeholder/markup leaks.) */
+export function cleanIds(ids: string | null): string {
+  if (!ids) return ''
+  const s = ids.replace(/\[[A-Z]+\]/g, '').replace(/[⿰-⿿]/g, '')
+  return [...s].filter((c) => c.trim()).join(' ')
+}
+
+/** Sanitise a CC-CEDICT/JMdict gloss for display: strip classifier clauses, bracketed romanisation,
+ * trad|simp pipe pairs, "Taiwan pr." notes, and tidy dangling separators. The raw glosses leak
+ * dictionary markup (e.g. "telephone; CL:通[tong1]") that reads as machine junk to users. */
+export function cleanGloss(g: string): string {
+  if (!g) return ''
+  let s = g
+  s = s.replace(/\s*\bCL:[^;]*(?=;|$)/g, '') // classifier clauses
+  s = s.replace(/\[[A-Za-zÀ-ÿüÜ0-9·,.\s]*\]/g, '') // [hang2 kong1 gang3], [fa3] — before pipes
+  s = s.replace(/([^\s;,，|[\]]+)\|([^\s;,，|[\]]+)/g, '$1') // 處|处 -> 處
+  s = s.replace(/[,;]?\s*(?:Taiwan|Mainland|also|old|erhua|Cantonese)\s+pr\.\s*/gi, ' ') // pr. notes
+  s = s.replace(/\(\s*\)/g, '') // empty parens left behind
+  s = s.replace(/\s*;\s*/g, '; ') // normalise sense separators
+  s = s.replace(/(?:;\s*)+/g, '; ')
+  s = s.replace(/\s{2,}/g, ' ')
+  s = s.replace(/\s+([;,.)])/g, '$1')
+  s = s.replace(/^[\s;,]+|[\s;,]+$/g, '')
+  return s.trim()
+}
+
+/** Clean + join a list of glosses for a single line. */
+export function glossLine(glosses: string[], max = 4): string {
+  return glosses.map(cleanGloss).filter(Boolean).slice(0, max).join('; ')
 }
 
 export type FuriToken = { t: 'text'; v: string } | { t: 'ruby'; base: string; rt: string }

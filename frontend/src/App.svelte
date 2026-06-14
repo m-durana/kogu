@@ -1,18 +1,18 @@
 <script lang="ts">
-  import { search, entry as fetchEntry, translate } from './lib/api'
-  import type { Entry, Hit, ConceptGroup } from './lib/types'
+  import { search, entry as fetchEntry } from './lib/api'
+  import type { Entry, Hit } from './lib/types'
   import { primaryForm, varietyLabel, regionsOf, shortGloss } from './lib/display'
   import InputSheet from './lib/InputSheet.svelte'
-  import Concepts from './lib/Concepts.svelte'
-  import EntryView from './lib/Entry.svelte'
+  import Unified from './lib/Unified.svelte'
   import { Search, X, Brush, Camera } from '@lucide/svelte'
   import { onMount } from 'svelte'
 
   let q = $state('')
   let results = $state<Hit[]>([])
-  let concepts = $state<ConceptGroup[]>([])
   let classified = $state('')
   let entry = $state<Entry | null>(null)
+  let enrichEntry = $state<Entry | null>(null)
+  let unified = $state(false)
   let view = $state<'results' | 'entry'>('results')
   let inputOpen = $state(false)
   let inputMode = $state<'draw' | 'photo'>('draw')
@@ -32,9 +32,10 @@
     q = query
     view = 'results'
     entry = null
+    enrichEntry = null
+    unified = false
     if (!term) {
       results = []
-      concepts = []
       searched = false
       if (mode !== 'none') history.replaceState({ view: 'results', q: '' }, '', location.pathname)
       return
@@ -50,14 +51,16 @@
       results = res.results
       classified = res.classified_as
       searched = true
-      // English-pivot: for English queries, also fetch concept groups (translation across systems)
-      concepts = []
-      if (res.classified_as === 'latin') {
-        try {
-          concepts = (await translate(term, ctrl.signal)).concepts
-        } catch {
-          /* ignore: fall back to flat results */
-        }
+      // Han queries resolve to one word seen across languages — show the unified view directly,
+      // no list step. Enrich it with the top lexeme's decomposition + origin in the background.
+      if (res.classified_as === 'han' && results.length) {
+        unified = true
+        const topId = results[0].lexeme_id
+        fetchEntry(topId)
+          .then((e) => {
+            if (q.trim() === term && unified) enrichEntry = e
+          })
+          .catch(() => {})
       }
     } catch (e) {
       if ((e as Error).name !== 'AbortError') err = 'search failed'
@@ -79,6 +82,7 @@
     err = ''
     try {
       entry = await fetchEntry(id)
+      unified = false
       view = 'entry'
       if (mode === 'push') history.pushState({ view: 'entry', id, q }, '', `#/entry/${id}`)
     } catch {
@@ -117,7 +121,9 @@
   function clearSearch() {
     q = ''
     results = []
-    concepts = []
+    entry = null
+    enrichEntry = null
+    unified = false
     searched = false
     err = ''
     history.replaceState({ view: 'results', q: '' }, '', location.pathname)
@@ -180,15 +186,13 @@
 
   {#if view === 'entry' && entry}
     {#key entry.lexeme_id}
-      <EntryView {entry} anchor={q} onsearch={doSearch} />
+      <Unified entry={entry} anchor={q} onsearch={doSearch} />
     {/key}
+  {:else if unified && results.length}
+    <Unified hits={results} entry={enrichEntry} anchor={q} onsearch={doSearch} />
   {:else}
-    {#if concepts.length}
-      <div class="meta">translations · 同義</div>
-      <Concepts groups={concepts} onopen={openEntry} />
-    {/if}
-    {#if searched && !loading}
-      <div class="meta">{concepts.length ? 'all matches' : `${results.length} · ${classified}`}</div>
+    {#if searched && !loading && results.length}
+      <div class="meta">{results.length} {results.length === 1 ? 'result' : 'results'}</div>
     {/if}
     <ul class="results" data-testid="results">
       {#each results as r (r.lexeme_id)}
@@ -212,6 +216,12 @@
     </ul>
     {#if searched && !loading && results.length === 0}
       <div class="empty">nothing for “{q}”.</div>
+    {/if}
+    {#if !searched && !q}
+      <div class="intro">
+        <p class="tag">One word, read across <b>中文</b> · <b>粵語</b> · <b>日本語</b>.</p>
+        <p class="tag2">Type a character, a reading (pinyin · jyutping · kana), or English — or draw or photograph one.</p>
+      </div>
     {/if}
   {/if}
 </div>
@@ -270,4 +280,8 @@
   .rg { font-size: 0.6rem; color: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 0 0.2rem; font-family: var(--mono); }
   .gl { color: var(--muted); font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .empty { color: var(--faint); padding: 1.2rem 0; }
+  .intro { padding: 1.5rem 0.2rem; }
+  .tag { font-family: var(--sans); font-size: 1.35rem; line-height: 1.5; color: var(--text); margin: 0 0 0.8rem; }
+  .tag b { font-family: var(--han); font-weight: 500; }
+  .tag2 { color: var(--faint); font-size: 0.95rem; line-height: 1.6; margin: 0; max-width: 32ch; }
 </style>
