@@ -65,17 +65,18 @@ pub async fn ocr_handler(
         .map(Json)
 }
 
-fn run_ocr(engine: &OAROCR, bytes: &[u8]) -> Result<OcrResponse, (StatusCode, Json<Value>)> {
-    let img = image::load_from_memory(bytes)
-        .map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({ "error": "bad_image", "detail": e.to_string() }))))?
-        .to_rgb8();
-    let (width, height) = (img.width(), img.height());
+/// One recognized region: text, confidence, and an axis-aligned box [x,y,w,h].
+struct Region {
+    text: String,
+    conf: f32,
+    box_: [f32; 4],
+}
 
+fn recognize(engine: &OAROCR, img: image::RgbImage) -> Result<Vec<Region>, (StatusCode, Json<Value>)> {
     let results = engine.predict(vec![img]).map_err(|e| {
         (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "ocr_failed", "detail": e.to_string() })))
     })?;
-
-    let mut lines = Vec::new();
+    let mut out = Vec::new();
     if let Some(result) = results.into_iter().next() {
         for region in result.text_regions {
             let text = match region.text {
@@ -96,17 +97,63 @@ fn run_ocr(engine: &OAROCR, bytes: &[u8]) -> Result<OcrResponse, (StatusCode, Js
                 maxx = maxx.max(p.x);
                 maxy = maxy.max(p.y);
             }
-            let box_ = [minx, miny, maxx - minx, maxy - miny];
-            let chars = char_cells(box_, &text);
-            lines.push(OcrLine {
+            out.push(Region {
                 text,
-                confidence: region.confidence.unwrap_or(0.0),
-                box_,
-                chars,
+                conf: region.confidence.unwrap_or(0.0),
+                box_: [minx, miny, maxx - minx, maxy - miny],
             });
         }
     }
+    Ok(out)
+}
+
+/// Total recognized "evidence" = Σ chars × confidence. Used to pick the better orientation.
+fn score(regions: &[Region]) -> f32 {
+    regions.iter().map(|r| r.text.chars().filter(|c| !c.is_whitespace()).count() as f32 * r.conf).sum()
+}
+
+fn run_ocr(engine: &OAROCR, bytes: &[u8]) -> Result<OcrResponse, (StatusCode, Json<Value>)> {
+    let img = image::load_from_memory(bytes)
+        .map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({ "error": "bad_image", "detail": e.to_string() }))))?
+        .to_rgb8();
+    let (width, height) = (img.width(), img.height());
+
+    // Pass 1: upright. PP-OCR reads horizontal text well.
+    let upright = recognize(engine, img.clone())?;
+    let best_conf = upright.iter().map(|r| r.conf).fold(0.0_f32, f32::max);
+
+    // If upright is weak, the text may be vertical: OCR a 90° (CCW) rotation — vertical columns
+    // become horizontal lines — and keep whichever orientation has more evidence. Boxes from the
+    // rotated pass are mapped back to the original frame (they become tall = vertical, so char_cells
+    // splits them top-to-bottom).
+    let regions = if best_conf >= 0.6 {
+        upright
+    } else {
+        let rotated = recognize(engine, image::imageops::rotate270(&img))?;
+        if score(&rotated) > score(&upright) {
+            rotated.into_iter().map(|r| map_from_rot270(r, height)).collect()
+        } else {
+            upright
+        }
+    };
+
+    let lines = regions
+        .into_iter()
+        .map(|r| OcrLine { chars: char_cells(r.box_, &r.text), text: r.text, confidence: r.conf, box_: r.box_ })
+        .collect();
     Ok(OcrResponse { width, height, lines })
+}
+
+/// Map a region from a rotate270 (CCW) image back to original coordinates. rotate270 maps original
+/// (x,y) -> rotated (y, W-1-x); inverse of an aabb (bx,by,bw,bh) with original height H is
+/// [H-(by+bh), bx, bh, bw]. Text read left-to-right in the rotated frame is top-to-bottom in the
+/// original column, so order is preserved.
+fn map_from_rot270(r: Region, orig_height: u32) -> Region {
+    let [bx, by, bw, bh] = r.box_;
+    Region {
+        box_: [orig_height as f32 - (by + bh), bx, bh, bw],
+        ..r
+    }
 }
 
 /// Convenience for AppState to hold a shareable engine.
@@ -141,7 +188,26 @@ pub fn char_cells(box_: [f32; 4], text: &str) -> Vec<OcrChar> {
 
 #[cfg(test)]
 mod tests {
-    use super::char_cells;
+    use super::{char_cells, map_from_rot270, Region};
+
+    #[test]
+    fn rot270_box_maps_to_tall_vertical_box() {
+        // a horizontal line in the rotated frame becomes a tall (vertical) box in the original
+        let r = Region { text: "日本語".into(), conf: 1.0, box_: [0.0, 0.0, 90.0, 30.0] };
+        let m = map_from_rot270(r, 200);
+        // [H-(by+bh), bx, bh, bw] = [200-30, 0, 30, 90]
+        assert_eq!(m.box_, [170.0, 0.0, 30.0, 90.0]);
+        assert!(m.box_[3] > m.box_[2], "mapped box should be tall (vertical)");
+        assert_eq!(m.text, "日本語"); // text/conf preserved
+    }
+
+    #[test]
+    fn rot270_offset_box() {
+        let r = Region { text: "x".into(), conf: 0.9, box_: [10.0, 20.0, 5.0, 40.0] };
+        let m = map_from_rot270(r, 100);
+        assert_eq!(m.box_, [40.0, 10.0, 40.0, 5.0]); // [100-(20+40), 10, 40, 5]
+    }
+
 
     #[test]
     fn horizontal_split_even() {
