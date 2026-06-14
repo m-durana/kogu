@@ -2,7 +2,7 @@
   import { ocr } from './api'
   import type { OcrResponse } from './types'
   import { ocrSelectedText } from './display'
-  import { Camera, X } from '@lucide/svelte'
+  import { Camera, ImagePlus, X } from '@lucide/svelte'
 
   let { onpick }: { onpick: (text: string) => void } = $props()
 
@@ -72,10 +72,16 @@
 
 <div class="ocr">
   {#if !imageUrl}
-    <label class="capture">
-      <Camera size={18} aria-hidden="true" /> photo / image
-      <input type="file" accept="image/*" capture="environment" onchange={onFile} hidden />
-    </label>
+    <div class="choices">
+      <label class="capture">
+        <Camera size={18} aria-hidden="true" /> take photo
+        <input type="file" accept="image/*" capture="environment" onchange={onFile} hidden />
+      </label>
+      <label class="capture">
+        <ImagePlus size={18} aria-hidden="true" /> attach image
+        <input type="file" accept="image/*" onchange={onFile} hidden />
+      </label>
+    </div>
     <p class="hint">snap a sign, page, or screenshot — then tap the characters to look up.</p>
   {:else}
     <div class="stage">
@@ -123,6 +129,7 @@
 
 <style>
   .ocr { display: flex; flex-direction: column; gap: 0.7rem; }
+  .choices { display: flex; gap: 0.5rem; flex-wrap: wrap; }
   .capture, .retake {
     display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;
     background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r);

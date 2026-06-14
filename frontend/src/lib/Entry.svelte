@@ -42,22 +42,21 @@
     opencc: 'OpenCC', 'unihan-variant': 'Unihan', 'hk-std': 'HK', 'tw-std': 'TW',
   }
 
-  const hasWhy = $derived(entry.origin_badges.length > 0 || !!entry.etymology)
+  // only surface "why" when there's real prose to read — a lone origin badge isn't a story
+  const hasWhy = $derived(!!entry.etymology && entry.etymology.trim().length > 0)
 </script>
 
 <article class="entry">
   <header>
     <div class="hero">
-      <span class="var v-{entry.variety}">{varietyLabel(entry.variety)}</span>
       <h2 class="head">
         {disp?.primary.form ?? entry.headword}{#if disp?.alternate}<span class="alt">{disp.alternate.form}</span>{/if}
       </h2>
     </div>
-    {#if headReadings.length}
-      <div class="readings">
-        {#each headReadings as r}<span class="rk">{r.value}</span>{/each}
-      </div>
-    {/if}
+    <div class="readings">
+      <span class="var v-{entry.variety}">{varietyLabel(entry.variety)}</span>
+      {#each headReadings as r}<span class="rk">{r.value}</span>{/each}
+    </div>
   </header>
 
   <div class="tabs" role="tablist">
@@ -80,7 +79,7 @@
           <button class="link" onclick={() => onsearch(l.headword)}>
             <span class="var v-{l.variety}">{varietyLabel(l.variety)}</span>
             <span class="lhead">{l.headword}</span>
-            <span class="rel {l.relation === 'false-friend' ? 'ff' : 'cog'}">{l.relation === 'false-friend' ? 'false friend' : 'cognate'}</span>
+            <span class="rel {l.relation === 'false-friend' ? 'ff' : 'cog'}">{l.relation === 'false-friend' ? 'different meaning' : 'same meaning'}</span>
             <span class="dim lg">{l.glosses[0] ?? ''}</span>
           </button>
         {/each}
@@ -149,7 +148,7 @@
   .v-ja, .v-zh, .v-yue { color: var(--muted); }
   .head { font-family: var(--han); font-size: clamp(2.4rem, 11vw, 3.4rem); margin: 0; font-weight: 500; line-height: 1; }
   .head .alt { color: var(--faint); font-size: 0.42em; margin-left: 0.3rem; font-weight: 400; }
-  .readings { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 0.5rem; font-family: var(--mono); color: var(--text); font-size: 0.95rem; }
+  .readings { display: flex; flex-wrap: wrap; align-items: center; gap: 0.7rem 1rem; margin-top: 0.55rem; font-family: var(--mono); color: var(--text); font-size: 0.95rem; }
 
   .tabs { display: flex; gap: 0.4rem; border-bottom: 1px solid var(--border); margin-bottom: 0.9rem; }
   .tabs button {
@@ -175,9 +174,8 @@
   .lhead { font-family: var(--han); font-size: 1.3rem; }
   .lread { font-family: var(--mono); color: var(--muted); font-size: 0.8rem; }
   .lg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem; }
-  .rel { font-size: 0.6rem; padding: 0.1rem 0.35rem; border-radius: 4px; flex: none; text-transform: uppercase; letter-spacing: 0.04em; }
-  .rel.cog { border: 1px solid var(--border-strong); color: var(--muted); }
-  .rel.ff { background: var(--text); color: var(--bg); font-weight: 700; }
+  .rel { font-size: 0.62rem; padding: 0.12rem 0.4rem; border-radius: 4px; flex: none; text-align: center; letter-spacing: 0.02em; border: 1px solid var(--border); color: var(--faint); }
+  .rel.ff { border-style: dashed; }
 
   .badges { display: flex; flex-wrap: wrap; gap: 0.4rem; }
   .obadge { font-size: 0.68rem; padding: 0.12rem 0.45rem; border: 1px solid var(--border-strong); border-radius: var(--r); text-transform: uppercase; letter-spacing: 0.04em; }

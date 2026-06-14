@@ -5,7 +5,7 @@
   import InputSheet from './lib/InputSheet.svelte'
   import Concepts from './lib/Concepts.svelte'
   import EntryView from './lib/Entry.svelte'
-  import { Search, X, ArrowLeft, Brush, Camera } from '@lucide/svelte'
+  import { Search, X, Brush, Camera } from '@lucide/svelte'
   import { onMount } from 'svelte'
 
   let q = $state('')
@@ -109,8 +109,6 @@
     return () => window.removeEventListener('popstate', onPop)
   })
 
-  const goBack = () => history.back()
-
   function openInput(m: 'draw' | 'photo') {
     inputMode = m
     inputOpen = true
@@ -147,35 +145,32 @@
   </header>
 
   <div class="searchrow">
-    <span class="searchicon" aria-hidden="true"><Search size={18} /></span>
-    <input
-      type="text"
-      aria-label="Search by hanzi, kanji, pinyin, jyutping, kana, or English"
-      placeholder="character · reading · meaning"
-      value={q}
-      oninput={onInput}
-      oncompositionstart={() => (composing = true)}
-      oncompositionend={(e) => {
-        composing = false
-        doSearch((e.target as HTMLInputElement).value, 'replace')
-      }}
-      onkeydown={(e) => e.key === 'Enter' && doSearch(q)}
-      data-testid="search-input"
-      autocomplete="off"
-      autocapitalize="off"
-      spellcheck="false"
-    />
-    {#if q}
-      <button class="clearbtn" aria-label="clear search" onclick={clearSearch} data-testid="clear"><X size={18} /></button>
-    {/if}
-  </div>
-
-  {#if view === 'results'}
-    <div class="modes">
-      <button class="mode" onclick={() => openInput('draw')} data-testid="draw-toggle"><Brush size={16} aria-hidden="true" /> draw</button>
-      <button class="mode" onclick={() => openInput('photo')} data-testid="scan-toggle"><Camera size={16} aria-hidden="true" /> photo</button>
+    <div class="field">
+      <span class="searchicon" aria-hidden="true"><Search size={17} /></span>
+      <input
+        type="text"
+        aria-label="Search by hanzi, kanji, pinyin, jyutping, kana, or English"
+        placeholder="character · reading · meaning"
+        value={q}
+        oninput={onInput}
+        oncompositionstart={() => (composing = true)}
+        oncompositionend={(e) => {
+          composing = false
+          doSearch((e.target as HTMLInputElement).value, 'replace')
+        }}
+        onkeydown={(e) => e.key === 'Enter' && doSearch(q)}
+        data-testid="search-input"
+        autocomplete="off"
+        autocapitalize="off"
+        spellcheck="false"
+      />
+      {#if q}
+        <button class="clearbtn" aria-label="clear search" onclick={clearSearch} data-testid="clear"><X size={17} /></button>
+      {/if}
     </div>
-  {/if}
+    <button class="rowbtn" aria-label="draw a character" title="draw" onclick={() => openInput('draw')} data-testid="draw-toggle"><Brush size={18} /></button>
+    <button class="rowbtn" aria-label="photo or image" title="photo / image" onclick={() => openInput('photo')} data-testid="scan-toggle"><Camera size={18} /></button>
+  </div>
 
   {#if inputOpen}
     <InputSheet mode={inputMode} onpick={fromInput} onclose={() => (inputOpen = false)} />
@@ -184,7 +179,6 @@
   {#if err}<div class="err">{err}</div>{/if}
 
   {#if view === 'entry' && entry}
-    <button class="back" onclick={goBack} data-testid="back"><ArrowLeft size={15} aria-hidden="true" /> back</button>
     {#key entry.lexeme_id}
       <EntryView {entry} anchor={q} onsearch={doSearch} />
     {/key}
@@ -236,23 +230,25 @@
   .brand .mark { font-family: var(--han); font-weight: 500; font-size: 1.4rem; letter-spacing: -0.04em; color: var(--text); }
   .brand .word { font-family: var(--sans); font-size: 1.05rem; letter-spacing: 0.06em; color: var(--muted); }
 
-  .searchrow { position: relative; margin-bottom: 0.7rem; }
-  .searchicon { position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; display: flex; }
-  .searchrow input {
-    padding: 0.95rem 3rem 0.95rem 3rem; font-size: 1.3rem; font-family: var(--sans);
+  .searchrow { display: flex; gap: 0.4rem; align-items: stretch; margin-bottom: 1.5rem; }
+  .field { position: relative; flex: 1; min-width: 0; display: flex; }
+  .searchicon { position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; display: flex; }
+  .field input {
+    width: 100%; padding: 0.6rem 2.4rem 0.6rem 2.4rem; font-size: 1.05rem; font-family: var(--sans);
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
   }
-  .searchrow input:focus { border-color: var(--border-strong); background: var(--surface-2); }
-  .searchrow input::placeholder { color: var(--faint); }
+  .field input:focus { border-color: var(--border-strong); background: var(--surface-2); }
+  .field input::placeholder { color: var(--faint); }
   .clearbtn {
-    position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%);
-    border: none; background: transparent; color: var(--muted); padding: 0.45rem; border-radius: var(--r);
+    position: absolute; right: 0.45rem; top: 50%; transform: translateY(-50%);
+    border: none; background: transparent; color: var(--muted); padding: 0.4rem; border-radius: var(--r); display: inline-flex;
   }
   .clearbtn:hover { color: #fff; background: var(--surface-2); }
-
-  .modes { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
-  .mode { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.9rem; color: var(--muted); }
-  .mode:hover { color: #fff; border-color: var(--text); }
+  .rowbtn {
+    flex: none; display: inline-flex; align-items: center; justify-content: center; padding: 0 0.75rem;
+    color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+  }
+  .rowbtn:hover { color: #fff; border-color: var(--border-strong); background: var(--surface-2); }
 
   .meta { color: var(--faint); font-size: 0.7rem; margin-bottom: 0.6rem; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.1em; }
   .err { color: var(--text); margin: 0.5rem 0; }
@@ -273,7 +269,5 @@
   .var { font-family: var(--han); font-size: 0.72rem; color: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 0 0.25rem; }
   .rg { font-size: 0.6rem; color: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 0 0.2rem; font-family: var(--mono); }
   .gl { color: var(--muted); font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .back { display: inline-flex; align-items: center; gap: 0.3rem; margin-bottom: 1rem; background: none; border: none; color: var(--muted); padding: 0.3rem 0; }
-  .back:hover { color: #fff; background: none; }
   .empty { color: var(--faint); padding: 1.2rem 0; }
 </style>
