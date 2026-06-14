@@ -10,7 +10,11 @@
 
   const disp = $derived(primaryForm(entry.forms, entry.variety, anchor))
 
-  let tab = $state<'meaning' | 'why' | 'characters'>('meaning')
+  // single characters lead with the multilingual character view (CJKV's core); words with meaning
+  // svelte-ignore state_referenced_locally
+  let tab = $state<'meaning' | 'why' | 'characters'>(
+    [...(entry.headword ?? '')].length === 1 ? 'characters' : 'meaning',
+  )
 
   // headword readings (hide internal normalisation kinds; backend already excludes them)
   const headReadings = $derived(
@@ -38,10 +42,7 @@
     opencc: 'OpenCC', 'unihan-variant': 'Unihan', 'hk-std': 'HK', 'tw-std': 'TW',
   }
 
-  const charsWithWhy = $derived(entry.characters.filter((c) => c.variants.length || readingLine(c).length))
-  const hasWhy = $derived(
-    entry.origin_badges.length > 0 || !!entry.etymology || charsWithWhy.length > 0,
-  )
+  const hasWhy = $derived(entry.origin_badges.length > 0 || !!entry.etymology)
 </script>
 
 <article class="entry">
@@ -110,36 +111,29 @@
           </p>
         {/if}
       {/if}
-
-      {#each charsWithWhy as c}
-        <div class="whychar">
-          <button class="glyph sm" onclick={() => onsearch(c.ch)}>{c.ch}</button>
-          <div class="whymeta">
-            {#if c.variants.length}
-              {#each c.variants as v}
-                <div class="vedge">{c.ch} → <b>{v.parent}</b> <span class="dim">{v.edge_type}{#if v.reform_name} · {v.reform_name}{#if v.reform_year} {v.reform_year}{/if}{/if}</span></div>
-              {/each}
-            {/if}
-            {#if readingLine(c).length}
-              <div class="creadings">{#each readingLine(c) as r}<span class="rd"><span class="rl">{r.label}</span> {r.value}</span>{/each}</div>
-            {/if}
-          </div>
-        </div>
-      {/each}
     </section>
   {:else}
+    <!-- characters: the multilingual character view — readings across 中/粵/日 + meaning + form -->
     <section class="pane">
       {#each entry.characters as c}
         <div class="char">
           <button class="glyph" onclick={() => onsearch(c.ch)} title="look up {c.ch}">{c.ch}</button>
           <div class="cmeta">
+            {#if readingLine(c).length}
+              <div class="creadings">
+                {#each readingLine(c) as r}<span class="rd"><span class="rl">{r.label}</span> {r.value}</span>{/each}
+              </div>
+            {/if}
+            {#if c.gloss_en}<div class="cgloss">{c.gloss_en}</div>{/if}
             <div class="cline">
               <span class="badge {c.is_orthodox ? 'b-orth' : 'b-deriv'}">{c.is_orthodox ? 'orthodox' : 'derived'}</span>
               {#if c.strokes}<span class="dim">{c.strokes}画</span>{/if}
               {#if c.radical}<span class="dim">rad {c.radical}</span>{/if}
               {#if c.ids}<span class="ids">{c.ids}</span>{/if}
             </div>
-            {#if c.gloss_en}<div class="cgloss">{c.gloss_en}</div>{/if}
+            {#each c.variants as v}
+              <div class="vedge">→ <b>{v.parent}</b> <span class="dim">{v.edge_type}{#if v.reform_name} · {v.reform_name}{#if v.reform_year} {v.reform_year}{/if}{/if}</span></div>
+            {/each}
           </div>
         </div>
       {/each}

@@ -185,7 +185,9 @@
 
   {#if view === 'entry' && entry}
     <button class="back" onclick={goBack} data-testid="back"><ArrowLeft size={15} aria-hidden="true" /> back</button>
-    <EntryView {entry} anchor={q} onsearch={doSearch} />
+    {#key entry.lexeme_id}
+      <EntryView {entry} anchor={q} onsearch={doSearch} />
+    {/key}
   {:else}
     {#if concepts.length}
       <div class="meta">translations · 同義</div>
