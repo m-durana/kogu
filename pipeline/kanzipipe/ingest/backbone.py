@@ -78,9 +78,11 @@ def ingest(conn) -> None:
     ids: dict[int, str] = {}
     chars: set[int] = set()  # every codepoint we will materialise as a character row
 
+    # NB: Unihan kJapaneseOn/kJapaneseKun are ROMAJI (e.g. "ABURA", "KO") — unusable for kana
+    # display, so we do NOT ingest them. Japanese on/kun come solely from Kanjidic (proper kana,
+    # applied below); characters Kanjidic lacks simply get no JP reading rather than romaji junk.
     READING_FIELDS = {
         "kMandarin": "pinyin", "kCantonese": "jyutping",
-        "kJapaneseOn": "onyomi", "kJapaneseKun": "kunyomi",
     }
     for cp, field, value in _unihan("Unihan_Readings.txt"):
         if field in READING_FIELDS:

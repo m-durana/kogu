@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CharInfo, Entry, Hit, ReadingKV, Variety } from './types'
-  import { primaryForm, varietyLabel, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine } from './display'
+  import { primaryForm, varietyLabel, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, meaningfulGlossCount } from './display'
 
   // The unified cross-language view — one Han word, seen across 中 / 粵 / 日 at once.
   // Renders instantly from search hits; enriches (decomposition, origin) when the full entry loads.
@@ -90,11 +90,38 @@
           relation: l.relation,
         })
       }
-    return out.sort((a, b) => VORDER.indexOf(a.variety) - VORDER.indexOf(b.variety))
+    // collapse to one row per (variety, form), keeping the most meaningful lexeme; this drops
+    // duplicate/minor entries (e.g. a bare "surname Long" 龍 next to the real "dragon" 龍).
+    const primary = hits[0]?.lexeme_id ?? entry?.lexeme_id ?? -1
+    const best = new Map<string, Row>()
+    for (const r of out) {
+      const key = `${r.variety}|${r.form}`
+      const prev = best.get(key)
+      if (!prev) {
+        best.set(key, r)
+      } else {
+        const keep = r.id === primary || meaningfulGlossCount(r.glosses) > meaningfulGlossCount(prev.glosses)
+        if (keep && prev.id !== primary) best.set(key, r)
+      }
+    }
+    let deduped = [...best.values()]
+    // drop rows whose only content is a surname/variant cross-reference — unless it's the row you
+    // looked up, or it's the sole row for its language (so a purely-minor entry still shows).
+    const richByVar = new Set(deduped.filter((r) => meaningfulGlossCount(r.glosses) > 0).map((r) => r.variety))
+    deduped = deduped.filter(
+      (r) =>
+        r.id === primary ||
+        meaningfulGlossCount(r.glosses) > 0 ||
+        !richByVar.has(r.variety),
+    )
+    return deduped.sort((a, b) => VORDER.indexOf(a.variety) - VORDER.indexOf(b.variety))
   })
 
   // the headword glyph: what the user looked up
   const head = $derived(anchor || rows[0]?.form || '')
+
+  // the lexeme this page actually resolved to (the top hit / the opened entry) — marked in the stack
+  const primaryId = $derived(hits[0]?.lexeme_id ?? entry?.lexeme_id ?? -1)
 
   // does any pair disagree in meaning? (the false-friend signal CJKV misses)
   const hasFalseFriend = $derived(rows.some((r) => r.relation === 'false-friend'))
@@ -125,16 +152,16 @@
 
 <article class="u">
   <header class="head">
-    <h2 class="glyph">{head}</h2>
     {#if varieties.length > 1}
       <p class="sub">{varieties.map((v) => varietyLabel(v)).join(' · ')}</p>
     {/if}
+    <h2 class="glyph">{head}</h2>
   </header>
 
   <!-- the core: this word, read across every language at once -->
   <ul class="langs">
     {#each rows as r (r.id)}
-      <li>
+      <li class:cur={r.id === primaryId}>
         <button class="lang" onclick={() => onsearch(r.form)} title="look up {r.form}">
           <span class="v">{varietyLabel(r.variety)}</span>
           <span class="body">
@@ -210,20 +237,24 @@
   .u { display: flex; flex-direction: column; }
   .head { margin-bottom: 1rem; }
   .glyph { font-family: var(--han); font-size: clamp(3rem, 16vw, 4.5rem); line-height: 1; margin: 0; font-weight: 500; }
-  .sub { font-family: var(--han); color: var(--faint); font-size: 0.85rem; margin: 0.4rem 0 0; letter-spacing: 0.1em; }
+  .sub { font-family: var(--han); color: var(--faint); font-size: 0.85rem; margin: 0 0 0.4rem; letter-spacing: 0.1em; }
 
   /* the cross-language stack — the heart of the app */
   .langs { list-style: none; margin: 0 0 0.4rem; padding: 0; border-top: 1px solid var(--border); }
   .langs li { border-bottom: 1px solid var(--border); }
-  .lang { display: flex; gap: 0.9rem; align-items: flex-start; width: 100%; text-align: left; background: none; border: none; border-radius: 0; padding: 0.85rem 0.3rem; }
+  /* the row this page resolved to — marked so you know which entry you're on */
+  .langs li.cur { background: var(--surface); box-shadow: inset 2px 0 0 var(--text); }
+  .lang { display: flex; gap: 0.8rem; align-items: flex-start; width: 100%; text-align: left; background: none; border: none; border-radius: 0; padding: 0.85rem 0.3rem; }
   .lang:hover { background: var(--surface); }
-  .v { font-family: var(--han); font-size: 1.1rem; color: var(--muted); width: 1.4rem; flex: none; line-height: 1.5; }
+  .v { font-family: var(--han); font-size: 1rem; color: var(--muted); flex: none;
+       display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; }
+  .langs li.cur .v { background: var(--text); color: var(--bg); border-radius: 5px; }
   .body { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; flex: 1; }
   .top { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
   .form { font-family: var(--han); font-size: 1.5rem; line-height: 1.1; }
   .form .alt { color: var(--faint); font-size: 0.62em; margin-left: 0.25rem; }
   .read { font-family: var(--mono); color: var(--muted); font-size: 0.9rem; }
-  .ff { font-size: 0.6rem; color: var(--faint); border: 1px dashed var(--border-strong); border-radius: 4px; padding: 0.08rem 0.35rem; align-self: center; }
+  .ff { font-size: 0.6rem; line-height: 1; color: var(--faint); border: 1px dashed var(--border-strong); border-radius: 4px; padding: 0.2rem 0.35rem; align-self: center; display: inline-flex; align-items: center; }
   .gloss { color: var(--text); font-size: 0.98rem; line-height: 1.4; }
 
   .note { color: var(--faint); font-size: 0.8rem; margin: 0.3rem 0 0; }
@@ -244,7 +275,7 @@
   .cln b { font-family: var(--han); }
 
   .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-  .chip { display: inline-flex; align-items: baseline; gap: 0.3rem; font-family: var(--han); font-size: 1.05rem; padding: 0.25rem 0.55rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); }
+  .chip { display: inline-flex; align-items: center; gap: 0.35rem; font-family: var(--han); font-size: 1.05rem; padding: 0.25rem 0.55rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); }
   .chip:hover { border-color: var(--border-strong); }
   .cv { font-size: 0.7rem; color: var(--faint); }
 

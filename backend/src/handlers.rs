@@ -119,7 +119,7 @@ fn build_entry(
             continue;
         }
         same_form_ids.insert(other);
-        let relation = if shares_concept(conn, id, other)? { "cognate" } else { "false-friend" };
+        let relation = classify_relation(conn, id, other)?;
         if let Some(l) = link_lite(conn, other, relation, None)? {
             same_form.push(l);
         }
@@ -196,6 +196,44 @@ fn shares_concept(conn: &rusqlite::Connection, a: i64, b: i64) -> rusqlite::Resu
         |r| r.get(0),
     )?;
     Ok(n != 0)
+}
+
+/// English words too generic to signal shared meaning (don't count as gloss overlap).
+const GLOSS_STOPWORDS: &[&str] = &[
+    "the", "and", "for", "with", "used", "esp", "etc", "sth", "someone", "something", "one",
+    "that", "this", "see", "also", "form", "kind", "type", "thing", "person", "make", "made",
+    "way", "part", "abbr", "old", "pron", "var", "from", "into", "out", "off", "not", "any",
+    "all", "such", "more", "less", "very", "his", "her", "its", "who", "whom", "way", "are",
+];
+
+/// Content words (≥3 letters, not stopwords) from a lexeme's first few glosses.
+fn gloss_words(conn: &rusqlite::Connection, id: i64) -> rusqlite::Result<std::collections::HashSet<String>> {
+    let mut s = conn.prepare("SELECT gloss_en FROM sense WHERE lexeme_id=?1 ORDER BY sense_order LIMIT 5")?;
+    let glosses: Vec<String> = s.query_map([id], |r| r.get(0))?.collect::<Result<_, _>>()?;
+    let mut out = std::collections::HashSet::new();
+    for g in glosses {
+        for tok in g.to_lowercase().split(|c: char| !c.is_ascii_alphabetic()) {
+            if tok.len() >= 3 && !GLOSS_STOPWORDS.contains(&tok) {
+                out.insert(tok.to_string());
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Classify the relation between two same-form lexemes. A false-friend label needs POSITIVE
+/// evidence of divergence: both sides must be glossed and share no concept and no gloss word.
+/// Otherwise it's a cognate — this avoids two big mislabel classes: (1) cognates the concept layer
+/// just didn't link (砂糖 = sugar/sugar), and (2) bare variant glyphs with no glosses (廣/广, 個/个,
+/// where the absence of glosses is not evidence of a different meaning).
+fn classify_relation(conn: &rusqlite::Connection, a: i64, b: i64) -> rusqlite::Result<&'static str> {
+    if shares_concept(conn, a, b)? {
+        return Ok("cognate");
+    }
+    let wa = gloss_words(conn, a)?;
+    let wb = gloss_words(conn, b)?;
+    let diverges = !wa.is_empty() && !wb.is_empty() && wa.is_disjoint(&wb);
+    Ok(if diverges { "false-friend" } else { "cognate" })
 }
 
 pub async fn why_handler(

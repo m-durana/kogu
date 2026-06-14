@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, isMinorGloss, meaningfulGlossCount } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -211,6 +211,24 @@ describe('cleanGloss — strip CC-CEDICT markup', () => {
   })
   it('glossLine cleans, filters empties, caps count', () => {
     expect(glossLine(['a', 'CL:个[ge4]', 'b', 'c', 'd', 'e'], 4)).toBe('a; b; c; d')
+  })
+})
+
+describe('isMinorGloss / meaningfulGlossCount', () => {
+  it('flags surnames, variants, radicals as minor', () => {
+    expect(isMinorGloss('surname Long')).toBe(true)
+    expect(isMinorGloss('variant of 痴[chi1]')).toBe(true)
+    expect(isMinorGloss('used in 乜斜')).toBe(true)
+    expect(isMinorGloss('"house on a cliff" radical in Chinese characters')).toBe(true)
+    expect(isMinorGloss('')).toBe(true)
+  })
+  it('keeps real meanings', () => {
+    expect(isMinorGloss('dragon')).toBe(false)
+    expect(isMinorGloss('to study; to learn')).toBe(false)
+  })
+  it('meaningfulGlossCount ignores minor glosses', () => {
+    expect(meaningfulGlossCount(['surname Mu', 'tree; wood'])).toBe(1)
+    expect(meaningfulGlossCount(['surname Shui'])).toBe(0)
   })
 })
 

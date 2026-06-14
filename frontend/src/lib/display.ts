@@ -148,6 +148,23 @@ export function glossLine(glosses: string[], max = 4): string {
   return glosses.map(cleanGloss).filter(Boolean).slice(0, max).join('; ')
 }
 
+/** A "minor" gloss carries no real meaning for a cross-language comparison — a bare surname,
+ * a "variant of"/"used in"/"see" cross-reference, or a radical definition. */
+export function isMinorGloss(g: string): boolean {
+  const s = cleanGloss(g).toLowerCase()
+  if (!s) return true
+  return (
+    /^(surname\b|old variant of|variant of|used in|see\b|abbr\b|\(bound form\))/.test(s) ||
+    s.includes('radical in chinese characters') ||
+    s.includes('kangxi radical')
+  )
+}
+
+/** Count glosses that actually convey meaning (for picking the best lexeme per language). */
+export function meaningfulGlossCount(glosses: string[]): number {
+  return glosses.filter((g) => !isMinorGloss(g)).length
+}
+
 export type FuriToken = { t: 'text'; v: string } | { t: 'ruby'; base: string; rt: string }
 
 /** Turn inline readings into real furigana tokens: 甘(あま)し -> ruby[甘|あま] + "し".
