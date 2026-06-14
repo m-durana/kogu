@@ -165,19 +165,23 @@ pub fn search(
         }
     };
 
-    match kind {
-        Kind::Han => {
-            // exact surface-form match
-            let mut stmt = conn.prepare("SELECT lexeme_id FROM surface_form WHERE form = ?1")?;
-            let ids: Vec<i64> = stmt.query_map([q], |r| r.get(0))?.collect::<Result<_, _>>()?;
-            for id in ids {
-                bump(&mut cand, id, "exact", W_EXACT);
-            }
-            // variant / cross-script via backbone key (also yields 同字 cross-language hits)
-            for &id in state.graph.lexemes_by_key(q) {
-                bump(&mut cand, id, "variant", W_VARIANT);
-            }
+    // exact written-form match — works for ANY typed string (機場, 甘い, 食べる, あまい, …).
+    // (Mixed kanji+kana words classify as Kana but their written form lives in surface_form.)
+    {
+        let mut stmt = conn.prepare("SELECT lexeme_id FROM surface_form WHERE form = ?1")?;
+        let ids: Vec<i64> = stmt.query_map([q], |r| r.get(0))?.collect::<Result<_, _>>()?;
+        for id in ids {
+            bump(&mut cand, id, "exact", W_EXACT);
         }
+    }
+    // backbone-key expansion whenever the query contains Han (cross-script / 同字)
+    if q.chars().any(is_han) {
+        for &id in state.graph.lexemes_by_key(q) {
+            bump(&mut cand, id, "variant", W_VARIANT);
+        }
+    }
+
+    match kind {
         Kind::Kana => {
             let mut stmt = conn
                 .prepare("SELECT lexeme_id FROM lexeme_reading WHERE kind='kana' AND value = ?1")?;
@@ -221,7 +225,7 @@ pub fn search(
                 }
             }
         }
-        Kind::Other => {}
+        _ => {}
     }
 
     // assemble + rank

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CharInfo, Entry } from './types'
-  import { primaryForm, varietyLabel } from './display'
+  import { primaryForm, varietyLabel, furiganaTokens } from './display'
 
   let {
     entry,
@@ -104,7 +104,11 @@
         {#if entry.origin_badges.length}
           <div class="badges">{#each entry.origin_badges as b}<span class="obadge">{b.replace(/-/g, ' ')}</span>{/each}</div>
         {/if}
-        {#if entry.etymology}<p class="ety">{entry.etymology}</p>{/if}
+        {#if entry.etymology}
+          <p class="ety">
+            {#each furiganaTokens(entry.etymology) as tok}{#if tok.t === 'ruby'}<ruby><button class="kanji" onclick={() => onsearch(tok.base)}>{tok.base}</button><rt>{tok.rt}</rt></ruby>{:else}{tok.v}{/if}{/each}
+          </p>
+        {/if}
       {/if}
 
       {#each charsWithWhy as c}
@@ -145,15 +149,15 @@
 
 <style>
   .entry { display: flex; flex-direction: column; }
-  header { padding-bottom: 1rem; }
-  .hero { display: flex; align-items: flex-start; gap: 0.6rem; }
-  .var { font-family: var(--han); font-size: 0.8rem; color: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 0.1rem 0.3rem; margin-top: 0.6rem; flex: none; }
+  header { padding-bottom: 0.7rem; }
+  .hero { display: flex; align-items: center; gap: 0.6rem; }
+  .var { font-family: var(--han); font-size: 0.8rem; color: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 0.1rem 0.3rem; flex: none; }
   .v-ja, .v-zh, .v-yue { color: var(--muted); }
-  .head { font-family: var(--han); font-size: clamp(2.8rem, 13vw, 4.2rem); margin: 0; font-weight: 500; line-height: 1; }
-  .head .alt { color: var(--faint); font-size: 0.4em; margin-left: 0.3rem; font-weight: 400; }
-  .readings { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 0.7rem; font-family: var(--mono); color: var(--text); font-size: 0.95rem; }
+  .head { font-family: var(--han); font-size: clamp(2.4rem, 11vw, 3.4rem); margin: 0; font-weight: 500; line-height: 1; }
+  .head .alt { color: var(--faint); font-size: 0.42em; margin-left: 0.3rem; font-weight: 400; }
+  .readings { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 0.5rem; font-family: var(--mono); color: var(--text); font-size: 0.95rem; }
 
-  .tabs { display: flex; gap: 0.4rem; border-bottom: 1px solid var(--border); margin-bottom: 1.1rem; }
+  .tabs { display: flex; gap: 0.4rem; border-bottom: 1px solid var(--border); margin-bottom: 0.9rem; }
   .tabs button {
     border: none; background: none; color: var(--faint); padding: 0.6rem 0.2rem; margin-right: 0.8rem;
     font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em;
@@ -164,15 +168,15 @@
 
   .pane { display: flex; flex-direction: column; gap: 0.3rem; animation: fade 0.2s ease; }
   @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
-  h3 { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 1.2rem 0 0.4rem; }
+  h3 { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 0.9rem 0 0.3rem; }
   h3 .dim { font-family: var(--han); }
   .dim { color: var(--faint); }
 
-  .senses { margin: 0; padding-left: 1.3rem; }
-  .senses li { margin: 0.3rem 0; font-size: 1.05rem; line-height: 1.5; }
+  .senses { margin: 0; padding-left: 1.2rem; }
+  .senses li { margin: 0.2rem 0; font-size: 1.02rem; line-height: 1.45; }
   .pos { color: var(--faint); font-size: 0.75rem; margin-right: 0.4rem; font-family: var(--mono); }
 
-  .link { display: flex; gap: 0.6rem; align-items: baseline; text-align: left; padding: 0.5rem 0.4rem; border: none; background: none; border-radius: var(--r); }
+  .link { display: flex; gap: 0.6rem; align-items: center; text-align: left; padding: 0.4rem 0.4rem; border: none; background: none; border-radius: var(--r); }
   .link:hover { background: var(--surface); }
   .lhead { font-family: var(--han); font-size: 1.3rem; }
   .lread { font-family: var(--mono); color: var(--muted); font-size: 0.8rem; }
@@ -183,7 +187,11 @@
 
   .badges { display: flex; flex-wrap: wrap; gap: 0.4rem; }
   .obadge { font-size: 0.68rem; padding: 0.12rem 0.45rem; border: 1px solid var(--border-strong); border-radius: var(--r); text-transform: uppercase; letter-spacing: 0.04em; }
-  .ety { font-size: 0.95rem; color: var(--muted); line-height: 1.6; margin: 0.5rem 0 0; }
+  .ety { font-size: 0.95rem; color: var(--muted); line-height: 1.9; margin: 0.5rem 0 0; }
+  .ety ruby { font-family: var(--han); }
+  .ety rt { font-size: 0.55em; color: var(--faint); font-family: var(--han); }
+  .ety .kanji { background: none; border: none; padding: 0; font: inherit; color: var(--text); cursor: pointer; }
+  .ety .kanji:hover { text-decoration: underline; }
 
   .whychar, .char { display: flex; gap: 0.9rem; padding: 0.7rem 0; border-top: 1px solid var(--border); }
   .glyph { font-family: var(--han); font-size: 2.6rem; padding: 0 0.4rem; line-height: 1; background: none; border: none; }

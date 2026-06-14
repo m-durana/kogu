@@ -23,17 +23,17 @@
 </section>
 
 <style>
-  .concepts { display: flex; flex-direction: column; gap: 1.4rem; margin-bottom: 1.6rem; }
+  .concepts { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.2rem; }
   .group { display: flex; flex-direction: column; gap: 0.5rem; }
   .concept {
-    font-family: var(--serif); font-style: italic; font-size: 1.5rem; color: var(--text);
+    font-family: var(--serif); font-size: 1.3rem; color: var(--text);
     border-bottom: 1px solid var(--border); padding-bottom: 0.3rem;
   }
   .members { display: flex; flex-wrap: wrap; gap: 0.5rem; }
   .member {
-    display: inline-flex; align-items: baseline; gap: 0.4rem;
+    display: inline-flex; align-items: center; gap: 0.4rem;
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
-    padding: 0.45rem 0.7rem;
+    padding: 0.4rem 0.7rem;
   }
   .member:hover { border-color: var(--border-strong); background: var(--surface-2); }
   .var { font-family: var(--han); font-size: 0.72rem; color: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 0 0.2rem; }

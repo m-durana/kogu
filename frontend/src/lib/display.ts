@@ -81,6 +81,27 @@ export function shortGloss(glosses: string[], max = 90): string {
   return g.length > max ? g.slice(0, max - 1) + '…' : g
 }
 
+export type FuriToken = { t: 'text'; v: string } | { t: 'ruby'; base: string; rt: string }
+
+/** Turn inline readings into real furigana tokens: 甘(あま)し -> ruby[甘|あま] + "し".
+ * A (reading) in parens right after a Han run becomes ruby on that run (kana or romaji); the rest
+ * stays plain text. Rendered with <ruby>/<rt> so the reading sits ON the character. */
+export function furiganaTokens(text: string): FuriToken[] {
+  const out: FuriToken[] = []
+  const han = '[\u3400-\u9FFF\uF900-\uFAFF\u3005\u3006]+'
+  const reading = "[\u3040-\u30FF \u30FC\u30FBA-Za-z\u0100-\u017F\u00E0-\u00FC'\u0304\u0301\u0300\u030C-]+"
+  const re = new RegExp('(' + han + ')\\((' + reading + ')\\)', 'g')
+  let last = 0
+  let m
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) out.push({ t: 'text', v: text.slice(last, m.index) })
+    out.push({ t: 'ruby', base: m[1], rt: m[2].trim() })
+    last = m.index + m[0].length
+  }
+  if (last < text.length) out.push({ t: 'text', v: text.slice(last) })
+  return out
+}
+
 /** OCR selection -> text, always in document (line, char) order regardless of tap order. */
 export function ocrSelectedText(
   lines: { chars: { ch: string }[] }[],

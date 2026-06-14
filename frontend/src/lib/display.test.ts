@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -111,6 +111,33 @@ describe('primaryForm — echo the typed form (no toggle)', () => {
   })
   it('empty forms -> null', () => {
     expect(primaryForm([], 'zh', 'x')).toBeNull()
+  })
+})
+
+describe('furiganaTokens — readings become ruby on the kanji', () => {
+  it('kana reading after a kanji', () => {
+    expect(furiganaTokens('甘(あま)し')).toEqual([
+      { t: 'ruby', base: '甘', rt: 'あま' },
+      { t: 'text', v: 'し' },
+    ])
+  })
+  it('consecutive per-kanji readings', () => {
+    expect(furiganaTokens('止(し)形(けい)')).toEqual([
+      { t: 'ruby', base: '止', rt: 'し' },
+      { t: 'ruby', base: '形', rt: 'けい' },
+    ])
+  })
+  it('romaji reading also rubies', () => {
+    expect(furiganaTokens('字(zi)')).toEqual([{ t: 'ruby', base: '字', rt: 'zi' }])
+  })
+  it('multi-char base run keeps one ruby', () => {
+    expect(furiganaTokens('漢字(かんじ)')).toEqual([{ t: 'ruby', base: '漢字', rt: 'かんじ' }])
+  })
+  it('reading not after a kanji stays plain text', () => {
+    expect(furiganaTokens('first (abc)')).toEqual([{ t: 'text', v: 'first (abc)' }])
+  })
+  it('plain text passes through', () => {
+    expect(furiganaTokens('no readings here')).toEqual([{ t: 'text', v: 'no readings here' }])
   })
 })
 

@@ -344,6 +344,13 @@ async fn etymology_passthrough() {
     assert!(ety.contains('空') && ety.contains('港'), "etymology was {ety:?}");
 }
 
+// S1. mixed kanji+kana words (甘い, 食べる) classify as kana but must match by written form.
+#[tokio::test]
+async fn mixed_kanji_kana_word() {
+    assert!(headwords(&search("甘い").await).contains(&"甘い".to_string()), "甘い not found");
+    assert!(headwords(&search("食べる").await).contains(&"食べる".to_string()), "食べる not found");
+}
+
 // --- Phase 3.3: Cantonese ---
 
 // C1. Cantonese colloquial words / 粵字 exist as first-class yue lexemes.

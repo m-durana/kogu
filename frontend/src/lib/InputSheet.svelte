@@ -3,10 +3,16 @@
   import Ocr from './Ocr.svelte'
   import { X } from '@lucide/svelte'
 
-  let { onpick, onclose }: { onpick: (text: string) => void; onclose: () => void } = $props()
+  let {
+    onpick,
+    onclose,
+    mode: initialMode = 'draw',
+  }: { onpick: (text: string) => void; onclose: () => void; mode?: 'draw' | 'photo' } = $props()
 
-  // the two non-keyboard input modes, full-screen and focused — one at a time
-  let mode = $state<'draw' | 'photo'>('draw')
+  // the two non-keyboard input modes, full-screen and focused — one at a time.
+  // seeded from the prop (the sheet is re-created on each open) — initial capture is intended.
+  // svelte-ignore state_referenced_locally
+  let mode = $state<'draw' | 'photo'>(initialMode)
 </script>
 
 <div class="overlay" role="dialog" aria-modal="true" aria-label="character input">

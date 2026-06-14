@@ -5,7 +5,7 @@
   import InputSheet from './lib/InputSheet.svelte'
   import Concepts from './lib/Concepts.svelte'
   import EntryView from './lib/Entry.svelte'
-  import { Search, Plus, X, ArrowLeft } from '@lucide/svelte'
+  import { Search, X, ArrowLeft, Brush, Camera } from '@lucide/svelte'
   import { onMount } from 'svelte'
 
   let q = $state('')
@@ -15,6 +15,7 @@
   let entry = $state<Entry | null>(null)
   let view = $state<'results' | 'entry'>('results')
   let inputOpen = $state(false)
+  let inputMode = $state<'draw' | 'photo'>('draw')
   let loading = $state(false)
   let err = $state('')
   let searched = $state(false)
@@ -110,6 +111,28 @@
 
   const goBack = () => history.back()
 
+  function openInput(m: 'draw' | 'photo') {
+    inputMode = m
+    inputOpen = true
+  }
+
+  function clearSearch() {
+    q = ''
+    results = []
+    concepts = []
+    searched = false
+    err = ''
+    history.replaceState({ view: 'results', q: '' }, '', location.pathname)
+  }
+
+  // tapping the logo resets everything to a clean home (and drops the back button)
+  function goHome() {
+    inputOpen = false
+    entry = null
+    view = 'results'
+    clearSearch()
+  }
+
   function fromInput(text: string) {
     inputOpen = false
     doSearch(text)
@@ -118,10 +141,12 @@
 
 <div class="wrap">
   <header class="bar">
-    <h1 class="brand"><span class="mark">古古</span> <span class="word">Kogu</span></h1>
+    <h1 class="brand">
+      <button class="brandbtn" onclick={goHome} aria-label="home"><span class="mark">古古</span> <span class="word">Kogu</span></button>
+    </h1>
   </header>
 
-  <div class="searchrow" class:open={inputOpen}>
+  <div class="searchrow">
     <span class="searchicon" aria-hidden="true"><Search size={18} /></span>
     <input
       type="text"
@@ -140,20 +165,20 @@
       autocapitalize="off"
       spellcheck="false"
     />
-    <button
-      class="inputbtn"
-      aria-label={inputOpen ? 'close input methods' : 'draw or photograph a character'}
-      aria-pressed={inputOpen}
-      title="draw / photo"
-      onclick={() => (inputOpen = !inputOpen)}
-      data-testid="input-toggle"
-    >
-      {#if inputOpen}<X size={18} />{:else}<Plus size={18} />{/if}
-    </button>
+    {#if q}
+      <button class="clearbtn" aria-label="clear search" onclick={clearSearch} data-testid="clear"><X size={18} /></button>
+    {/if}
   </div>
 
+  {#if view === 'results'}
+    <div class="modes">
+      <button class="mode" onclick={() => openInput('draw')} data-testid="draw-toggle"><Brush size={16} aria-hidden="true" /> draw</button>
+      <button class="mode" onclick={() => openInput('photo')} data-testid="scan-toggle"><Camera size={16} aria-hidden="true" /> photo</button>
+    </div>
+  {/if}
+
   {#if inputOpen}
-    <InputSheet onpick={fromInput} onclose={() => (inputOpen = false)} />
+    <InputSheet mode={inputMode} onpick={fromInput} onclose={() => (inputOpen = false)} />
   {/if}
 
   {#if err}<div class="err">{err}</div>{/if}
@@ -202,25 +227,30 @@
     padding: calc(1.4rem + env(safe-area-inset-top)) calc(1.15rem + env(safe-area-inset-right))
       calc(4rem + env(safe-area-inset-bottom)) calc(1.15rem + env(safe-area-inset-left));
   }
-  .bar { margin-bottom: 1.1rem; }
-  .brand { margin: 0; font-weight: 400; display: flex; align-items: baseline; gap: 0.45rem; }
-  .brand .mark { font-family: var(--han); font-weight: 500; font-size: 1.4rem; letter-spacing: -0.04em; }
+  .bar { margin-bottom: 1rem; }
+  .brand { margin: 0; font-weight: 400; }
+  .brandbtn { display: inline-flex; align-items: baseline; gap: 0.45rem; background: none; border: none; padding: 0; }
+  .brandbtn:hover { background: none; }
+  .brand .mark { font-family: var(--han); font-weight: 500; font-size: 1.4rem; letter-spacing: -0.04em; color: var(--text); }
   .brand .word { font-family: var(--sans); font-size: 1.05rem; letter-spacing: 0.06em; color: var(--muted); }
 
-  .searchrow { position: relative; margin-bottom: 1.6rem; }
+  .searchrow { position: relative; margin-bottom: 0.7rem; }
   .searchicon { position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; display: flex; }
   .searchrow input {
-    padding: 0.95rem 3.2rem 0.95rem 3rem; font-size: 1.3rem; font-family: var(--sans);
+    padding: 0.95rem 3rem 0.95rem 3rem; font-size: 1.3rem; font-family: var(--sans);
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
   }
   .searchrow input:focus { border-color: var(--border-strong); background: var(--surface-2); }
-  .searchrow input::placeholder { font-style: italic; color: var(--faint); }
-  .inputbtn {
+  .searchrow input::placeholder { color: var(--faint); }
+  .clearbtn {
     position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%);
     border: none; background: transparent; color: var(--muted); padding: 0.45rem; border-radius: var(--r);
   }
-  .inputbtn:hover { color: #fff; background: var(--surface-2); }
-  .inputbtn[aria-pressed='true'] { color: #fff; }
+  .clearbtn:hover { color: #fff; background: var(--surface-2); }
+
+  .modes { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+  .mode { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.9rem; color: var(--muted); }
+  .mode:hover { color: #fff; border-color: var(--text); }
 
   .meta { color: var(--faint); font-size: 0.7rem; margin-bottom: 0.6rem; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.1em; }
   .err { color: var(--text); margin: 0.5rem 0; }
@@ -229,11 +259,11 @@
   .results { list-style: none; margin: 0; padding: 0; }
   .results li + li { border-top: 1px solid var(--border); }
   .hit {
-    display: flex; align-items: baseline; gap: 1rem; width: 100%; text-align: left;
-    background: none; border: none; border-radius: var(--r); padding: 0.85rem 0.5rem;
+    display: flex; align-items: center; gap: 0.9rem; width: 100%; text-align: left;
+    background: none; border: none; border-radius: var(--r); padding: 0.7rem 0.5rem;
   }
   .hit:hover { background: var(--surface); color: var(--text); }
-  .hw { font-family: var(--han); font-size: 1.75rem; line-height: 1.05; flex: none; min-width: 2.4em; }
+  .hw { font-family: var(--han); font-size: 1.7rem; line-height: 1.05; flex: none; min-width: 2.2em; }
   .hw .alt { color: var(--faint); font-size: 0.95rem; margin-left: 0.35rem; }
   .meta-col { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }
   .line1 { display: flex; align-items: baseline; gap: 0.5rem; }
@@ -243,5 +273,5 @@
   .gl { color: var(--muted); font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .back { display: inline-flex; align-items: center; gap: 0.3rem; margin-bottom: 1rem; background: none; border: none; color: var(--muted); padding: 0.3rem 0; }
   .back:hover { color: #fff; background: none; }
-  .empty { color: var(--faint); padding: 1.2rem 0; font-style: italic; }
+  .empty { color: var(--faint); padding: 1.2rem 0; }
 </style>
