@@ -216,11 +216,11 @@
     /* respect the notch / status bar / home indicator so it doesn't sit under them */
     padding: calc(1.2rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right)) calc(4rem + env(safe-area-inset-bottom)) calc(1rem + env(safe-area-inset-left));
   }
-  .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.2rem; }
-  .brand { display: flex; align-items: baseline; gap: 0.5rem; margin: 0; font-weight: 400; }
-  .brand .mark { font-family: var(--han); font-weight: 500; font-size: 1.5rem; letter-spacing: -0.04em; line-height: 1; }
+  .bar { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem 0.8rem; flex-wrap: wrap; margin-bottom: 1.2rem; }
+  .brand { display: flex; align-items: baseline; gap: 0.5rem; margin: 0; font-weight: 400; flex-shrink: 0; }
+  .brand .mark { font-family: var(--han); font-weight: 500; font-size: 1.5rem; letter-spacing: -0.04em; line-height: 1; white-space: nowrap; }
   .brand .word { font-family: var(--sans); font-size: 1.15rem; letter-spacing: 0.02em; color: var(--muted); }
-  .controls { display: flex; gap: 0.5rem; }
+  .controls { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; }
   .iconbtn { display: inline-flex; align-items: center; gap: 0.3rem; }
   .searchrow { position: relative; margin-bottom: 1.4rem; }
   .searchicon { position: absolute; left: 0.95rem; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; display: flex; }
