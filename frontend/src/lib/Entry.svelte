@@ -53,6 +53,18 @@
     {/each}
   </ol>
 
+  {#if entry.origin_badges.length || entry.etymology}
+    <section class="origin">
+      <h3>origin <span class="dim">why this word</span></h3>
+      {#if entry.origin_badges.length}
+        <div class="badges">
+          {#each entry.origin_badges as b}<span class="obadge">{b.replace(/-/g, ' ')}</span>{/each}
+        </div>
+      {/if}
+      {#if entry.etymology}<p class="ety">{entry.etymology}</p>{/if}
+    </section>
+  {/if}
+
   <section class="chars">
     <h3>characters</h3>
     {#each entry.characters as c}
@@ -154,6 +166,9 @@
   .variants { margin-top: 0.3rem; display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.8rem; }
   .vedge { display: inline-flex; align-items: center; gap: 0.2rem; }
   .vedge b { font-family: var(--han); }
+  .badges { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.2rem 0 0.5rem; }
+  .obadge { font-size: 0.7rem; padding: 0.1rem 0.45rem; border: 1px solid var(--border-strong); border-radius: var(--r); color: var(--text); text-transform: uppercase; letter-spacing: 0.04em; }
+  .ety { font-size: 0.9rem; color: var(--muted); line-height: 1.55; margin: 0.2rem 0 0; }
   .links { display: flex; flex-direction: column; gap: 0.2rem; }
   .link { display: flex; gap: 0.6rem; align-items: baseline; text-align: left; padding: 0.35rem 0.4rem; }
   .link:hover { background: var(--surface-2); border: none; }

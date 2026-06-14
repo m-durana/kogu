@@ -156,6 +156,13 @@ fn build_entry(
         }
     }
 
+    // lexical "why": origin badges + Wiktionary etymology passthrough
+    let mut bs = conn.prepare("SELECT badge FROM origin_badge WHERE lexeme_id=?1 ORDER BY badge")?;
+    let origin_badges: Vec<String> = bs.query_map([id], |r| r.get(0))?.collect::<Result<_, _>>()?;
+    let etymology: Option<String> = conn
+        .query_row("SELECT text FROM etymology WHERE lexeme_id=?1", [id], |r| r.get(0))
+        .ok();
+
     Ok(Some(Entry {
         lexeme_id: id,
         variety,
@@ -168,6 +175,8 @@ fn build_entry(
         characters,
         same_form,
         translations,
+        origin_badges,
+        etymology,
     }))
 }
 

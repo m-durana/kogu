@@ -285,6 +285,31 @@ async fn translate_unknown_empty() {
     assert!(v["concepts"].as_array().unwrap().is_empty());
 }
 
+// --- Phase 3.2: lexical origin badges + etymology passthrough ---
+
+// O1. origin badge: Chinese 会社 is tagged borrowed-from-japanese (data-only, no LLM).
+#[tokio::test]
+async fn origin_badge() {
+    // the zh lexeme's headword is 會社 (traditional); 会社 is its simplified form
+    let v = search("会社").await;
+    let hit = v["results"].as_array().unwrap().iter().find(|r| r["variety"] == "zh").expect("zh 会社");
+    let id = hit["lexeme_id"].as_i64().unwrap();
+    let e = get(&format!("/entry/{id}")).await.1;
+    let badges: Vec<String> =
+        e["origin_badges"].as_array().unwrap().iter().map(|b| b.as_str().unwrap().into()).collect();
+    assert!(badges.iter().any(|b| b == "borrowed-from-japanese"), "badges were {badges:?}");
+}
+
+// O2. etymology passthrough: 空港 carries its Wiktionary etymology paragraph verbatim.
+#[tokio::test]
+async fn etymology_passthrough() {
+    let hit = entry_of(&search("空港").await, "ja", "空港");
+    let id = hit["lexeme_id"].as_i64().unwrap();
+    let e = get(&format!("/entry/{id}")).await.1;
+    let ety = e["etymology"].as_str().unwrap_or("");
+    assert!(ety.contains('空') && ety.contains('港'), "etymology was {ety:?}");
+}
+
 // --- Phase 3.3: Cantonese ---
 
 // C1. Cantonese colloquial words / 粵字 exist as first-class yue lexemes.

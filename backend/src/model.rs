@@ -44,6 +44,10 @@ pub struct Entry {
     pub same_form: Vec<LinkLite>,
     /// 同義 — lexemes sharing a concept (a different word, same meaning) across the systems.
     pub translations: Vec<LinkLite>,
+    /// lexical "why": origin badges (wasei-kango, borrowed-from-japanese, calque, …) — no LLM.
+    pub origin_badges: Vec<String>,
+    /// Wiktionary etymology paragraph, passthrough (no generated prose).
+    pub etymology: Option<String>,
 }
 
 #[derive(Serialize)]

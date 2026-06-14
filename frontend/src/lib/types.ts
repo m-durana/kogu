@@ -72,6 +72,8 @@ export interface Entry {
   characters: CharInfo[]
   same_form: LinkLite[]
   translations: LinkLite[]
+  origin_badges: string[]
+  etymology: string | null
 }
 
 export interface ConceptGroup {
