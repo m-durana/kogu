@@ -132,14 +132,17 @@ fn build_entry(
     let mut translations = Vec::new();
     let mut seen = same_form_ids;
     seen.insert(id);
+    // prefer tight (specific) concepts; skip hopelessly generic ones to cut polysemy noise
     let mut s = conn.prepare(
-        "SELECT DISTINCT s2.lexeme_id, co.label_en \
+        "SELECT s2.lexeme_id, co.label_en, MIN(co.member_count) AS spec \
          FROM sense_concept sc1 \
          JOIN sense_concept sc2 ON sc2.concept_id = sc1.concept_id \
          JOIN sense s1 ON s1.id = sc1.sense_id \
          JOIN sense s2 ON s2.id = sc2.sense_id \
          JOIN concept co ON co.id = sc1.concept_id \
-         WHERE s1.lexeme_id = ?1 AND s2.lexeme_id <> ?1 \
+         WHERE s1.lexeme_id = ?1 AND s2.lexeme_id <> ?1 AND co.member_count <= 18 \
+         GROUP BY s2.lexeme_id \
+         ORDER BY spec ASC \
          LIMIT 120",
     )?;
     let rows: Vec<(i64, String)> =

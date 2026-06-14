@@ -9,12 +9,38 @@ semantic-variant edges are suggestion-only (never used for orthodox resolution).
 """
 from __future__ import annotations
 
+import json
 import zipfile
 from collections import defaultdict
 
 from ..db import SOURCES_DIR
 
 UNIHAN_ZIP = SOURCES_DIR / "Unihan.zip"
+KANJIDIC_ZIP = SOURCES_DIR / "kanjidic2-en.json.zip"
+
+
+def _kanjidic_kana():
+    """codepoint -> (onyomi[katakana], kunyomi[hiragana]) from Kanjidic — proper kana, not romaji."""
+    on: dict[int, list[str]] = {}
+    kun: dict[int, list[str]] = {}
+    if not KANJIDIC_ZIP.exists():
+        return on, kun
+    with zipfile.ZipFile(KANJIDIC_ZIP) as z:
+        name = next(n for n in z.namelist() if n.endswith(".json"))
+        data = json.loads(z.read(name))
+    for c in data.get("characters", []):
+        lit = c.get("literal")
+        if not lit or len(lit) != 1:
+            continue
+        cp = ord(lit)
+        rm = c.get("readingMeaning") or {}
+        for g in rm.get("groups", []):
+            for r in g.get("readings", []):
+                if r.get("type") == "ja_on":
+                    on.setdefault(cp, []).append(r["value"])
+                elif r.get("type") == "ja_kun":
+                    kun.setdefault(cp, []).append(r["value"])
+    return on, kun
 
 
 def _unihan(file: str):
@@ -96,6 +122,15 @@ def ingest(conn) -> None:
                 continue
             ids[cp] = cols[2].strip()
             chars.add(cp)
+
+    # ---- override Japanese on/kun with proper kana from Kanjidic (Unihan only has romaji) ----
+    kd_on, kd_kun = _kanjidic_kana()
+    for cp, vals in kd_on.items():
+        chars.add(cp)
+        readings[cp]["onyomi"] = list(dict.fromkeys(vals))
+    for cp, vals in kd_kun.items():
+        chars.add(cp)
+        readings[cp]["kunyomi"] = list(dict.fromkeys(vals))
 
     # ---- collect edges: (child_cp, parent_cp, type, reform_id) ----
     edges: list[tuple[int, int, str, str]] = []

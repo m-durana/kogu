@@ -131,10 +131,11 @@ CREATE INDEX idx_sense_lexeme ON sense(lexeme_id);
 
 -- A language-independent sense. Gathers words across all four systems that express it.
 CREATE TABLE concept (
-    id          INTEGER PRIMARY KEY,
-    label_en    TEXT,                    -- short English label
-    definition  TEXT,
-    source      TEXT                     -- 'omw','wiktionary','gloss-pivot','curated'
+    id           INTEGER PRIMARY KEY,
+    label_en     TEXT,                   -- short English label
+    definition   TEXT,
+    source       TEXT,                   -- 'omw','wiktionary','gloss-pivot','curated'
+    member_count INTEGER NOT NULL DEFAULT 0  -- distinct lexemes (specificity: smaller = tighter)
 );
 
 -- sense ↔ concept, many-to-many (DESIGN.md §2: word↔concept is sense-level).

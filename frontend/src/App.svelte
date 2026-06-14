@@ -119,9 +119,13 @@
       <span class="word">Wenbun</span>
     </div>
     <div class="controls">
-      <div class="toggle" role="group" aria-label="primary script">
-        <button aria-pressed={pref === 'trad'} onclick={() => (pref = 'trad')}>繁</button>
-        <button aria-pressed={pref === 'simp'} onclick={() => (pref = 'simp')}>简</button>
+      <div class="toggle" role="group" aria-label="Chinese script">
+        <button aria-pressed={pref === 'trad'} title="Traditional Chinese" onclick={() => (pref = 'trad')}>
+          <span class="cjk">繁</span> Trad
+        </button>
+        <button aria-pressed={pref === 'simp'} title="Simplified Chinese" onclick={() => (pref = 'simp')}>
+          <span class="cjk">简</span> Simp
+        </button>
       </div>
       <button aria-pressed={pad} onclick={() => (pad = !pad)} data-testid="draw-toggle" class="iconbtn">
         <Brush size={15} /> draw
@@ -203,7 +207,8 @@
   .searchrow input { padding: 0.85rem 0.9rem 0.85rem 2.9rem; font-size: 1.35rem; background: var(--surface); border: 1px solid var(--border); }
   .searchrow input:focus { border-color: var(--border-strong); background: var(--surface-2); }
   .toggle { display: inline-flex; gap: 2px; padding: 3px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); }
-  .toggle button { border: none; background: transparent; color: var(--muted); font-family: var(--han); padding: 0.3rem 0.7rem; border-radius: calc(var(--r-lg) - 5px); }
+  .toggle button { border: none; background: transparent; color: var(--muted); font-family: var(--sans); font-size: 0.8rem; padding: 0.35rem 0.6rem; border-radius: calc(var(--r-lg) - 5px); }
+  .toggle button .cjk { font-family: var(--han); font-size: 1.05rem; }
   .toggle button:hover { background: var(--surface-2); color: #fff; }
   .toggle button[aria-pressed='true'] { background: var(--border-strong); color: #fff; }
   .padwrap { margin-bottom: 1.2rem; }

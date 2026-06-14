@@ -50,7 +50,13 @@ button {
   padding: 0.45rem 0.75rem;
   cursor: pointer;
   font-size: 0.85rem;
+  line-height: 1;
   letter-spacing: 0.02em;
+  /* center contents both axes — fixes CJK glyphs sitting high in chips/buttons */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
   transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 button:hover { border-color: var(--text); color: #fff; }

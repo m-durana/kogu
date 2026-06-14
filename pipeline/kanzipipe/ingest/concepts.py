@@ -73,12 +73,13 @@ def ingest(conn) -> None:
         if len(lexemes) < 2 or len(lexemes) > _MAX_LEXEMES_PER_CONCEPT:
             continue
         cid += 1
-        concept_rows.append((cid, key, None, "gloss-pivot"))
+        concept_rows.append((cid, key, None, "gloss-pivot", len(lexemes)))
         for sense_id in key_senses[key]:
             link_rows.append((sense_id, cid, 1.0))
 
     conn.executemany(
-        "INSERT INTO concept(id,label_en,definition,source) VALUES (?,?,?,?)", concept_rows)
+        "INSERT INTO concept(id,label_en,definition,source,member_count) VALUES (?,?,?,?,?)",
+        concept_rows)
     conn.executemany(
         "INSERT OR IGNORE INTO sense_concept(sense_id,concept_id,confidence) VALUES (?,?,?)",
         link_rows)
