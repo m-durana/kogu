@@ -84,9 +84,9 @@
     aria-label="handwriting canvas"
   ></canvas>
   <div class="pad-actions">
-    <button onclick={clear} data-testid="pad-clear" class="ib"><Eraser size={15} /> clear</button>
+    <button onclick={clear} data-testid="pad-clear" class="ib"><Eraser size={15} aria-hidden="true" /> clear</button>
     <button onclick={run} disabled={busy} data-testid="pad-recognize" class="ib">
-      <ScanLine size={15} /> {busy ? '…' : 'recognise'}
+      <ScanLine size={15} aria-hidden="true" /> {busy ? '…' : 'recognise'}
     </button>
   </div>
   {#if error}<div class="pad-error">{error}</div>{/if}

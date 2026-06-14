@@ -90,7 +90,7 @@
             <div class="variants">
               {#each c.variants as v}
                 <span class="vedge">
-                  <ArrowRight size={13} /> <b>{v.parent}</b>
+                  <ArrowRight size={13} aria-hidden="true" /> <b>{v.parent}</b>
                   <span class="dim">{v.edge_type}{#if v.reform_name} · {v.reform_name}{#if v.reform_year} ({v.reform_year}){/if}{/if}</span>
                 </span>
               {/each}

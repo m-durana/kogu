@@ -7,7 +7,7 @@
   --border-strong: #3a3a40;
   --text: #ededeb;
   --muted: #8a8a90;
-  --faint: #5a5a60;
+  --faint: #76767e;
   /* monochrome only — no colour. "accent" = brightest grey/white for emphasis. */
   --accent: #f4f4f2;
   --accent-dim: #3a3a40;
@@ -15,7 +15,7 @@
   --ja: var(--text);
   --yue: var(--text);
 
-  /* Wenbun brand type: Newsreader (serif body/wordmark), Space Mono (labels), Noto Serif (Han). */
+  /* Kogu brand type: Newsreader (serif body/wordmark), Space Mono (labels), Noto Serif (Han). */
   --mono: "Space Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --sans: "Newsreader", Georgia, "Times New Roman", serif;
   --han: "Noto Serif SC", "Noto Serif JP", "Songti SC", "Hiragino Mincho ProN", "MS Mincho", serif;
@@ -29,6 +29,10 @@
 }
 
 * { box-sizing: border-box; }
+
+/* keyboard focus ring (visible only for keyboard nav, not mouse) */
+:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+:focus:not(:focus-visible) { outline: none; }
 
 html, body {
   margin: 0;

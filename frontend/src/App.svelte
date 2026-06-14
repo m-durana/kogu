@@ -114,10 +114,10 @@
 
 <div class="wrap">
   <header class="bar">
-    <div class="brand">
-      <span class="mark">文文</span>
-      <span class="word">Wenbun</span>
-    </div>
+    <h1 class="brand">
+      <span class="mark">古古</span>
+      <span class="word">Kogu</span>
+    </h1>
     <div class="controls">
       <div class="toggle" role="group" aria-label="Chinese script">
         <button aria-pressed={pref === 'trad'} title="Traditional Chinese" onclick={() => (pref = 'trad')}>
@@ -128,15 +128,16 @@
         </button>
       </div>
       <button aria-pressed={pad} onclick={() => (pad = !pad)} data-testid="draw-toggle" class="iconbtn">
-        <Brush size={15} /> draw
+        <Brush size={15} aria-hidden="true" /> draw
       </button>
     </div>
   </header>
 
   <div class="searchrow">
-    <span class="searchicon"><Search size={18} /></span>
+    <span class="searchicon" aria-hidden="true"><Search size={18} /></span>
     <input
       type="text"
+      aria-label="Search by hanzi, kanji, pinyin, jyutping, kana, or English"
       placeholder="hanzi · kanji · pinyin · jyutping · kana · english"
       value={q}
       oninput={onInput}
@@ -161,7 +162,7 @@
 
   {#if view === 'entry' && entry}
     <button class="back iconbtn" onclick={goBack} data-testid="back">
-      <ArrowLeft size={15} /> results
+      <ArrowLeft size={15} aria-hidden="true" /> results
     </button>
     <EntryView {entry} {pref} onsearch={doSearch} />
   {:else}
@@ -197,7 +198,7 @@
 <style>
   .wrap { max-width: 760px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
   .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.2rem; }
-  .brand { display: flex; align-items: baseline; gap: 0.5rem; }
+  .brand { display: flex; align-items: baseline; gap: 0.5rem; margin: 0; font-weight: 400; }
   .brand .mark { font-family: var(--han); font-weight: 500; font-size: 1.5rem; letter-spacing: -0.04em; line-height: 1; }
   .brand .word { font-family: var(--sans); font-size: 1.15rem; letter-spacing: 0.02em; color: var(--muted); }
   .controls { display: flex; gap: 0.5rem; }

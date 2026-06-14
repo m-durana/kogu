@@ -1,7 +1,7 @@
-// Wenbun service worker — installability + fast loads. Offline is deferred (DESIGN Appendix A),
+// Kogu service worker — installability + fast loads. Offline is deferred (DESIGN Appendix A),
 // so this caches the app shell + hashed assets but never caches API responses.
-const CACHE = 'wenbun-v2'
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg', '/icon-192.png?v=2', '/icon-512.png?v=2']
+const CACHE = 'kogu-v3'
+const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg', '/icon-192.png?v=3', '/icon-512.png?v=3']
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()))

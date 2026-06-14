@@ -1,6 +1,6 @@
 {
-  "name": "Wenbun 文文",
-  "short_name": "Wenbun",
+  "name": "Kogu 古古",
+  "short_name": "Kogu",
   "description": "A dictionary for the living Han script: Traditional, Simplified, Cantonese, Japanese.",
   "lang": "en",
   "start_url": "/",
@@ -10,8 +10,8 @@
   "background_color": "#0b0b0c",
   "theme_color": "#0b0b0c",
   "icons": [
-    { "src": "/icon-192.png?v=2", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png?v=2", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png?v=2", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/icon-192.png?v=3", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png?v=3", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png?v=3", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
