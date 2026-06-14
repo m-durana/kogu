@@ -170,7 +170,7 @@
   .senses li { margin: 0.2rem 0; font-size: 1.02rem; line-height: 1.45; }
   .pos { color: var(--faint); font-size: 0.75rem; margin-right: 0.4rem; font-family: var(--mono); }
 
-  .link { display: flex; gap: 0.6rem; align-items: center; text-align: left; padding: 0.4rem 0.4rem; border: none; background: none; border-radius: var(--r); }
+  .link { display: flex; gap: 0.6rem; align-items: center; justify-content: flex-start; text-align: left; padding: 0.4rem 0.4rem; border: none; background: none; border-radius: var(--r); }
   .link:hover { background: var(--surface); }
   .lhead { font-family: var(--han); font-size: 1.3rem; }
   .lread { font-family: var(--mono); color: var(--muted); font-size: 0.8rem; }

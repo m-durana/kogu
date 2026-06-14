@@ -261,7 +261,7 @@
   .results { list-style: none; margin: 0; padding: 0; }
   .results li + li { border-top: 1px solid var(--border); }
   .hit {
-    display: flex; align-items: center; gap: 0.9rem; width: 100%; text-align: left;
+    display: flex; align-items: center; justify-content: flex-start; gap: 0.9rem; width: 100%; text-align: left;
     background: none; border: none; border-radius: var(--r); padding: 0.7rem 0.5rem;
   }
   .hit:hover { background: var(--surface); color: var(--text); }
