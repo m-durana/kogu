@@ -26,7 +26,14 @@ pub fn load_engine() -> Option<OAROCR> {
         tracing::warn!("OCR models not found in {dir} — /ocr disabled");
         return None;
     }
-    match OAROCRBuilder::new(det, rec, dict).build() {
+    let mut builder = OAROCRBuilder::new(det, rec, dict);
+    // text-line orientation classification: rotates rotated/vertical lines before recognition
+    let ori = format!("{dir}/pp-lcnet_x0_25_textline_ori.onnx");
+    if std::path::Path::new(&ori).exists() {
+        builder = builder.with_text_line_orientation_classification(ori);
+        tracing::info!("OCR: text-line orientation classification enabled");
+    }
+    match builder.build() {
         Ok(engine) => {
             tracing::info!("OCR engine loaded from {dir}");
             Some(engine)

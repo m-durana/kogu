@@ -134,11 +134,11 @@
           <span class="cjk">简</span> Simp
         </button>
       </div>
-      <button aria-pressed={scan} onclick={() => (scan = !scan)} data-testid="scan-toggle" class="iconbtn">
-        <Camera size={15} aria-hidden="true" /> scan
+      <button aria-pressed={scan} aria-label="scan an image" title="scan an image" onclick={() => (scan = !scan)} data-testid="scan-toggle" class="ic">
+        <Camera size={18} aria-hidden="true" />
       </button>
-      <button aria-pressed={pad} onclick={() => (pad = !pad)} data-testid="draw-toggle" class="iconbtn">
-        <Brush size={15} aria-hidden="true" /> draw
+      <button aria-pressed={pad} aria-label="draw a character" title="draw a character" onclick={() => (pad = !pad)} data-testid="draw-toggle" class="ic">
+        <Brush size={18} aria-hidden="true" />
       </button>
     </div>
   </header>
@@ -220,7 +220,8 @@
   .brand { display: flex; align-items: baseline; gap: 0.5rem; margin: 0; font-weight: 400; flex-shrink: 0; }
   .brand .mark { font-family: var(--han); font-weight: 500; font-size: 1.5rem; letter-spacing: -0.04em; line-height: 1; white-space: nowrap; }
   .brand .word { font-family: var(--sans); font-size: 1.15rem; letter-spacing: 0.02em; color: var(--muted); }
-  .controls { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; }
+  .controls { display: flex; gap: 0.4rem; align-items: center; }
+  .ic { display: inline-flex; align-items: center; justify-content: center; padding: 0.5rem 0.6rem; }
   .iconbtn { display: inline-flex; align-items: center; gap: 0.3rem; }
   .searchrow { position: relative; margin-bottom: 1.4rem; }
   .searchicon { position: absolute; left: 0.95rem; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; display: flex; }
