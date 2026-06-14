@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -80,6 +80,37 @@ describe('labels & helpers', () => {
     expect(shortGloss([])).toBe('')
     expect(shortGloss(['a'.repeat(200)]).endsWith('…')).toBe(true)
     expect(shortGloss(['airport'])).toBe('airport')
+  })
+})
+
+describe('primaryForm — echo the typed form (no toggle)', () => {
+  const ts = [f('機場', 'trad', null, true), f('机场', 'simp', 'CN')]
+  it('echoes the simplified query', () => {
+    const d = primaryForm(ts, 'zh', '机场')!
+    expect(d.primary.form).toBe('机场')
+    expect(d.alternate?.form).toBe('機場')
+  })
+  it('echoes the traditional query', () => {
+    const d = primaryForm(ts, 'zh', '機場')!
+    expect(d.primary.form).toBe('機場')
+    expect(d.alternate?.form).toBe('机场')
+  })
+  it('no/!match query falls back to canonical, still brackets the other', () => {
+    const d = primaryForm(ts, 'zh', 'airport')!
+    expect(d.primary.form).toBe('機場')
+    expect(d.alternate?.form).toBe('机场')
+  })
+  it('identical forms across scripts -> no bracket', () => {
+    const d = primaryForm([f('山', 'trad', null, true), f('山', 'simp', 'CN')], 'zh', '')!
+    expect(d.alternate).toBeNull()
+  })
+  it('japanese: no bracketed alternate', () => {
+    const d = primaryForm([f('会社', 'shinjitai', 'JP', true), f('かいしゃ', 'kana', 'JP')], 'ja', '会社')!
+    expect(d.primary.form).toBe('会社')
+    expect(d.alternate).toBeNull()
+  })
+  it('empty forms -> null', () => {
+    expect(primaryForm([], 'zh', 'x')).toBeNull()
   })
 })
 
