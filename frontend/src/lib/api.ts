@@ -17,6 +17,17 @@ export async function entry(id: number): Promise<Entry> {
   return r.json()
 }
 
+export async function ocr(blob: Blob): Promise<import('./types').OcrResponse> {
+  const r = await fetch(`${BASE}/ocr`, {
+    method: 'POST',
+    headers: { 'Content-Type': blob.type || 'image/jpeg' },
+    body: blob,
+  })
+  if (r.status === 503) throw new Error('ocr_unavailable')
+  if (!r.ok) throw new Error(`ocr failed: ${r.status}`)
+  return r.json()
+}
+
 export type Stroke = [number, number, number][]
 
 export async function recognize(

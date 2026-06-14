@@ -64,3 +64,13 @@ export function shortGloss(glosses: string[], max = 90): string {
   const g = glosses[0] ?? ''
   return g.length > max ? g.slice(0, max - 1) + '…' : g
 }
+
+/** OCR selection -> text, always in document (line, char) order regardless of tap order. */
+export function ocrSelectedText(
+  lines: { chars: { ch: string }[] }[],
+  selected: Set<string>,
+): string {
+  return lines
+    .flatMap((l, li) => l.chars.filter((_, ci) => selected.has(`${li}-${ci}`)).map((c) => c.ch))
+    .join('')
+}

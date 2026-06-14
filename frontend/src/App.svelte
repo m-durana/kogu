@@ -3,8 +3,9 @@
   import type { Entry, Hit, PrefScript } from './lib/types'
   import { pickForms, matchLabel, varietyLabel, regionsOf, shortGloss } from './lib/display'
   import Pad from './lib/Pad.svelte'
+  import Ocr from './lib/Ocr.svelte'
   import EntryView from './lib/Entry.svelte'
-  import { Search, Brush, ArrowLeft } from '@lucide/svelte'
+  import { Search, Brush, Camera, ArrowLeft } from '@lucide/svelte'
   import { onMount } from 'svelte'
 
   let q = $state('')
@@ -14,6 +15,7 @@
   let view = $state<'results' | 'entry'>('results')
   let pref = $state<PrefScript>('trad')
   let pad = $state(false)
+  let scan = $state(false)
   let loading = $state(false)
   let err = $state('')
   let searched = $state(false)
@@ -110,6 +112,11 @@
     pad = false
     doSearch(ch)
   }
+
+  function fromOcr(text: string) {
+    scan = false
+    doSearch(text)
+  }
 </script>
 
 <div class="wrap">
@@ -127,6 +134,9 @@
           <span class="cjk">简</span> Simp
         </button>
       </div>
+      <button aria-pressed={scan} onclick={() => (scan = !scan)} data-testid="scan-toggle" class="iconbtn">
+        <Camera size={15} aria-hidden="true" /> scan
+      </button>
       <button aria-pressed={pad} onclick={() => (pad = !pad)} data-testid="draw-toggle" class="iconbtn">
         <Brush size={15} aria-hidden="true" /> draw
       </button>
@@ -153,6 +163,10 @@
       spellcheck="false"
     />
   </div>
+
+  {#if scan}
+    <div class="padwrap"><Ocr onpick={fromOcr} /></div>
+  {/if}
 
   {#if pad}
     <div class="padwrap"><Pad onpick={fromPad} /></div>
@@ -196,7 +210,12 @@
 </div>
 
 <style>
-  .wrap { max-width: 760px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    /* respect the notch / status bar / home indicator so it doesn't sit under them */
+    padding: calc(1.2rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right)) calc(4rem + env(safe-area-inset-bottom)) calc(1rem + env(safe-area-inset-left));
+  }
   .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.2rem; }
   .brand { display: flex; align-items: baseline; gap: 0.5rem; margin: 0; font-weight: 400; }
   .brand .mark { font-family: var(--han); font-weight: 500; font-size: 1.5rem; letter-spacing: -0.04em; line-height: 1; }

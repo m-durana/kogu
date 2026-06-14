@@ -41,6 +41,14 @@ async fn get(uri: &str) -> (StatusCode, Value) {
     (status, val)
 }
 
+async fn post(uri: &str, body: Vec<u8>) -> StatusCode {
+    let app = build_router(state());
+    app.oneshot(Request::builder().method("POST").uri(uri).body(Body::from(body)).unwrap())
+        .await
+        .unwrap()
+        .status()
+}
+
 async fn search(q: &str) -> Value {
     get(&format!("/search?q={}", enc(q))).await.1
 }
@@ -163,6 +171,32 @@ async fn english_order_independent() {
     a.sort();
     b.sort();
     assert_eq!(a, b);
+}
+
+// --- OCR endpoint wiring (the char-split logic itself is unit-tested in src/ocr.rs) ---
+
+// OCR1. /ocr is POST-only and wired (GET is 405, not 404).
+#[tokio::test]
+async fn ocr_is_post_only() {
+    let (st, _) = get("/ocr").await;
+    assert_eq!(st, StatusCode::METHOD_NOT_ALLOWED);
+}
+
+// OCR2. empty body is rejected cleanly: 400 (engine present) or 503 (models absent) — never 500/404.
+#[tokio::test]
+async fn ocr_empty_body_handled() {
+    let st = post("/ocr", Vec::new()).await;
+    assert!(
+        st == StatusCode::BAD_REQUEST || st == StatusCode::SERVICE_UNAVAILABLE,
+        "unexpected status for empty /ocr: {st}"
+    );
+}
+
+// OCR3. non-image bytes never 500: 400 bad_image (engine present) or 503 (absent).
+#[tokio::test]
+async fn ocr_garbage_not_500() {
+    let st = post("/ocr", b"not an image".to_vec()).await;
+    assert!(st == StatusCode::BAD_REQUEST || st == StatusCode::SERVICE_UNAVAILABLE, "got {st}");
 }
 
 // --- Phase 2: concept layer / translation / relation labels ---

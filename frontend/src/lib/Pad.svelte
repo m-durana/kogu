@@ -23,6 +23,9 @@
   }
   function start(e: PointerEvent) {
     e.preventDefault()
+    try {
+      canvas.setPointerCapture(e.pointerId) // keep the gesture on the canvas (no selection/scroll)
+    } catch {}
     drawing = true
     if (strokes.length === 0 && current.length === 0) t0 = performance.now()
     const [x, y] = pos(e)
@@ -33,6 +36,7 @@
   }
   function move(e: PointerEvent) {
     if (!drawing) return
+    e.preventDefault()
     const [x, y] = pos(e)
     current.push([x, y, performance.now() - t0])
     const c = ctx()
@@ -80,7 +84,8 @@
     onpointerdown={start}
     onpointermove={move}
     onpointerup={end}
-    onpointerleave={end}
+    onpointercancel={end}
+    oncontextmenu={(e) => e.preventDefault()}
     aria-label="handwriting canvas"
   ></canvas>
   <div class="pad-actions">

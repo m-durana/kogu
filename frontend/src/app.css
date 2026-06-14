@@ -41,7 +41,10 @@ html, body {
   font-family: var(--sans);
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
+  /* PWA: kill the rubber-band overscroll that reveals it's a web view */
+  overscroll-behavior: none;
 }
+body { min-height: 100svh; }
 
 #app { min-height: 100vh; }
 

@@ -31,9 +31,17 @@ r2d2 = "0.8"
 r2d2_sqlite = "0.25"
 anyhow = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# OCR. We drop `download-binaries` (its prebuilt onnxruntime needs glibc 2.38; this VPS is 2.35,
+# and it pulls OpenSSL) and instead use ort's `load-dynamic`: dlopen the official manylinux
+# onnxruntime .so at runtime (ORT_DYLIB_PATH). We supply the PP-OCRv5 models ourselves.
+oar-ocr = { version = "0.7.0", default-features = false, features = ["simd"] }
+ort = { version = "=2.0.0-rc.12", features = ["load-dynamic"] }
+image = "0.25.10"
 
 [profile.release]
 opt-level = 3
-lto = true
-codegen-units = 1
+# LTO disabled: the OCR dep tree (onnxruntime bindings, image/av1, nalgebra, tokenizers) makes
+# full LTO too disk/RAM-heavy for this small shared VPS. opt-level 3 is plenty for a dictionary.
+lto = false
+codegen-units = 16
 strip = true

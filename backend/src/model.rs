@@ -117,3 +117,30 @@ pub struct ConceptGroup {
     pub concept: String,
     pub members: Vec<LinkLite>,
 }
+
+/// /ocr response — recognized text laid out over the image for tap-to-select (DESIGN: OCR feature).
+#[derive(Serialize)]
+pub struct OcrResponse {
+    /// the (possibly downscaled) image dimensions the boxes are in
+    pub width: u32,
+    pub height: u32,
+    pub lines: Vec<OcrLine>,
+}
+
+#[derive(Serialize)]
+pub struct OcrLine {
+    pub text: String,
+    pub confidence: f32,
+    /// axis-aligned bounding box [x, y, w, h] in image pixels
+    #[serde(rename = "box")]
+    pub box_: [f32; 4],
+    /// per-character cells (line box split by character count — Han is ~monospace)
+    pub chars: Vec<OcrChar>,
+}
+
+#[derive(Serialize)]
+pub struct OcrChar {
+    pub ch: String,
+    #[serde(rename = "box")]
+    pub box_: [f32; 4],
+}

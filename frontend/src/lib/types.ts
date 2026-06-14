@@ -80,6 +80,23 @@ export interface ConceptGroup {
   concept: string
   members: LinkLite[]
 }
+
+export type Box = [number, number, number, number] // x, y, w, h in image px
+export interface OcrChar {
+  ch: string
+  box: Box
+}
+export interface OcrLine {
+  text: string
+  confidence: number
+  box: Box
+  chars: OcrChar[]
+}
+export interface OcrResponse {
+  width: number
+  height: number
+  lines: OcrLine[]
+}
 export interface TranslateResponse {
   query: string
   concepts: ConceptGroup[]

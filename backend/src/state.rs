@@ -15,6 +15,8 @@ pub struct AppState {
     pub graph: Arc<VariantGraph>,
     /// shared HTTP client for the handwriting proxy (/recognize)
     pub http: reqwest::Client,
+    /// OCR engine (PaddleOCR via ONNX); None if models are unavailable
+    pub ocr: Option<Arc<oar_ocr::prelude::OAROCR>>,
 }
 
 impl AppState {
@@ -38,8 +40,9 @@ impl AppState {
         };
         let http = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(8))
-            .user_agent("kanzi/0.0 (+https://miro.build)")
+            .user_agent("kogu/0.0 (+https://miro.build)")
             .build()?;
-        Ok(AppState { pool, graph: Arc::new(graph), http })
+        let ocr = crate::ocr::load_engine().map(Arc::new);
+        Ok(AppState { pool, graph: Arc::new(graph), http, ocr })
     }
 }

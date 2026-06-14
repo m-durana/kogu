@@ -3,6 +3,7 @@
 pub mod graph;
 pub mod handlers;
 pub mod model;
+pub mod ocr;
 pub mod recognize;
 pub mod search;
 pub mod state;
@@ -24,6 +25,10 @@ pub fn build_router(st: AppState) -> Router {
         .route("/search", get(handlers::search_handler))
         .route("/entry/:id", get(handlers::entry_handler))
         .route("/recognize", post(recognize::recognize_handler))
+        .route(
+            "/ocr",
+            post(ocr::ocr_handler).layer(axum::extract::DefaultBodyLimit::max(12 * 1024 * 1024)),
+        )
         .route("/translate", get(handlers::translate_handler))
         .route("/why/:id", get(handlers::why_handler))
         .layer(CompressionLayer::new())

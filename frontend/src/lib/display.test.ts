@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, matchLabel, regionsOf, shortGloss, varietyLabel } from './display'
+import { pickForms, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -80,5 +80,31 @@ describe('labels & helpers', () => {
     expect(shortGloss([])).toBe('')
     expect(shortGloss(['a'.repeat(200)]).endsWith('…')).toBe(true)
     expect(shortGloss(['airport'])).toBe('airport')
+  })
+})
+
+describe('ocrSelectedText — OCR character selection', () => {
+  const lines = [
+    { chars: [{ ch: '機' }, { ch: '場' }] },
+    { chars: [{ ch: '空' }, { ch: '港' }] },
+  ]
+  it('empty selection -> empty string', () => {
+    expect(ocrSelectedText(lines, new Set())).toBe('')
+  })
+  it('single character', () => {
+    expect(ocrSelectedText(lines, new Set(['0-1']))).toBe('場')
+  })
+  it('keeps document order regardless of tap order', () => {
+    // select 港(line1) before 機(line0) — output must be document order 機…港
+    expect(ocrSelectedText(lines, new Set(['1-1', '0-0']))).toBe('機港')
+  })
+  it('whole line', () => {
+    expect(ocrSelectedText(lines, new Set(['1-0', '1-1']))).toBe('空港')
+  })
+  it('all selected', () => {
+    expect(ocrSelectedText(lines, new Set(['0-0', '0-1', '1-0', '1-1']))).toBe('機場空港')
+  })
+  it('ignores out-of-range keys', () => {
+    expect(ocrSelectedText(lines, new Set(['9-9', '0-0']))).toBe('機')
   })
 })
