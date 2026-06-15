@@ -221,13 +221,75 @@ fn gloss_words(conn: &rusqlite::Connection, id: i64) -> rusqlite::Result<std::co
     Ok(out)
 }
 
+const IDENTITY_TYPES: &str = "('simplification','shinjitai','z-variant')";
+
+/// A lexeme's primary surface form (the string compared char-by-char for variant detection).
+fn primary_form(conn: &rusqlite::Connection, id: i64) -> rusqlite::Result<String> {
+    conn.query_row(
+        "SELECT COALESCE((SELECT form FROM surface_form WHERE lexeme_id=l.id AND is_primary=1 LIMIT 1), headword) \
+         FROM lexeme l WHERE id=?1",
+        [id],
+        |r| r.get(0),
+    )
+}
+
+/// Are two characters a clean 1:1 variant spelling of the same character? True when an identity
+/// edge links them AND the derived form has exactly ONE identity parent — i.e. a plain spelling
+/// difference (这↔這, 汉↔漢), NOT a simplification *merge* of distinct characters (发←髮/發,
+/// 干←乾/幹), which the multi-parent test deliberately excludes so real merges stay false-friends.
+fn clean_variant_chars(conn: &rusqlite::Connection, x: char, y: char) -> rusqlite::Result<bool> {
+    if x == y {
+        return Ok(true);
+    }
+    for (child, parent) in [(x, y), (y, x)] {
+        let linked: i64 = conn.query_row(
+            &format!("SELECT EXISTS(SELECT 1 FROM glyph_edge WHERE child_cp=?1 AND parent_cp=?2 AND type IN {IDENTITY_TYPES})"),
+            [child as i64, parent as i64],
+            |r| r.get(0),
+        )?;
+        if linked != 0 {
+            let parents: i64 = conn.query_row(
+                &format!("SELECT COUNT(DISTINCT parent_cp) FROM glyph_edge WHERE child_cp=?1 AND type IN {IDENTITY_TYPES}"),
+                [child as i64],
+                |r| r.get(0),
+            )?;
+            if parents == 1 {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
+}
+
+/// Are two lexemes the same word in a different spelling? (equal length, every char a clean variant)
+fn variant_spelling(conn: &rusqlite::Connection, a: i64, b: i64) -> rusqlite::Result<bool> {
+    let fa = primary_form(conn, a)?;
+    let fb = primary_form(conn, b)?;
+    // identical spellings are NOT a "variant spelling" — same written form, so meaning (gloss)
+    // must decide. This keeps genuine same-form false friends (手紙 letter/toilet paper) flagged.
+    if fa == fb {
+        return Ok(false);
+    }
+    let (ca, cb): (Vec<char>, Vec<char>) = (fa.chars().collect(), fb.chars().collect());
+    if ca.is_empty() || ca.len() != cb.len() {
+        return Ok(false);
+    }
+    for (x, y) in ca.iter().zip(cb.iter()) {
+        if !clean_variant_chars(conn, *x, *y)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 /// Classify the relation between two same-form lexemes. A false-friend label needs POSITIVE
-/// evidence of divergence: both sides must be glossed and share no concept and no gloss word.
-/// Otherwise it's a cognate — this avoids two big mislabel classes: (1) cognates the concept layer
-/// just didn't link (砂糖 = sugar/sugar), and (2) bare variant glyphs with no glosses (廣/广, 個/个,
-/// where the absence of glosses is not evidence of a different meaning).
+/// evidence of divergence: not a shared concept, not a shared gloss word, not a mere variant
+/// spelling, and both sides actually glossed. This avoids the mislabel classes seen in testing:
+/// cognates the concept layer didn't link (砂糖 = sugar/sugar), bare variant glyphs with no
+/// glosses (廣/广), and 1:1 variant spellings of one word (这/這, 汉/漢, 癡/痴) — while keeping
+/// genuine simplification *merges* (发←髮/發, 干←乾/幹) flagged.
 fn classify_relation(conn: &rusqlite::Connection, a: i64, b: i64) -> rusqlite::Result<&'static str> {
-    if shares_concept(conn, a, b)? {
+    if shares_concept(conn, a, b)? || variant_spelling(conn, a, b)? {
         return Ok("cognate");
     }
     let wa = gloss_words(conn, a)?;
