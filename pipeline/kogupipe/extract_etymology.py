@@ -1,10 +1,10 @@
-"""Phase 3.2 — stream-extract Wiktionary etymology + origin badges from kaikki (no full storage).
+"""Phase 3.2 - stream-extract Wiktionary etymology + origin badges from kaikki (no full storage).
 
 Streams the (large) kaikki per-language JSONL line by line, keeps ONLY entries whose word is a
 surface form already in our DB, and writes a compact JSONL per language to sources/:
     {"word":..., "lang":"zh"|"ja", "ety":"<text>", "badges":[...]}
 
-No LLM — just passthrough of Wiktionary's own etymology_text + structured origin templates.
+No LLM - just passthrough of Wiktionary's own etymology_text + structured origin templates.
 
 Run (rarely):  python -m kogupipe.extract_etymology
 """
@@ -25,6 +25,19 @@ KAIKKI = {
 # wiktextract etymology_template name -> badge (origin category)
 _LANG_NAME = {"ja": "japanese", "en": "english", "zh": "chinese", "sa": "sanskrit",
               "pt": "portuguese", "nl": "dutch", "fr": "french", "de": "german"}
+
+
+def _trim(text: str, limit: int = 1500) -> str:
+    """Keep a generous chunk but never cut mid-sentence: trim to the last sentence end (./。/!/?)
+    within the limit, else the last space. Avoids the old 600-char mid-word truncation."""
+    if len(text) <= limit:
+        return text
+    head = text[:limit]
+    cut = max(head.rfind(". "), head.rfind("。"), head.rfind("! "), head.rfind("? "), head.rfind("！"), head.rfind("？"))
+    if cut < limit * 0.5:  # no good sentence break — fall back to a word boundary
+        cut = head.rfind(" ")
+    end = cut + 1 if cut > 0 else limit
+    return text[:end].rstrip()
 
 
 def _badges(obj: dict) -> list[str]:
@@ -70,12 +83,12 @@ def extract(lang: str, url: str, forms: set[str]) -> int:
             badges = _badges(obj)
             if not ety and not badges:
                 continue
-            rec = {"word": word, "lang": lang, "ety": ety[:600], "badges": badges}
+            rec = {"word": word, "lang": lang, "ety": _trim(ety), "badges": badges}
             out.write(json.dumps(rec, ensure_ascii=False) + "\n")
             kept += 1
             if n % 200000 == 0:
                 print(f"  {lang}: scanned {n:,}, kept {kept:,}")
-    print(f"  {lang}: done — scanned {n:,}, kept {kept:,} -> {out_path.name}")
+    print(f"  {lang}: done - scanned {n:,}, kept {kept:,} -> {out_path.name}")
     return kept
 
 

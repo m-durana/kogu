@@ -1,4 +1,4 @@
-"""Phase 3.2 — lexical origin badges + etymology passthrough (DESIGN.md §4.1).
+"""Phase 3.2 - lexical origin badges + etymology passthrough (DESIGN.md §4.1).
 
 Loads the compact extracts produced by `extract_etymology.py` (if present) and attaches them to
 lexemes: a Wiktionary etymology paragraph (verbatim, no LLM) + origin badges (wasei-kango,
@@ -46,7 +46,7 @@ def ingest(conn) -> None:
                         badge_rows.add((lid, b))
 
     if not files:
-        print("      (no etymology extracts found — run kogupipe.extract_etymology; skipping)")
+        print("      (no etymology extracts found - run kogupipe.extract_etymology; skipping)")
         return
 
     conn.executemany(

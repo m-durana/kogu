@@ -2,8 +2,9 @@
   import { search, entry as fetchEntry } from './lib/api'
   import type { Entry, Hit } from './lib/types'
   import { primaryForm, varietyLabel, regionsOf, shortGloss } from './lib/display'
-  import InputSheet from './lib/InputSheet.svelte'
   import Unified from './lib/Unified.svelte'
+  import Pad from './lib/Pad.svelte'
+  import Ocr from './lib/Ocr.svelte'
   import { Search, X, Brush, Camera } from '@lucide/svelte'
   import { onMount } from 'svelte'
 
@@ -14,8 +15,10 @@
   let enrichEntry = $state<Entry | null>(null)
   let unified = $state(false)
   let view = $state<'results' | 'entry'>('results')
-  let inputOpen = $state(false)
-  let inputMode = $state<'draw' | 'photo'>('draw')
+  // inline input panel below the search row: 'draw' shows the pad; 'photo' shows the picked image
+  let panel = $state<'none' | 'draw' | 'photo'>('none')
+  let ocrFile = $state<File | null>(null)
+  let fileInput: HTMLInputElement
   let loading = $state(false)
   let err = $state('')
   let searched = $state(false)
@@ -51,7 +54,7 @@
       results = res.results
       classified = res.classified_as
       searched = true
-      // Han queries resolve to one word seen across languages — show the unified view directly,
+      // Han queries resolve to one word seen across languages - show the unified view directly,
       // no list step. Enrich it with the top lexeme's decomposition + origin in the background.
       if (res.classified_as === 'han' && results.length) {
         unified = true
@@ -113,9 +116,26 @@
     return () => window.removeEventListener('popstate', onPop)
   })
 
-  function openInput(m: 'draw' | 'photo') {
-    inputMode = m
-    inputOpen = true
+  // draw: toggle the inline pad. photo: trigger the OS-native picker (Photo Library / Camera /
+  // Files menu on iOS) right here — no separate page. The image opens in an inline panel.
+  function toggleDraw() {
+    panel = panel === 'draw' ? 'none' : 'draw'
+  }
+  function openPhoto() {
+    if (panel === 'photo') {
+      panel = 'none'
+      ocrFile = null
+    } else {
+      fileInput.click()
+    }
+  }
+  function onPhotoFile(e: Event) {
+    const f = (e.target as HTMLInputElement).files?.[0]
+    if (f) {
+      ocrFile = f
+      panel = 'photo'
+    }
+    ;(e.target as HTMLInputElement).value = '' // allow re-picking the same file
   }
 
   function clearSearch() {
@@ -129,16 +149,19 @@
     history.replaceState({ view: 'results', q: '' }, '', location.pathname)
   }
 
-  // tapping the logo resets everything to a clean home (and drops the back button)
+  // tapping the logo resets everything to a clean home
   function goHome() {
-    inputOpen = false
+    panel = 'none'
+    ocrFile = null
     entry = null
     view = 'results'
     clearSearch()
   }
 
+  // a character was chosen from the pad or the photo selection — search it and close the panel
   function fromInput(text: string) {
-    inputOpen = false
+    panel = 'none'
+    ocrFile = null
     doSearch(text)
   }
 </script>
@@ -174,12 +197,15 @@
         <button class="clearbtn" aria-label="clear search" onclick={clearSearch} data-testid="clear"><X size={17} /></button>
       {/if}
     </div>
-    <button class="rowbtn" aria-label="draw a character" title="draw" onclick={() => openInput('draw')} data-testid="draw-toggle"><Brush size={18} /></button>
-    <button class="rowbtn" aria-label="photo or image" title="photo / image" onclick={() => openInput('photo')} data-testid="scan-toggle"><Camera size={18} /></button>
+    <button class="rowbtn" class:on={panel === 'draw'} aria-label="draw a character" aria-pressed={panel === 'draw'} title="draw" onclick={toggleDraw} data-testid="draw-toggle"><Brush size={18} /></button>
+    <button class="rowbtn" class:on={panel === 'photo'} aria-label="photo or image" title="photo / image" onclick={openPhoto} data-testid="scan-toggle"><Camera size={18} /></button>
+    <input bind:this={fileInput} type="file" accept="image/*" onchange={onPhotoFile} hidden />
   </div>
 
-  {#if inputOpen}
-    <InputSheet mode={inputMode} onpick={fromInput} onclose={() => (inputOpen = false)} />
+  {#if panel === 'draw'}
+    <section class="inputpanel"><Pad onpick={fromInput} /></section>
+  {:else if panel === 'photo' && ocrFile}
+    <section class="inputpanel"><Ocr file={ocrFile} onpick={fromInput} /></section>
   {/if}
 
   {#if err}<div class="err">{err}</div>{/if}
@@ -217,10 +243,10 @@
     {#if searched && !loading && results.length === 0}
       <div class="empty">nothing for “{q}”.</div>
     {/if}
-    {#if !searched && !q}
+    {#if !searched && !q && panel === 'none'}
       <div class="intro">
         <p class="tag">One word, read across <b>中文</b> · <b>粵語</b> · <b>日本語</b>.</p>
-        <p class="tag2">Type a character, a reading (pinyin · jyutping · kana), or English — or draw or photograph one.</p>
+        <p class="tag2">Type a character, a reading (pinyin · jyutping · kana), or English. Or draw or photograph one.</p>
       </div>
     {/if}
   {/if}
@@ -240,7 +266,7 @@
   .brand .mark { font-family: var(--han); font-weight: 500; font-size: 1.4rem; letter-spacing: -0.04em; color: var(--text); }
   .brand .word { font-family: var(--sans); font-size: 1.05rem; letter-spacing: 0.06em; color: var(--muted); }
 
-  .searchrow { display: flex; gap: 0.4rem; align-items: stretch; margin-bottom: 1.5rem; }
+  .searchrow { display: flex; gap: 0.4rem; align-items: stretch; margin-bottom: 0.7rem; }
   .field { position: relative; flex: 1; min-width: 0; display: flex; }
   .searchicon { position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; display: flex; }
   .field input {
@@ -259,11 +285,15 @@
     color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
   }
   .rowbtn:hover { color: #fff; border-color: var(--border-strong); background: var(--surface-2); }
+  .rowbtn.on { color: var(--bg); background: var(--text); border-color: var(--text); }
+
+  /* inline draw pad / photo selection, shown directly under the search row */
+  .inputpanel { margin-bottom: 1.2rem; }
 
   .meta { color: var(--faint); font-size: 0.7rem; margin-bottom: 0.6rem; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.1em; }
   .err { color: var(--text); margin: 0.5rem 0; }
 
-  /* results — an editorial list: big serif headword, quiet meta column */
+  /* results - an editorial list: big serif headword, quiet meta column */
   .results { list-style: none; margin: 0; padding: 0; }
   .results li + li { border-top: 1px solid var(--border); }
   .hit {
@@ -280,7 +310,7 @@
   .rg { font-size: 0.6rem; color: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 0 0.2rem; font-family: var(--mono); }
   .gl { color: var(--muted); font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .empty { color: var(--faint); padding: 1.2rem 0; }
-  .intro { padding: 1.5rem 0.2rem; }
+  .intro { padding: 0.4rem 0.2rem; }
   .tag { font-family: var(--sans); font-size: 1.35rem; line-height: 1.5; color: var(--text); margin: 0 0 0.8rem; }
   .tag b { font-family: var(--han); font-weight: 500; }
   .tag2 { color: var(--faint); font-size: 0.95rem; line-height: 1.6; margin: 0; max-width: 32ch; }

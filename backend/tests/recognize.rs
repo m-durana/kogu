@@ -1,4 +1,4 @@
-//! Phase 1.5 — handwriting proxy: pure payload-builder + response-parser tests (no network).
+//! Phase 1.5 - handwriting proxy: pure payload-builder + response-parser tests (no network).
 
 use kogu::recognize::{build_payload, parse_candidates};
 use serde_json::json;

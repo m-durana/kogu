@@ -194,7 +194,7 @@ pub fn search(
         }
     };
 
-    // exact written-form match — works for ANY typed string (機場, 甘い, 食べる, あまい, …).
+    // exact written-form match - works for ANY typed string (機場, 甘い, 食べる, あまい, …).
     // (Mixed kanji+kana words classify as Kana but their written form lives in surface_form.)
     {
         let mut stmt = conn.prepare("SELECT lexeme_id FROM surface_form WHERE form = ?1")?;
@@ -220,7 +220,7 @@ pub fn search(
             }
         }
         Kind::Latin => {
-            // phonetic (toneless fold) — tolerant of tone marks / numbers / no tone.
+            // phonetic (toneless fold) - tolerant of tone marks / numbers / no tone.
             // pinyin_plain and jyutping_plain share the same fold (letters only), so one key
             // matches Mandarin *and* Cantonese readings (jyutping was the original's blind spot).
             let plain = pinyin_plain(q);

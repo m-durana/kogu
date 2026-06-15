@@ -2,21 +2,29 @@
   import { ocr } from './api'
   import type { OcrResponse } from './types'
   import { ocrSelectedText } from './display'
-  import { Camera, ImagePlus, X } from '@lucide/svelte'
 
-  let { onpick }: { onpick: (text: string) => void } = $props()
+  // Driven by a File picked via the OS-native menu on the home page (App.svelte). Processes it,
+  // shows the image with tappable character boxes, and returns the selected text on look-up.
+  let { file, onpick }: { file: File | null; onpick: (text: string) => void } = $props()
 
   let imageUrl = $state<string | null>(null)
   let resp = $state<OcrResponse | null>(null)
   let busy = $state(false)
   let error = $state('')
-  // selection keyed by "lineIdx-charIdx"
   let selected = $state<Set<string>>(new Set())
+  let processed: File | null = null
+
+  $effect(() => {
+    if (file && file !== processed) {
+      processed = file
+      void process(file)
+    }
+  })
 
   // downscale a captured image to <=MAX px and return a JPEG blob (smaller upload, better OCR)
   const MAX = 1600
-  async function toBlob(file: File): Promise<Blob> {
-    const bmp = await createImageBitmap(file)
+  async function toBlob(f: File): Promise<Blob> {
+    const bmp = await createImageBitmap(f)
     const scale = Math.min(1, MAX / Math.max(bmp.width, bmp.height))
     const w = Math.round(bmp.width * scale)
     const h = Math.round(bmp.height * scale)
@@ -27,15 +35,13 @@
     return new Promise((res) => canvas.toBlob((b) => res(b!), 'image/jpeg', 0.85))
   }
 
-  async function onFile(e: Event) {
-    const file = (e.target as HTMLInputElement).files?.[0]
-    if (!file) return
+  async function process(f: File) {
     error = ''
     resp = null
     selected = new Set()
     busy = true
     try {
-      const blob = await toBlob(file)
+      const blob = await toBlob(f)
       if (imageUrl) URL.revokeObjectURL(imageUrl)
       imageUrl = URL.createObjectURL(blob)
       resp = await ocr(blob)
@@ -62,28 +68,12 @@
     selected = next
   }
 
-  // selected text in document order
   const selectedText = $derived(ocrSelectedText(resp?.lines ?? [], selected))
-
-  function pct(v: number, total: number) {
-    return `${(v / total) * 100}%`
-  }
+  const pct = (v: number, total: number) => `${(v / total) * 100}%`
 </script>
 
 <div class="ocr">
-  {#if !imageUrl}
-    <div class="choices">
-      <label class="capture">
-        <Camera size={18} aria-hidden="true" /> take photo
-        <input type="file" accept="image/*" capture="environment" onchange={onFile} hidden />
-      </label>
-      <label class="capture">
-        <ImagePlus size={18} aria-hidden="true" /> attach image
-        <input type="file" accept="image/*" onchange={onFile} hidden />
-      </label>
-    </div>
-    <p class="hint">snap a sign, page, or screenshot — then tap the characters to look up.</p>
-  {:else}
+  {#if imageUrl}
     <div class="stage">
       <img src={imageUrl} alt="captured" />
       {#if resp}
@@ -113,15 +103,13 @@
   {#if busy}<div class="status">recognising…</div>{/if}
   {#if error}<div class="status err">{error}</div>{/if}
 
-  {#if imageUrl}
+  {#if imageUrl && !busy}
     <div class="bar">
-      <label class="retake"><X size={14} aria-hidden="true" /> new
-        <input type="file" accept="image/*" capture="environment" onchange={onFile} hidden /></label>
       {#if selectedText}
         <span class="sel-text">{selectedText}</span>
         <button class="lookup" onclick={() => onpick(selectedText)}>look up</button>
       {:else if resp && resp.lines.length}
-        <span class="hint2">tap characters to select</span>
+        <span class="hint2">tap the characters you want</span>
       {/if}
     </div>
   {/if}
@@ -129,14 +117,6 @@
 
 <style>
   .ocr { display: flex; flex-direction: column; gap: 0.7rem; }
-  .choices { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-  .capture, .retake {
-    display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer;
-    background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r);
-    padding: 0.6rem 0.9rem; font-size: 0.9rem; align-self: flex-start;
-  }
-  .capture:hover, .retake:hover { border-color: var(--text); color: #fff; }
-  .hint { color: var(--faint); font-size: 0.85rem; margin: 0; }
   .stage { position: relative; display: inline-block; max-width: 100%; border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; }
   .stage img { display: block; max-width: 100%; height: auto; }
   .overlay { position: absolute; inset: 0; }

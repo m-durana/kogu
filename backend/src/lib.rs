@@ -1,4 +1,4 @@
-//! kogu library surface — shared by the binary and the integration tests.
+//! kogu library surface - shared by the binary and the integration tests.
 
 pub mod graph;
 pub mod handlers;

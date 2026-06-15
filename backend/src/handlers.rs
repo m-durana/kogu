@@ -115,7 +115,7 @@ fn build_entry(
         }
     }
 
-    // 同字 — other lexemes sharing the backbone key, each labelled cognate / false-friend
+    // 同字 - other lexemes sharing the backbone key, each labelled cognate / false-friend
     let mut same_form = Vec::new();
     let mut same_form_ids = std::collections::HashSet::new();
     for &other in st.graph.lexemes_by_key(&primary) {
@@ -132,7 +132,7 @@ fn build_entry(
         }
     }
 
-    // 同義 — lexemes sharing a concept (different word, same meaning), excluding same-form ones
+    // 同義 - lexemes sharing a concept (different word, same meaning), excluding same-form ones
     let mut translations = Vec::new();
     let mut seen = same_form_ids;
     seen.insert(id);
@@ -163,7 +163,7 @@ fn build_entry(
         }
     }
 
-    // 熟語 — for a single character, the common words that contain it (across all systems).
+    // 熟語 - for a single character, the common words that contain it (across all systems).
     let mut compounds = Vec::new();
     if headword.chars().count() == 1 {
         if let Some(ch) = headword.chars().next() {
@@ -196,7 +196,7 @@ fn build_entry(
     }))
 }
 
-/// 熟語 — words containing a character, shortest then most-frequent first, the given variety preferred.
+/// 熟語 - words containing a character, shortest then most-frequent first, the given variety preferred.
 fn char_compounds(
     conn: &rusqlite::Connection,
     ch: char,
@@ -280,7 +280,7 @@ const GLOSS_STOPWORDS: &[&str] = &[
     "all", "such", "more", "less", "very", "his", "her", "its", "who", "whom", "way", "are",
 ];
 
-/// A gloss segment that is a cross-reference, not a meaning — "the Japanese word for company",
+/// A gloss segment that is a cross-reference, not a meaning - "the Japanese word for company",
 /// "Mandarin equivalent: 的", "variant of X", "see also X". Its words must not count as shared
 /// meaning, or false friends whose dictionary gloss *describes the other language* slip through
 /// (会社: jp "company" vs zh "…the Japanese word for company").
@@ -330,7 +330,7 @@ fn primary_form(conn: &rusqlite::Connection, id: i64) -> rusqlite::Result<String
 }
 
 /// Are two characters a clean 1:1 variant spelling of the same character? True when an identity
-/// edge links them AND the derived form has exactly ONE identity parent — i.e. a plain spelling
+/// edge links them AND the derived form has exactly ONE identity parent - i.e. a plain spelling
 /// difference (这↔這, 汉↔漢), NOT a simplification *merge* of distinct characters (发←髮/發,
 /// 干←乾/幹), which the multi-parent test deliberately excludes so real merges stay false-friends.
 fn clean_variant_chars(conn: &rusqlite::Connection, x: char, y: char) -> rusqlite::Result<bool> {
@@ -361,7 +361,7 @@ fn clean_variant_chars(conn: &rusqlite::Connection, x: char, y: char) -> rusqlit
 fn variant_spelling(conn: &rusqlite::Connection, a: i64, b: i64) -> rusqlite::Result<bool> {
     let fa = primary_form(conn, a)?;
     let fb = primary_form(conn, b)?;
-    // identical spellings are NOT a "variant spelling" — same written form, so meaning (gloss)
+    // identical spellings are NOT a "variant spelling" - same written form, so meaning (gloss)
     // must decide. This keeps genuine same-form false friends (手紙 letter/toilet paper) flagged.
     if fa == fb {
         return Ok(false);
@@ -381,13 +381,13 @@ fn variant_spelling(conn: &rusqlite::Connection, a: i64, b: i64) -> rusqlite::Re
 /// Classify the relation between two same-form lexemes. Gloss DISJOINTNESS is the decisive signal:
 /// two glossed forms that share no meaning word are a false friend; any shared word (or a mere
 /// variant spelling, or one side unglossed) is a cognate. This is more reliable than the concept
-/// layer, which both under-links (砂糖 = sugar/sugar) and over-links (大丈夫, 娘 — classic false
+/// layer, which both under-links (砂糖 = sugar/sugar) and over-links (大丈夫, 娘 - classic false
 /// friends it wrongly tied together). Variant spellings (这/這, 汉/漢) and bare variant glyphs with
 /// no glosses stay cognate; genuine same-form divergences (手紙, 汽車, 大丈夫, 娘) flag.
 fn classify_relation(conn: &rusqlite::Connection, a: i64, b: i64) -> rusqlite::Result<&'static str> {
-    // A variant spelling means "the same word, written differently" — but only WITHIN a language.
+    // A variant spelling means "the same word, written differently" - but only WITHIN a language.
     // Across languages, variant-equivalent forms can still be false friends (会社 jp "company" vs
-    // 會社 zh "guild" — 会 is just the shinjitai of 會), so only short-circuit same-variety pairs.
+    // 會社 zh "guild" - 会 is just the shinjitai of 會), so only short-circuit same-variety pairs.
     let va: String = conn.query_row("SELECT variety FROM lexeme WHERE id=?1", [a], |r| r.get(0))?;
     let vb: String = conn.query_row("SELECT variety FROM lexeme WHERE id=?1", [b], |r| r.get(0))?;
     if va == vb && variant_spelling(conn, a, b)? {

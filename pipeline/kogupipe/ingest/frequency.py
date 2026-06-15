@@ -1,4 +1,4 @@
-"""Word-frequency ingest — populates lexeme.freq so search ranks common words first.
+"""Word-frequency ingest - populates lexeme.freq so search ranks common words first.
 
 Without this, every lexeme has freq=1.0 and ranking ties break arbitrarily (e.g. toneless "ren"
 surfaces a rare 肕 above 人). Sources are OpenSubtitles word-frequency lists (hermitdave/
@@ -32,7 +32,7 @@ def _load_ranked(path) -> dict[str, float]:
 
 def _simp_to_trad(conn) -> dict[str, str]:
     """char-level simplified→traditional (first option), so the Chinese (simplified) list can also
-    score traditional forms — used by zh traditional surface forms and by Cantonese."""
+    score traditional forms - used by zh traditional surface forms and by Cantonese."""
     m: dict[str, str] = {}
     for child, parent in conn.execute(
         "SELECT child_cp, parent_cp FROM glyph_edge WHERE type='simplification'"
@@ -49,7 +49,7 @@ def ingest(conn) -> None:
     zh = _load_ranked(SOURCES_DIR / "freq_zh_cn.txt")
     ja = _load_ranked(SOURCES_DIR / "freq_ja.txt")
     if not zh and not ja:
-        print("    (no frequency lists found — skipping)")
+        print("    (no frequency lists found - skipping)")
         return
 
     # widen the Chinese map with traditional spellings so trad zh forms and Cantonese also match

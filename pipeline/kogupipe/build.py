@@ -2,7 +2,7 @@
 
 Runs each ingest step in order, then finalises (rebuild FTS, set build_meta) and verifies the
 build-time invariants from DESIGN.md (every living glyph -> exactly one orthodox parent; no
-placeholder leaks). The invariant check FAILS the build loudly — that's the point.
+placeholder leaks). The invariant check FAILS the build loudly - that's the point.
 
 Usage:
     python -m kogupipe.build               # full build into data/kogu.sqlite
@@ -24,7 +24,7 @@ def verify_invariants(conn) -> list[str]:
     """Return a list of invariant violations (empty = healthy)."""
     problems: list[str] = []
 
-    # Invariant 1: bounded transitive closure must terminate — no glyph is its own ancestor
+    # Invariant 1: bounded transitive closure must terminate - no glyph is its own ancestor
     # through simp/shinjitai edges (a runaway chain / cycle). Multi-parent is allowed (it is the
     # documented many-to-one merge phenomenon: 发←發/髮, 弁←瓣/辨/辯, 台←臺/檯/颱). The "exactly one
     # parent" wording in DESIGN is realised as targeted regression probes (広→廣 etc.), not here.
@@ -40,7 +40,7 @@ def verify_invariants(conn) -> list[str]:
         SELECT COUNT(*) FROM reach WHERE start = node
     """).fetchone()[0]
     if cycle:
-        problems.append(f"{cycle} cyclic identity-edge path(s) — closure does not terminate")
+        problems.append(f"{cycle} cyclic identity-edge path(s) - closure does not terminate")
 
     # Invariant 2: no placeholder leaks (the original's `xx5` class of bug).
     for tbl, col in [("char_reading", "value"), ("lexeme", "reading"),
@@ -128,7 +128,7 @@ def build(out=None, *, built_at: str | None = None) -> str:
         for p in problems:
             print(f"  ✗ INVARIANT: {p}", file=sys.stderr)
         conn.close()
-        raise BuildError(f"{len(problems)} invariant violation(s) — build rejected")
+        raise BuildError(f"{len(problems)} invariant violation(s) - build rejected")
     print("  ✓ invariants hold")
     conn.close()
     return out
@@ -138,7 +138,7 @@ def main(argv: list[str]) -> int:
     out = None
     if "--out" in argv:
         out = argv[argv.index("--out") + 1]
-    # built_at is passed in (Date.now is fine here — this is a plain script, not a workflow)
+    # built_at is passed in (Date.now is fine here - this is a plain script, not a workflow)
     import datetime
     build(out, built_at=datetime.datetime.utcnow().isoformat() + "Z")
     return 0

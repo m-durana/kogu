@@ -1,7 +1,7 @@
 //! Handwriting recognition proxy (DESIGN.md §5.1).
 //!
 //! The backend proxies the Google Input Tools handwriting endpoint (the same engine Google
-//! Translate uses) — image/shape based, so stroke-order-independent and "any-to-any". We never
+//! Translate uses) - image/shape based, so stroke-order-independent and "any-to-any". We never
 //! send ink to the browser's origin; the Rust binary forwards it, dodging CORS and hiding the
 //! client. PaddleOCR-via-`ort` is the future fallback behind this identical interface.
 //!

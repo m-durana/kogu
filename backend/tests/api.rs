@@ -136,7 +136,7 @@ async fn toneless_pinyin_multi() {
 // --- edge cases ---
 
 // E1. 会社 false-friend material: the Japanese 会社 (company) and a Chinese 會社 both surface,
-//     in different varieties — the raw material for the Phase-2 false-friend label.
+//     in different varieties - the raw material for the Phase-2 false-friend label.
 #[tokio::test]
 async fn false_friend_material() {
     let v = search("会社").await;
@@ -184,7 +184,7 @@ async fn ocr_is_post_only() {
     assert_eq!(st, StatusCode::METHOD_NOT_ALLOWED);
 }
 
-// OCR2. empty body is rejected cleanly: 400 (engine present) or 503 (models absent) — never 500/404.
+// OCR2. empty body is rejected cleanly: 400 (engine present) or 503 (models absent) - never 500/404.
 #[tokio::test]
 async fn ocr_empty_body_handled() {
     let st = post("/ocr", Vec::new()).await;
@@ -408,7 +408,7 @@ async fn entry_and_404() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Probe batteries — the 115-word and 100-edge-case sets, distilled into invariants
+// Probe batteries - the 115-word and 100-edge-case sets, distilled into invariants
 // that must hold on every build. (Run from backend/: `cargo test --release`.)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -423,7 +423,7 @@ fn same_form_has_ff(e: &Value) -> bool {
     e["same_form"].as_array().unwrap().iter().any(|l| l["relation"] == "false-friend")
 }
 
-// B1. Nothing in the batteries comes back empty — incl. kokuji with no word-lexeme (込/凪/榊,
+// B1. Nothing in the batteries comes back empty - incl. kokuji with no word-lexeme (込/凪/榊,
 // resolved by the character-page fallback) and the keep-vs-convert own-chars (干/缶/糸).
 #[tokio::test]
 async fn probe_no_zero_hits() {
@@ -459,7 +459,7 @@ async fn probe_cognate_controls() {
 }
 
 // B4. Cross-language false friend whose forms are variant glyphs: 会社 (jp "company") and 會社
-// (zh "guild") — 会 is the shinjitai of 會, so the variant-spelling cognate rule must NOT apply
+// (zh "guild") - 会 is the shinjitai of 會, so the variant-spelling cognate rule must NOT apply
 // across languages (the canonical 会社 case from the probe set).
 #[tokio::test]
 async fn probe_kaisha_cross_language_false_friend() {
@@ -493,7 +493,7 @@ async fn probe_phonetic_ranking() {
     }
 }
 
-// B7. Japanese on/kun char readings are kana — never romaji junk like "K0"/"ABURA".
+// B7. Japanese on/kun char readings are kana - never romaji junk like "K0"/"ABURA".
 #[tokio::test]
 async fn probe_no_romaji_onkun_junk() {
     for q in ["愛", "水", "人", "込", "畑", "学校"] {

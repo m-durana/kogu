@@ -3,7 +3,7 @@
 //!
 //! Identity-class edges (simplification / shinjitai / z-variant) are unioned into equivalence
 //! classes via union-find. A word's **backbone key** is the sequence of its characters' class ids
-//! — so 学校 (simp/ja) and 學校 (trad) share one key, and looking words up by key gives both the
+//! - so 学校 (simp/ja) and 學校 (trad) share one key, and looking words up by key gives both the
 //! cross-script match and the 同字 (orthographic) link in a single index hit.
 //!
 //! semantic-variant edges are deliberately excluded (suggestion-only; never expanded), which is

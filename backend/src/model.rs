@@ -40,13 +40,13 @@ pub struct Entry {
     pub readings: Vec<ReadingKV>,
     pub senses: Vec<Sense>,
     pub characters: Vec<CharInfo>,
-    /// 同字 — other lexemes sharing this word's backbone form, each labelled cognate / false-friend.
+    /// 同字 - other lexemes sharing this word's backbone form, each labelled cognate / false-friend.
     pub same_form: Vec<LinkLite>,
-    /// 同義 — lexemes sharing a concept (a different word, same meaning) across the systems.
+    /// 同義 - lexemes sharing a concept (a different word, same meaning) across the systems.
     pub translations: Vec<LinkLite>,
-    /// 熟語 — common words that contain this character (single-character entries only).
+    /// 熟語 - common words that contain this character (single-character entries only).
     pub compounds: Vec<LinkLite>,
-    /// lexical "why": origin badges (wasei-kango, borrowed-from-japanese, calque, …) — no LLM.
+    /// lexical "why": origin badges (wasei-kango, borrowed-from-japanese, calque, …) - no LLM.
     pub origin_badges: Vec<String>,
     /// Wiktionary etymology paragraph, passthrough (no generated prose).
     pub etymology: Option<String>,
@@ -86,7 +86,7 @@ pub struct VariantEdge {
     pub reform_year: Option<i64>,
 }
 
-/// /why response — the orthographic + phonological "why" for a word (DESIGN.md §4).
+/// /why response - the orthographic + phonological "why" for a word (DESIGN.md §4).
 #[derive(Serialize)]
 pub struct WhyResponse {
     pub lexeme_id: i64,
@@ -120,7 +120,7 @@ pub struct ConceptGroup {
     pub members: Vec<LinkLite>,
 }
 
-/// /ocr response — recognized text laid out over the image for tap-to-select (DESIGN: OCR feature).
+/// /ocr response - recognized text laid out over the image for tap-to-select (DESIGN: OCR feature).
 #[derive(Serialize)]
 pub struct OcrResponse {
     /// the (possibly downscaled) image dimensions the boxes are in
@@ -136,7 +136,7 @@ pub struct OcrLine {
     /// axis-aligned bounding box [x, y, w, h] in image pixels
     #[serde(rename = "box")]
     pub box_: [f32; 4],
-    /// per-character cells (line box split by character count — Han is ~monospace)
+    /// per-character cells (line box split by character count - Han is ~monospace)
     pub chars: Vec<OcrChar>,
 }
 

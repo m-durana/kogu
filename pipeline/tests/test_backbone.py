@@ -39,7 +39,7 @@ def edge_types(conn, child, parent):
 
 
 # 1. 缶 and 糸 are kept as their own first-class entries (keep-vs-convert rule). Both are genuinely
-#    the Japanese shinjitai of 罐 / 絲 (OpenCC records this), so they DO have an orthodox parent —
+#    the Japanese shinjitai of 罐 / 絲 (OpenCC records this), so they DO have an orthodox parent -
 #    but the backbone must still retain them with their own radical gloss + readings, never collapse
 #    them. (That a *query* for 缶 returns 缶 and not only 罐 is asserted in the Phase 1.3 query tests.)
 def test_keep_not_convert(conn):
@@ -60,7 +60,7 @@ def test_hiro_gap_caught(conn):
     assert "廣" in identity_parents(conn, "広")
 
 
-# 3. 学 reaches 學 by BOTH a simplification and a shinjitai edge — same single orthodox parent.
+# 3. 学 reaches 學 by BOTH a simplification and a shinjitai edge - same single orthodox parent.
 def test_xue_dual_reform_single_parent(conn):
     assert edge_types(conn, "学", "學") == {"simplification", "shinjitai"}
     assert identity_parents(conn, "学") == {"學"}
@@ -98,7 +98,7 @@ def test_guang_two_distinct_children(conn):
 
 
 # E3. Readings are populated across varieties for 學 (pinyin / jyutping / onyomi).
-#     on/kun come from Kanjidic as KANA (not Unihan's romaji "GAKU") — see ingest/backbone.py.
+#     on/kun come from Kanjidic as KANA (not Unihan's romaji "GAKU") - see ingest/backbone.py.
 def test_readings_present(conn):
     got = {(k, v) for k, v in conn.execute(
         "SELECT kind, value FROM char_reading WHERE cp=?", (cp("學"),))}

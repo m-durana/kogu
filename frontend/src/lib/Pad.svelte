@@ -1,8 +1,8 @@
 <script lang="ts">
   import { recognize, type Stroke } from './api'
-  import { Eraser, ScanLine } from '@lucide/svelte'
+  import { X } from '@lucide/svelte'
 
-  let { onpick, fill = false }: { onpick: (ch: string) => void; fill?: boolean } = $props()
+  let { onpick }: { onpick: (ch: string) => void } = $props()
 
   const SIZE = 384 // backing resolution; CSS size scales independently
   let canvas: HTMLCanvasElement
@@ -13,6 +13,7 @@
   let busy = $state(false)
   let error = $state('')
   let t0 = 0
+  let timer: ReturnType<typeof setTimeout> | undefined
 
   const ctx = () => canvas.getContext('2d')!
   function pos(e: PointerEvent): [number, number] {
@@ -21,6 +22,7 @@
   }
   function start(e: PointerEvent) {
     e.preventDefault()
+    clearTimeout(timer)
     try {
       canvas.setPointerCapture(e.pointerId)
     } catch {}
@@ -50,8 +52,12 @@
     drawing = false
     if (current.length) strokes.push(current)
     current = []
+    // auto-recognise once the pen has rested for a moment
+    clearTimeout(timer)
+    timer = setTimeout(run, 1000)
   }
   function clear() {
+    clearTimeout(timer)
     strokes = []
     current = []
     candidates = []
@@ -65,7 +71,7 @@
     try {
       const res = await recognize(SIZE, SIZE, strokes, ['zh', 'ja'])
       candidates = res.candidates
-      if (candidates.length === 0) error = 'no match — try again'
+      if (candidates.length === 0) error = 'no match, try again'
     } catch {
       error = 'recogniser unavailable'
     } finally {
@@ -74,18 +80,21 @@
   }
 </script>
 
-<div class="pad" class:fill>
-  <canvas
-    bind:this={canvas}
-    width={SIZE}
-    height={SIZE}
-    onpointerdown={start}
-    onpointermove={move}
-    onpointerup={end}
-    onpointercancel={end}
-    oncontextmenu={(e) => e.preventDefault()}
-    aria-label="handwriting canvas — draw a character"
-  ></canvas>
+<div class="pad">
+  <div class="canvas-wrap">
+    <canvas
+      bind:this={canvas}
+      width={SIZE}
+      height={SIZE}
+      onpointerdown={start}
+      onpointermove={move}
+      onpointerup={end}
+      onpointercancel={end}
+      oncontextmenu={(e) => e.preventDefault()}
+      aria-label="handwriting canvas, draw a character"
+    ></canvas>
+    <button class="clearx" onclick={clear} data-testid="pad-clear" aria-label="clear"><X size={18} /></button>
+  </div>
 
   {#if candidates.length}
     <div class="cands" data-testid="pad-candidates">
@@ -93,33 +102,27 @@
         <button class="cand" onclick={() => onpick(ch)}>{ch}</button>
       {/each}
     </div>
+  {:else if busy}
+    <div class="pad-status">recognising…</div>
   {:else if error}
-    <div class="pad-error">{error}</div>
-  {:else}
-    <div class="pad-hint">draw one character, then recognise</div>
+    <div class="pad-status">{error}</div>
   {/if}
-
-  <div class="pad-actions">
-    <button onclick={clear} data-testid="pad-clear" class="ib"><Eraser size={16} aria-hidden="true" /> clear</button>
-    <button onclick={run} disabled={busy} data-testid="pad-recognize" class="ib primary">
-      <ScanLine size={16} aria-hidden="true" /> {busy ? '…' : 'recognise'}
-    </button>
-  </div>
 </div>
 
 <style>
   .pad {
     display: flex;
     flex-direction: column;
-    gap: 0.7rem;
+    gap: 0.6rem;
     user-select: none;
     -webkit-user-select: none;
     -webkit-touch-callout: none;
   }
-  .pad.fill { flex: 1; min-height: 0; }
+  .canvas-wrap { position: relative; width: 100%; }
   canvas {
-    width: 280px;
-    height: 280px;
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
     background: var(--surface);
     border: 1px solid var(--border-strong);
     border-radius: var(--r-lg);
@@ -130,19 +133,14 @@
     -webkit-tap-highlight-color: transparent;
     cursor: crosshair;
   }
-  /* full-screen: the canvas is the hero — a big centred square */
-  .pad.fill canvas {
-    width: min(88vw, 56vh);
-    height: min(88vw, 56vh);
-    align-self: center;
-    flex: none;
+  .clearx {
+    position: absolute; top: 0.5rem; right: 0.5rem;
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 0.4rem; color: var(--muted);
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--r);
   }
-  .pad-actions { display: flex; gap: 0.6rem; }
-  .pad.fill .pad-actions { justify-content: center; }
-  .ib { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.6rem 1rem; }
-  .ib.primary { background: var(--text); color: var(--bg); border-color: var(--text); }
-  .pad-error { color: var(--text); font-size: 0.85rem; text-align: center; }
-  .pad-hint { color: var(--faint); font-size: 0.85rem; text-align: center; font-style: italic; }
-  .cands { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; max-height: 22vh; overflow-y: auto; }
+  .clearx:hover { color: #fff; border-color: var(--border-strong); }
+  .pad-status { color: var(--faint); font-size: 0.85rem; text-align: center; }
+  .cands { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; }
   .cand { font-family: var(--han); font-size: 1.7rem; padding: 0.3rem 0.6rem; min-width: 2.8rem; }
 </style>

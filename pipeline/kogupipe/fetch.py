@@ -79,7 +79,7 @@ SOURCES: dict[str, Source] = {
     "cccanto-readings": Source(
         "cccanto-readings", "https://cantonese.org/cccedict-canto-readings-150923.zip",
         "cccanto-readings.zip", "CC-BY-SA"),
-    # Word frequency (OpenSubtitles via hermitdave/FrequencyWords) — ranks common words first.
+    # Word frequency (OpenSubtitles via hermitdave/FrequencyWords) - ranks common words first.
     "freq-zh": Source(
         "freq-zh", "https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/zh_cn/zh_cn_50k.txt",
         "freq_zh_cn.txt", "MIT"),
@@ -130,7 +130,7 @@ def fetch(names: list[str] | None = None, *, force: bool = False) -> dict:
             print(f"    {size:,} bytes  sha256={sha[:12]}…")
         except Exception as e:  # keep going; one bad source shouldn't lose the rest
             failures.append((name, repr(e)))
-            print(f"  ! {name}: FAILED — {e}")
+            print(f"  ! {name}: FAILED - {e}")
     # write the lockfile for whatever succeeded, always
     LOCKFILE.write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n")
     if failures:

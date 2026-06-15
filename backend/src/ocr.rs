@@ -17,10 +17,10 @@ use crate::state::AppState;
 /// Build the OCR engine from the model files (dir via KOGU_OAR_DIR). Returns None if unavailable,
 /// so the server still runs without OCR.
 pub fn load_engine() -> Option<OAROCR> {
-    // tests (and any non-OCR deployment) can skip the ONNX runtime entirely — loading it without
+    // tests (and any non-OCR deployment) can skip the ONNX runtime entirely - loading it without
     // ORT_DYLIB_PATH blocks, and the search/entry API doesn't need it.
     if std::env::var("KOGU_SKIP_OCR").is_ok() {
-        tracing::info!("KOGU_SKIP_OCR set — /ocr disabled");
+        tracing::info!("KOGU_SKIP_OCR set - /ocr disabled");
         return None;
     }
     let dir = std::env::var("KOGU_OAR_DIR")
@@ -29,7 +29,7 @@ pub fn load_engine() -> Option<OAROCR> {
     let rec = format!("{dir}/pp-ocrv5_mobile_rec.onnx");
     let dict = format!("{dir}/ppocrv5_dict.txt");
     if !std::path::Path::new(&det).exists() {
-        tracing::warn!("OCR models not found in {dir} — /ocr disabled");
+        tracing::warn!("OCR models not found in {dir} - /ocr disabled");
         return None;
     }
     let mut builder = OAROCRBuilder::new(det, rec, dict);
@@ -45,7 +45,7 @@ pub fn load_engine() -> Option<OAROCR> {
             Some(engine)
         }
         Err(e) => {
-            tracing::warn!("OCR engine failed to load ({e}) — /ocr disabled");
+            tracing::warn!("OCR engine failed to load ({e}) - /ocr disabled");
             None
         }
     }
@@ -64,7 +64,7 @@ pub async fn ocr_handler(
     if body.is_empty() {
         return Err((StatusCode::BAD_REQUEST, Json(json!({ "error": "empty_body" }))));
     }
-    // OCR is CPU-heavy + blocking — run off the async runtime.
+    // OCR is CPU-heavy + blocking - run off the async runtime.
     tokio::task::spawn_blocking(move || run_ocr(&engine, &body))
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))))?
@@ -128,8 +128,8 @@ fn run_ocr(engine: &OAROCR, bytes: &[u8]) -> Result<OcrResponse, (StatusCode, Js
     let upright = recognize(engine, img.clone())?;
     let best_conf = upright.iter().map(|r| r.conf).fold(0.0_f32, f32::max);
 
-    // If upright is weak, the text may be vertical: OCR a 90° (CCW) rotation — vertical columns
-    // become horizontal lines — and keep whichever orientation has more evidence. Boxes from the
+    // If upright is weak, the text may be vertical: OCR a 90° (CCW) rotation - vertical columns
+    // become horizontal lines - and keep whichever orientation has more evidence. Boxes from the
     // rotated pass are mapped back to the original frame (they become tall = vertical, so char_cells
     // splits them top-to-bottom).
     let regions = if best_conf >= 0.6 {

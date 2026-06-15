@@ -5,14 +5,14 @@ Three-tier on the VPS, matching the existing `*.miro.build` convention:
 - **Static SPA** (Svelte build) at `/var/www/miro/wenbun`, served by nginx.
 - **nginx** vhost `wenbun.miro.build` → static + `/api/*` reverse-proxy, TLS via Let's Encrypt.
 
-## One-time, manual (needs you — external)
+## One-time, manual (needs you - external)
 1. **Cloudflare DNS**: add an A record `wenbun.miro.build → 78.46.251.172`, **DNS-only (gray cloud)**
    (LE http-01 needs the origin reachable on :80; matches analytics/codepen).
 2. **TLS cert** once DNS resolves:
    ```
    certbot certonly --webroot -w /var/www/letsencrypt -d wenbun.miro.build
    ```
-   (LE renewals on this box temp-open :80 via ufw hooks — see other renewal confs.)
+   (LE renewals on this box temp-open :80 via ufw hooks - see other renewal confs.)
 
 ## Build + install (repeatable)
 ```
@@ -29,7 +29,7 @@ sudo systemctl restart wenbun
 ```
 
 ## Files
-- `wenbun.service` — systemd unit (read-only hardened).
-- `wenbun.miro.build.conf` — nginx vhost.
-- `wenbun-ratelimit.conf` — http-context `limit_req_zone`s (→ `/etc/nginx/conf.d/`).
-- `deploy.sh` — the installer.
+- `wenbun.service` - systemd unit (read-only hardened).
+- `wenbun.miro.build.conf` - nginx vhost.
+- `wenbun-ratelimit.conf` - http-context `limit_req_zone`s (→ `/etc/nginx/conf.d/`).
+- `deploy.sh` - the installer.

@@ -10,7 +10,7 @@ const zhHit = (forms: Form[]): Hit => ({
   forms, glosses: [], match_type: 'exact', score: 1,
 })
 
-describe('pickForms — principled bracketing + script toggle', () => {
+describe('pickForms - principled bracketing + script toggle', () => {
   const tradSimp = [f('機場', 'trad', null, true), f('机场', 'simp', 'CN')]
 
   // 1. prefer traditional -> trad primary, simp bracketed
@@ -83,7 +83,7 @@ describe('labels & helpers', () => {
   })
 })
 
-describe('primaryForm — echo the typed form (no toggle)', () => {
+describe('primaryForm - echo the typed form (no toggle)', () => {
   const ts = [f('機場', 'trad', null, true), f('机场', 'simp', 'CN')]
   it('echoes the simplified query', () => {
     const d = primaryForm(ts, 'zh', '机场')!
@@ -114,7 +114,7 @@ describe('primaryForm — echo the typed form (no toggle)', () => {
   })
 })
 
-describe('furiganaTokens — readings become ruby on the kanji', () => {
+describe('furiganaTokens - readings become ruby on the kanji', () => {
   it('kana reading after a kanji', () => {
     expect(furiganaTokens('甘(あま)し')).toEqual([
       { t: 'ruby', base: '甘', rt: 'あま' },
@@ -141,7 +141,7 @@ describe('furiganaTokens — readings become ruby on the kanji', () => {
   })
 })
 
-describe('pinyinMarks — numbered pinyin to tone marks', () => {
+describe('pinyinMarks - numbered pinyin to tone marks', () => {
   it('places tone on a/e first', () => {
     expect(pinyinMarks('xue2')).toBe('xué')
     expect(pinyinMarks('hao3')).toBe('hǎo')
@@ -167,7 +167,7 @@ describe('pinyinMarks — numbered pinyin to tone marks', () => {
   })
 })
 
-describe('cleanIds — strip source tags + IDC operators, keep components', () => {
+describe('cleanIds - strip source tags + IDC operators, keep components', () => {
   it('removes [GTV] tags and the ⿰ operator', () => {
     expect(cleanIds('⿰糸氏[GTV]')).toBe('糸 氏')
   })
@@ -186,7 +186,7 @@ describe('cleanIds — strip source tags + IDC operators, keep components', () =
   })
 })
 
-describe('cleanGloss — strip CC-CEDICT markup', () => {
+describe('cleanGloss - strip CC-CEDICT markup', () => {
   it('removes CL classifier clauses', () => {
     expect(cleanGloss('telephone; CL:通[tong1]; phone number')).toBe('telephone; phone number')
   })
@@ -232,7 +232,7 @@ describe('isMinorGloss / meaningfulGlossCount', () => {
   })
 })
 
-describe('ocrSelectedText — OCR character selection', () => {
+describe('ocrSelectedText - OCR character selection', () => {
   const lines = [
     { chars: [{ ch: '機' }, { ch: '場' }] },
     { chars: [{ ch: '空' }, { ch: '港' }] },
@@ -244,7 +244,7 @@ describe('ocrSelectedText — OCR character selection', () => {
     expect(ocrSelectedText(lines, new Set(['0-1']))).toBe('場')
   })
   it('keeps document order regardless of tap order', () => {
-    // select 港(line1) before 機(line0) — output must be document order 機…港
+    // select 港(line1) before 機(line0) - output must be document order 機…港
     expect(ocrSelectedText(lines, new Set(['1-1', '0-0']))).toBe('機港')
   })
   it('whole line', () => {

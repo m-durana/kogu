@@ -1,8 +1,8 @@
-"""Phase 2.1 — concept layer via English-gloss pivot (DESIGN.md §2.3, step 3).
+"""Phase 2.1 - concept layer via English-gloss pivot (DESIGN.md §2.3, step 3).
 
 This first cut needs no new downloads: it clusters senses that share a normalised English gloss
 into language-independent concepts. That alone powers translation search and cognate/false-friend
-labelling (機場↔空港 share "airport"; 會社"guild" vs 会社"company" land in *different* concepts —
+labelling (機場↔空港 share "airport"; 會社"guild" vs 会社"company" land in *different* concepts -
 a false friend). OMW + Wiktionary translation tables are layered on later to widen coverage.
 """
 from __future__ import annotations

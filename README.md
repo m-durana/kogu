@@ -1,6 +1,6 @@
 # kogu
 
-> Working title. Open-source successor to **CJKV Dict** — a dictionary for the living
+> Working title. Open-source successor to **CJKV Dict** - a dictionary for the living
 > Han-script written systems (Traditional Chinese, Simplified Chinese, Cantonese, Japanese)
 > whose headline feature is explaining *why* the same idea is written or read differently
 > across them.
@@ -13,8 +13,8 @@ phased implementation plan live in **`docs/`** (kept local, not committed).
 A free, server-backed online dictionary with three capabilities the original lacks:
 
 1. **A "why it branched" engine** (lexical → orthographic → phonological), built only from
-   open datasets — no LLM, no generated prose.
-2. **Any-to-any handwriting input** — draw a character your keyboard can't type, in any of
+   open datasets - no LLM, no generated prose.
+2. **Any-to-any handwriting input** - draw a character your keyboard can't type, in any of
    the four systems, and get candidates shown across all of them.
 3. **English-pivot translation search** via a language-independent concept layer.
 
@@ -28,7 +28,7 @@ Out (deliberately): Korean, Vietnamese. Offline use is deferred (see design doc,
 
 | Layer            | Choice                                                                   |
 |------------------|--------------------------------------------------------------------------|
-| Backend (serving)| **Rust** — Axum + rusqlite (SQLite/FTS5), single static binary           |
+| Backend (serving)| **Rust** - Axum + rusqlite (SQLite/FTS5), single static binary           |
 | Data store       | One precompiled **SQLite** file (FTS5), memory-resident at runtime       |
 | Build pipeline   | Offline ingestion (Python/JS allowed); **no Python in the serving path** |
 | Handwriting      | Proxy the **Google Input Tools** endpoint; PaddleOCR (ONNX via `ort`) fallback |
@@ -50,7 +50,7 @@ kogu/
 
 ## Status
 
-Phase 0 (scaffold). Nothing serving yet — see `docs/PLAN.md`.
+Phase 0 (scaffold). Nothing serving yet - see `docs/PLAN.md`.
 
 ## Licensing
 

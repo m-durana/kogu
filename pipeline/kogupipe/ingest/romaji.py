@@ -1,4 +1,4 @@
-"""Romaji reading index — lets Japanese words be found by romaji input, tolerant of long-vowel and
+"""Romaji reading index - lets Japanese words be found by romaji input, tolerant of long-vowel and
 n/m spelling variants (tokyo = toukyou = tōkyō → 東京; shinbun = shimbun → 新聞).
 
 Adds a lexeme_reading row kind='romaji_plain' for every kana reading, holding a folded Hepburn key.
@@ -39,14 +39,14 @@ def kana_to_romaji(s: str) -> str:
     i = 0
     while i < len(s):
         c = s[i]
-        if c == "っ":  # sokuon — double the next consonant
+        if c == "っ":  # sokuon - double the next consonant
             nxt = s[i + 1] if i + 1 < len(s) else ""
             r = _BASE.get(nxt, "")
             if r and r[0] not in _VOWELS:
                 out.append(r[0])
             i += 1
             continue
-        if c in ("ー", "～"):  # long-vowel mark — repeat previous vowel
+        if c in ("ー", "～"):  # long-vowel mark - repeat previous vowel
             if out and out[-1] and out[-1][-1] in _VOWELS:
                 out.append(out[-1][-1])
             i += 1

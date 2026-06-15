@@ -1,4 +1,4 @@
-//! kogu serving binary — read-only dictionary API (DESIGN.md §7).
+//! kogu serving binary - read-only dictionary API (DESIGN.md §7).
 //!
 //! Loads the precompiled SQLite DB (read-only, mmap'd) and the in-memory variant graph once at
 //! startup; every request is just index hits. No heavy work on the serving path.

@@ -1,4 +1,4 @@
-"""Phase 1.1 — character backbone ingestion (DESIGN.md §2.1).
+"""Phase 1.1 - character backbone ingestion (DESIGN.md §2.1).
 
 Sources: Unihan (readings, variants, strokes, radical, gloss), cjkvi-ids (IDS decomposition),
 OpenCC (STCharacters simp→trad, JPShinjitaiCharacters shinjitai→kyūjitai, TW/HK variants).
@@ -20,7 +20,7 @@ KANJIDIC_ZIP = SOURCES_DIR / "kanjidic2-en.json.zip"
 
 
 def _kanjidic_kana():
-    """codepoint -> (onyomi[katakana], kunyomi[hiragana]) from Kanjidic — proper kana, not romaji."""
+    """codepoint -> (onyomi[katakana], kunyomi[hiragana]) from Kanjidic - proper kana, not romaji."""
     on: dict[int, list[str]] = {}
     kun: dict[int, list[str]] = {}
     if not KANJIDIC_ZIP.exists():
@@ -78,7 +78,7 @@ def ingest(conn) -> None:
     ids: dict[int, str] = {}
     chars: set[int] = set()  # every codepoint we will materialise as a character row
 
-    # NB: Unihan kJapaneseOn/kJapaneseKun are ROMAJI (e.g. "ABURA", "KO") — unusable for kana
+    # NB: Unihan kJapaneseOn/kJapaneseKun are ROMAJI (e.g. "ABURA", "KO") - unusable for kana
     # display, so we do NOT ingest them. Japanese on/kun come solely from Kanjidic (proper kana,
     # applied below); characters Kanjidic lacks simply get no JP reading rather than romaji junk.
     READING_FIELDS = {
@@ -149,7 +149,7 @@ def ingest(conn) -> None:
     for simp, trads in _opencc("STCharacters.txt"):
         for trad in trads:
             add_edge(simp, trad, "simplification", "opencc")
-    # OpenCC shinjitai → kyūjitai (this is where 広 → 廣 lives — the Unihan gap)
+    # OpenCC shinjitai → kyūjitai (this is where 広 → 廣 lives - the Unihan gap)
     for shin, kyus in _opencc("JPShinjitaiCharacters.txt"):
         for kyu in kyus:
             add_edge(shin, kyu, "shinjitai", "jp-toyo")

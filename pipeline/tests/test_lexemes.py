@@ -27,7 +27,7 @@ def test_chinese_one_lexeme_two_skins(conn):
     assert zh[0][3] == "ji1 chang3"
 
 
-# 2. Japanese 会社 is its OWN lexeme with gloss 'company' — never merged into a Chinese one.
+# 2. Japanese 会社 is its OWN lexeme with gloss 'company' - never merged into a Chinese one.
 def test_japanese_separate_lexeme(conn):
     ja = [r for r in lexemes_for_form(conn, "会社") if r[1] == "ja"]
     assert len(ja) >= 1
@@ -97,7 +97,7 @@ def test_merge_lexeme_surface(conn):
     assert "頭髮" in trad
 
 
-# E3. 會社 (guild) exists as a Chinese lexeme distinct from Japanese 会社 (company) — the raw
+# E3. 會社 (guild) exists as a Chinese lexeme distinct from Japanese 会社 (company) - the raw
 #     material for the false-friend label in Phase 2. They must NOT be the same lexeme.
 def test_false_friend_material_distinct(conn):
     zh = conn.execute(

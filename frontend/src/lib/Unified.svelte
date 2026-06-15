@@ -2,7 +2,7 @@
   import type { CharInfo, Entry, Hit, ReadingKV, Variety } from './types'
   import { primaryForm, varietyLabel, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, meaningfulGlossCount } from './display'
 
-  // The unified cross-language view — one Han word, seen across 中 / 粵 / 日 at once.
+  // The unified cross-language view - one Han word, seen across 中 / 粵 / 日 at once.
   // Renders instantly from search hits; enriches (decomposition, origin) when the full entry loads.
   let {
     hits = [],
@@ -91,7 +91,7 @@
         })
       }
     // collapse to one row per (variety, form), keeping the MOST MEANINGFUL lexeme (tie → the one
-    // you looked up). This drops minor duplicates — e.g. the bare "surname Long" / "radical 广"
+    // you looked up). This drops minor duplicates - e.g. the bare "surname Long" / "radical 广"
     // entries that share a form with the real word (dragon / wide).
     const primary = hits[0]?.lexeme_id ?? entry?.lexeme_id ?? -1
     const best = new Map<string, Row>()
@@ -107,7 +107,7 @@
       if (rr > pr || (rr === pr && r.id === primary)) best.set(key, r)
     }
     let deduped = [...best.values()]
-    // drop rows whose only content is a surname/variant cross-reference — unless it's the row you
+    // drop rows whose only content is a surname/variant cross-reference - unless it's the row you
     // looked up, or it's the sole row for its language (so a purely-minor entry still shows).
     const richByVar = new Set(deduped.filter((r) => meaningfulGlossCount(r.glosses) > 0).map((r) => r.variety))
     deduped = deduped.filter(
@@ -122,7 +122,7 @@
   // the headword glyph: what the user looked up
   const head = $derived(anchor || rows[0]?.form || '')
 
-  // the (language, form) this page resolved to — marked in the stack. Keyed by form, not lexeme id,
+  // the (language, form) this page resolved to - marked in the stack. Keyed by form, not lexeme id,
   // because dedupe may keep a richer lexeme of the same written form than the exact top hit.
   const primaryKey = $derived.by(() => {
     if (hits.length) {
@@ -143,17 +143,19 @@
   }
   const hasFalseFriend = $derived(rows.some(isFalseFriendRow))
 
+  // reading systems, labelled in plain words (中 Mandarin pinyin, 粵 Cantonese jyutping,
+  // 日 Japanese on'yomi / kun'yomi) so it's obvious which language each reading is.
   const READING_ORDER: [string, string][] = [
-    ['pinyin', '拼'],
-    ['jyutping', '粵'],
-    ['onyomi', '音'],
-    ['kunyomi', '訓'],
+    ['pinyin', 'pinyin'],
+    ['jyutping', 'jyutping'],
+    ['onyomi', "on'yomi"],
+    ['kunyomi', "kun'yomi"],
   ]
   const isKana = (s: string) => /[぀-ヿ]/.test(s)
   function charReadings(c: CharInfo) {
     const out: { label: string; value: string }[] = []
     for (const [kind, label] of READING_ORDER) {
-      // Japanese on/kun readings must be kana — drop corrupt values like "K0"
+      // Japanese on/kun readings must be kana - drop corrupt values like "K0"
       let v = c.readings.filter((r) => r.kind === kind).map((r) => r.value)
       if (kind === 'onyomi' || kind === 'kunyomi') v = v.filter(isKana)
       if (v.length) out.push({ label, value: v.join(' ') })
@@ -161,14 +163,48 @@
     return out
   }
 
-  // languages actually present (for the subtitle — hidden when there's only one)
-  const varieties = $derived([...new Set(rows.map((r) => r.variety))])
+  // languages present. For a word: the varieties of its rows. For a single character: the
+  // languages it's actually read in (has a reading for) — so 汉 shows 中·粵·日 even though only
+  // the Chinese word exists, making clear the character is used in Japanese too.
+  const varieties = $derived.by<Variety[]>(() => {
+    if (single && headChar) {
+      const out: Variety[] = []
+      const kinds = new Set(headChar.readings.map((r) => r.kind))
+      if (kinds.has('pinyin')) out.push('zh')
+      if (kinds.has('jyutping')) out.push('yue')
+      if (kinds.has('onyomi') || kinds.has('kunyomi')) out.push('ja')
+      if (out.length) return out
+    }
+    return [...new Set(rows.map((r) => r.variety))]
+  })
 
-  // single character vs jukugo (compound word) — they get purpose-built layouts:
+  // single character vs jukugo (compound word) - they get purpose-built layouts:
   // a character page (readings + structure + the words that use it) vs a word page
   // (meaning across languages + its component characters).
   const single = $derived([...head].length === 1)
   const headChar = $derived(entry?.characters?.[0])
+
+  // is this glyph the traditional/simplified/Japanese form? (answers "trad or simple?")
+  function scriptLabel(c: CharInfo): string {
+    if (c.is_orthodox) return 'traditional'
+    const types = new Set(c.variants.map((v) => v.edge_type))
+    const parts: string[] = []
+    if (types.has('simplification')) parts.push('simplified')
+    if (types.has('shinjitai')) parts.push('Japanese shinjitai')
+    return parts.join(' · ') || 'variant'
+  }
+  // plain-language name for an edge to a parent form
+  function edgeWord(edgeType: string): string {
+    return (
+      {
+        simplification: 'traditional',
+        shinjitai: 'traditional',
+        'z-variant': 'variant',
+        'semantic-variant': 'related',
+        'region-standard': 'regional',
+      }[edgeType] ?? edgeType
+    )
+  }
 
   let showOrigin = $state(false)
 </script>
@@ -184,7 +220,7 @@
   <!-- the core: this word, read across every language at once -->
   <ul class="langs">
     {#each rows as r (r.id)}
-      <li class:cur={`${r.variety}|${r.form}` === primaryKey}>
+      <li>
         <button class="lang" onclick={() => onsearch(r.form)} title="look up {r.form}">
           <span class="v">{varietyLabel(r.variety)}</span>
           <span class="body">
@@ -201,7 +237,7 @@
   </ul>
 
   {#if hasFalseFriend}
-    <p class="note">同字 — same characters, but the meaning differs by language.</p>
+    <p class="note">同字 · same characters, but the meaning differs by language.</p>
   {/if}
 
   {#if entry && single && headChar}
@@ -214,13 +250,18 @@
         </div>
       {/if}
       <div class="cln">
-        {#if headChar.strokes}<span class="dim">{headChar.strokes}画</span>{/if}
-        {#if headChar.radical}<span class="dim">radical {headChar.radical}</span>{/if}
-        {#if cleanIds(headChar.ids)}<span class="ids">{cleanIds(headChar.ids)}</span>{/if}
+        {#if head && headChar.ch !== head}
+          <!-- the looked-up glyph is a simplified/variant form of the entry's canonical char -->
+          <span class="dim">simplified · traditional <b>{headChar.ch}</b></span>
+        {:else}
+          <span class="dim">{scriptLabel(headChar)}</span>
+          {#each headChar.variants as v}<span class="dim">· {edgeWord(v.edge_type)} <b>{v.parent}</b></span>{/each}
+        {/if}
       </div>
-      {#each headChar.variants as v}
-        <div class="vedge">→ <b>{v.parent}</b> <span class="dim">{v.edge_type}{#if v.reform_name} · {v.reform_name}{/if}</span></div>
-      {/each}
+      <div class="cln">
+        {#if headChar.strokes}<span class="dim">{headChar.strokes} strokes</span>{/if}
+        {#if cleanIds(headChar.ids)}<span class="dim">parts</span> <span class="ids">{cleanIds(headChar.ids)}</span>{/if}
+      </div>
     </section>
   {:else if entry && entry.characters.length}
     <!-- jukugo: break the word into its component characters, each tappable -->
@@ -294,16 +335,13 @@
   .glyph { font-family: var(--han); font-size: clamp(3rem, 16vw, 4.5rem); line-height: 1; margin: 0; font-weight: 500; }
   .sub { font-family: var(--han); color: var(--faint); font-size: 0.85rem; margin: 0 0 0.4rem; letter-spacing: 0.1em; }
 
-  /* the cross-language stack — the heart of the app */
+  /* the cross-language stack - the heart of the app */
   .langs { list-style: none; margin: 0 0 0.4rem; padding: 0; border-top: 1px solid var(--border); }
   .langs li { border-bottom: 1px solid var(--border); }
-  /* the row this page resolved to — marked so you know which entry you're on */
-  .langs li.cur { background: var(--surface); box-shadow: inset 2px 0 0 var(--text); }
   .lang { display: flex; gap: 0.8rem; align-items: flex-start; width: 100%; text-align: left; background: none; border: none; border-radius: 0; padding: 0.85rem 0.3rem; }
   .lang:hover { background: var(--surface); }
   .v { font-family: var(--han); font-size: 1rem; color: var(--muted); flex: none;
        display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; }
-  .langs li.cur .v { background: var(--text); color: var(--bg); border-radius: 5px; }
   .body { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; flex: 1; }
   .top { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
   .form { font-family: var(--han); font-size: 1.5rem; line-height: 1.1; }
@@ -323,17 +361,15 @@
   .cg:hover { background: var(--surface); }
   .cmeta { flex: 1; min-width: 0; }
   .crd { display: flex; flex-wrap: wrap; gap: 0.8rem; font-family: var(--mono); font-size: 0.8rem; }
-  .crd .rl { font-family: var(--han); color: var(--faint); margin-right: 0.15rem; }
+  .crd .rl { font-family: var(--mono); font-size: 0.85em; color: var(--faint); margin-right: 0.2rem; }
   .cgl { font-size: 0.92rem; color: var(--muted); margin-top: 0.25rem; }
   .cln { display: flex; gap: 0.7rem; align-items: center; flex-wrap: wrap; margin-top: 0.3rem; font-size: 0.8rem; }
   .ids { font-family: var(--han); color: var(--muted); }
   .cln b { font-family: var(--han); }
 
-  /* single-character structure block — readings + decomposition, no repeated glyph */
+  /* single-character structure block - readings + decomposition, no repeated glyph */
   .struct .crd { font-size: 0.9rem; gap: 1rem; }
   .struct .cln { margin-top: 0.5rem; }
-  .vedge { font-size: 0.9rem; margin-top: 0.35rem; }
-  .vedge b { font-family: var(--han); }
 
   .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
   .chip { display: inline-flex; align-items: center; gap: 0.35rem; font-family: var(--han); font-size: 1.05rem; padding: 0.25rem 0.55rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); }

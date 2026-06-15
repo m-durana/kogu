@@ -1,4 +1,4 @@
-// Pure display logic — fixes the original CJKV Dict's display bugs *by construction* (DESIGN.md §5.3):
+// Pure display logic - fixes the original CJKV Dict's display bugs *by construction* (DESIGN.md §5.3):
 //  - user-selectable primary script (never hard-code traditional)
 //  - principled bracketing: show the alternate form IFF it differs (no inverted logic)
 //  - region tags surfaced on forms
@@ -75,7 +75,7 @@ export function regionsOf(hit: Hit): string[] {
   return order.filter((r) => present.has(r))
 }
 
-/** First gloss, trimmed for the results list (never shows internal placeholders — backend strips them). */
+/** First gloss, trimmed for the results list (never shows internal placeholders - backend strips them). */
 export function shortGloss(glosses: string[], max = 90): string {
   const g = cleanGloss(glosses[0] ?? '')
   return g.length > max ? g.slice(0, max - 1) + '…' : g
@@ -131,7 +131,7 @@ export function cleanGloss(g: string): string {
   if (!g) return ''
   let s = g
   s = s.replace(/\s*\bCL:[^;]*(?=;|$)/g, '') // classifier clauses
-  s = s.replace(/\[[A-Za-zÀ-ÿüÜ0-9·,.\s]*\]/g, '') // [hang2 kong1 gang3], [fa3] — before pipes
+  s = s.replace(/\[[A-Za-zÀ-ÿüÜ0-9·,.\s]*\]/g, '') // [hang2 kong1 gang3], [fa3] - before pipes
   s = s.replace(/([^\s;,，|[\]]+)\|([^\s;,，|[\]]+)/g, '$1') // 處|处 -> 處
   s = s.replace(/[,;]?\s*(?:Taiwan|Mainland|also|old|erhua|Cantonese)\s+pr\.\s*/gi, ' ') // pr. notes
   s = s.replace(/\(\s*\)/g, '') // empty parens left behind
@@ -148,7 +148,7 @@ export function glossLine(glosses: string[], max = 4): string {
   return glosses.map(cleanGloss).filter(Boolean).slice(0, max).join('; ')
 }
 
-/** A "minor" gloss carries no real meaning for a cross-language comparison — a bare surname,
+/** A "minor" gloss carries no real meaning for a cross-language comparison - a bare surname,
  * a "variant of"/"used in"/"see" cross-reference, or a radical definition. */
 export function isMinorGloss(g: string): boolean {
   const s = cleanGloss(g).toLowerCase()

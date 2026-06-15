@@ -1,7 +1,7 @@
-"""Phase 1.2 — lexeme ingestion.
+"""Phase 1.2 - lexeme ingestion.
 
 Chinese (CC-CEDICT): one lexeme with two skins (trad + simp surface forms, one Mandarin reading).
-Japanese (JMdict-simplified): separate lexemes — never merged into Chinese (that merge is what
+Japanese (JMdict-simplified): separate lexemes - never merged into Chinese (that merge is what
 produced the 会社 false friend). Region tags use the core-four launch set; fine-grained regional
 vocabulary splits are Phase 3 (the columns exist now).
 
@@ -23,7 +23,7 @@ JMDICT_ZIP = SOURCES_DIR / "jmdict-eng-common.json.zip"
 _CEDICT_RE = re.compile(r"^(\S+)\s+(\S+)\s+\[([^\]]*)\]\s+/(.*)/\s*$")
 _TONE = re.compile(r"[1-5]")
 # CC-CEDICT uses 'xx5' as a placeholder for an unknown reading. The original CJKV Dict leaked
-# this to the UI — we suppress it (keep the word + glosses, drop the bogus reading).
+# this to the UI - we suppress it (keep the word + glosses, drop the bogus reading).
 _PLACEHOLDER = re.compile(r"xx[0-9]", re.IGNORECASE)
 
 

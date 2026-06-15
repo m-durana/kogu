@@ -1,9 +1,9 @@
-"""Phase 3.3 — Cantonese layer (DESIGN.md §2.2).
+"""Phase 3.3 - Cantonese layer (DESIGN.md §2.2).
 
 Two CC-Canto files:
-  * cccedict-canto-readings — jyutping for CC-CEDICT entries → attach jyutping to the shared zh
+  * cccedict-canto-readings - jyutping for CC-CEDICT entries → attach jyutping to the shared zh
     lexemes (so Cantonese pronunciation shows on standard written vocabulary).
-  * cccanto — a Cantonese dictionary incl. colloquial words and 粵字 (係 唔 嘅 喺 咗 冇 嘢 …) →
+  * cccanto - a Cantonese dictionary incl. colloquial words and 粵字 (係 唔 嘅 喺 咗 冇 嘢 …) →
     create first-class `yue` lexemes for the entries not already standard Mandarin words.
 
 Runs after lexemes, before concepts (so yue lexemes also join the gloss-pivot concept layer).

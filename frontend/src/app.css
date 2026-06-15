@@ -1,4 +1,4 @@
-/* kogu — minimal, sharp (zero radius), dark. Angular "kanji" aesthetic. */
+/* kogu - minimal, sharp (zero radius), dark. Angular "kanji" aesthetic. */
 :root {
   --bg: #0b0b0c;
   --surface: #141416;
@@ -8,7 +8,7 @@
   --text: #ededeb;
   --muted: #8a8a90;
   --faint: #76767e;
-  /* monochrome only — no colour. "accent" = brightest grey/white for emphasis. */
+  /* monochrome only - no colour. "accent" = brightest grey/white for emphasis. */
   --accent: #f4f4f2;
   --accent-dim: #3a3a40;
   --zh: var(--text);
@@ -59,7 +59,7 @@ button {
   font-size: 0.85rem;
   line-height: 1;
   letter-spacing: 0.02em;
-  /* center contents both axes — fixes CJK glyphs sitting high in chips/buttons */
+  /* center contents both axes - fixes CJK glyphs sitting high in chips/buttons */
   display: inline-flex;
   align-items: center;
   justify-content: center;
