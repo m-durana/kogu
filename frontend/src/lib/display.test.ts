@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, isMinorGloss, meaningfulGlossCount } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, isMinorGloss, meaningfulGlossCount, splitRecon } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -211,6 +211,26 @@ describe('cleanGloss - strip CC-CEDICT markup', () => {
   })
   it('glossLine cleans, filters empties, caps count', () => {
     expect(glossLine(['a', 'CL:个[ge4]', 'b', 'c', 'd', 'e'], 4)).toBe('a; b; c; d')
+  })
+})
+
+describe('splitRecon - de-emphasise phonological reconstructions', () => {
+  it('splits an OC parenthetical', () => {
+    expect(splitRecon('漢 (OC *n̥ˁar): water')).toEqual([
+      { t: 'text', v: '漢 ' },
+      { t: 'recon', v: '(OC *n̥ˁar)' },
+      { t: 'text', v: ': water' },
+    ])
+  })
+  it('splits a slashed reconstruction', () => {
+    expect(splitRecon('from /*ʔɨts/ in')).toEqual([
+      { t: 'text', v: 'from ' },
+      { t: 'recon', v: '/*ʔɨts/' },
+      { t: 'text', v: ' in' },
+    ])
+  })
+  it('plain prose stays one text token', () => {
+    expect(splitRecon('a calque of English')).toEqual([{ t: 'text', v: 'a calque of English' }])
   })
 })
 

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CharInfo, Entry, Hit, ReadingKV, Variety } from './types'
-  import { primaryForm, varietyLabel, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, meaningfulGlossCount } from './display'
+  import { primaryForm, varietyLabel, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, meaningfulGlossCount, splitRecon } from './display'
 
   // The unified cross-language view - one Han word, seen across 中 / 粵 / 日 at once.
   // Renders instantly from search hits; enriches (decomposition, origin) when the full entry loads.
@@ -163,20 +163,11 @@
     return out
   }
 
-  // languages present. For a word: the varieties of its rows. For a single character: the
-  // languages it's actually read in (has a reading for) — so 汉 shows 中·粵·日 even though only
-  // the Chinese word exists, making clear the character is used in Japanese too.
-  const varieties = $derived.by<Variety[]>(() => {
-    if (single && headChar) {
-      const out: Variety[] = []
-      const kinds = new Set(headChar.readings.map((r) => r.kind))
-      if (kinds.has('pinyin')) out.push('zh')
-      if (kinds.has('jyutping')) out.push('yue')
-      if (kinds.has('onyomi') || kinds.has('kunyomi')) out.push('ja')
-      if (out.length) return out
-    }
-    return [...new Set(rows.map((r) => r.variety))]
-  })
+  // languages this exact form is actually used in (the varieties of its rows). NOT inferred from
+  // readings: 汉 reads カン in Japanese as a character, but Japanese writes it 漢 — so the simplified
+  // glyph 汉 is Chinese-only. The cross-script equivalent (traditional/Japanese 漢) is shown in the
+  // structure block instead.
+  const varieties = $derived([...new Set(rows.map((r) => r.variety))])
 
   // single character vs jukugo (compound word) - they get purpose-built layouts:
   // a character page (readings + structure + the words that use it) vs a word page
@@ -322,7 +313,7 @@
       </button>
       {#if showOrigin}
         <p class="ety">
-          {#each furiganaTokens(entry.etymology) as tok}{#if tok.t === 'ruby'}<ruby><button class="kanji" onclick={() => onsearch(tok.base)}>{tok.base}</button><rt>{tok.rt}</rt></ruby>{:else}{tok.v}{/if}{/each}
+          {#each furiganaTokens(entry.etymology) as tok}{#if tok.t === 'ruby'}<ruby><button class="kanji" onclick={() => onsearch(tok.base)}>{tok.base}</button><rt>{tok.rt}</rt></ruby>{:else}{#each splitRecon(tok.v) as s}{#if s.t === 'recon'}<span class="recon">{s.v}</span>{:else}{s.v}{/if}{/each}{/if}{/each}
         </p>
       {/if}
     </section>
@@ -385,4 +376,6 @@
   .ety rt { font-size: 0.55em; color: var(--faint); font-family: var(--han); }
   .ety .kanji { background: none; border: none; padding: 0; font: inherit; color: var(--text); }
   .ety .kanji:hover { text-decoration: underline; }
+  /* phonological reconstructions de-emphasised so the narrative reads first */
+  .ety .recon { font-size: 0.78em; color: var(--faint); font-family: var(--mono); }
 </style>

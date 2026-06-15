@@ -115,6 +115,26 @@ export function pinyinMarks(reading: string): string {
   return reading.split(/\s+/).map(markSyllable).join(' ')
 }
 
+/** Split etymology prose so the academic phonological reconstructions can be de-emphasised:
+ * parentheticals like "(OC *n̥ˁar)" / "(*ʔɨts)" and slashed forms like "/*ʔɨts/". The narrative
+ * stays prominent; the reconstructions render small + faint. */
+export type EtyToken = { t: 'text' | 'recon'; v: string }
+export function splitRecon(s: string): EtyToken[] {
+  // a parenthetical containing a "*" reconstruction, a tight /…*…/ form, or an (OC …)/(MC …) note.
+  // The slashed form must start "/*" so it doesn't swallow trad/simp "X /Y" slash notation.
+  const re = /(\([^)]*\*[^)]*\)|\/\*[^/]{0,40}\/|\((?:OC|MC|OJ|PIE|PST|STEDT|Old Chinese|Middle Chinese)[^)]*\))/g
+  const out: EtyToken[] = []
+  let last = 0
+  let m: RegExpExecArray | null
+  while ((m = re.exec(s)) !== null) {
+    if (m.index > last) out.push({ t: 'text', v: s.slice(last, m.index) })
+    out.push({ t: 'recon', v: m[0] })
+    last = m.index + m[0].length
+  }
+  if (last < s.length) out.push({ t: 'text', v: s.slice(last) })
+  return out
+}
+
 /** cjkvi-ids -> clean component list. Strips source tags ("[GTV]") and Ideographic Description
  * Characters (⿰⿱… U+2FF0–2FFF, which many fonts render as tofu) so only the components show:
  * "⿰糸氏[GTV]" -> "糸 氏". (DESIGN.md §6: no placeholder/markup leaks.) */
