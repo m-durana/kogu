@@ -1,12 +1,12 @@
-"""Build orchestrator: sources/ -> data/kanzi.sqlite.
+"""Build orchestrator: sources/ -> data/kogu.sqlite.
 
 Runs each ingest step in order, then finalises (rebuild FTS, set build_meta) and verifies the
 build-time invariants from DESIGN.md (every living glyph -> exactly one orthodox parent; no
 placeholder leaks). The invariant check FAILS the build loudly — that's the point.
 
 Usage:
-    python -m kanzipipe.build               # full build into data/kanzi.sqlite
-    python -m kanzipipe.build --out /tmp/x.sqlite
+    python -m kogupipe.build               # full build into data/kogu.sqlite
+    python -m kogupipe.build --out /tmp/x.sqlite
 """
 from __future__ import annotations
 

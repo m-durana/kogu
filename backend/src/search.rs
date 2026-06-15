@@ -75,7 +75,7 @@ pub fn pinyin_plain(q: &str) -> String {
 
 /// Fold a romaji query to the same canonical key the pipeline stores in romaji_plain: lowercase
 /// a–z, macrons unfolded, n before a labial, long vowels collapsed (tokyo=toukyou=tōkyō,
-/// shinbun=shimbun). Mirrors pipeline/kanzipipe/ingest/romaji.py::fold.
+/// shinbun=shimbun). Mirrors pipeline/kogupipe/ingest/romaji.py::fold.
 pub fn romaji_plain(q: &str) -> String {
     let mut s = String::with_capacity(q.len());
     for ch in q.chars() {

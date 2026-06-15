@@ -13,7 +13,7 @@ use crate::search;
 use crate::state::AppState;
 
 pub async fn health() -> Json<Value> {
-    Json(json!({ "status": "ok", "service": "kanzi", "version": env!("CARGO_PKG_VERSION") }))
+    Json(json!({ "status": "ok", "service": "kogu", "version": env!("CARGO_PKG_VERSION") }))
 }
 
 #[derive(Deserialize)]

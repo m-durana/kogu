@@ -1,5 +1,5 @@
 //! Phase 1.3-1.4 API regression probes (DESIGN.md §6.2) + edge cases.
-//! Runs the real router (oneshot) against the built data/kanzi.sqlite.
+//! Runs the real router (oneshot) against the built data/kogu.sqlite.
 //! Run from the backend/ dir: `cargo test`.
 
 use std::sync::OnceLock;
@@ -10,14 +10,14 @@ use http_body_util::BodyExt;
 use serde_json::Value;
 use tower::ServiceExt;
 
-use kanzi::{build_router, state::AppState};
+use kogu::{build_router, state::AppState};
 
 fn state() -> AppState {
     static S: OnceLock<AppState> = OnceLock::new();
     S.get_or_init(|| {
         // the API tests don't exercise OCR; loading the ONNX runtime without ORT_DYLIB_PATH blocks.
-        std::env::set_var("KANZI_SKIP_OCR", "1");
-        let path = std::env::var("KANZI_DB").unwrap_or_else(|_| "../data/kanzi.sqlite".into());
+        std::env::set_var("KOGU_SKIP_OCR", "1");
+        let path = std::env::var("KOGU_DB").unwrap_or_else(|_| "../data/kogu.sqlite".into());
         AppState::load(&path).expect("load DB (run the pipeline build first)")
     })
     .clone()

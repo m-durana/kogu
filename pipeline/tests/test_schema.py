@@ -6,7 +6,7 @@ import sqlite3
 
 import pytest
 
-from kanzipipe.db import create_db
+from kogupipe.db import create_db
 
 
 @pytest.fixture()

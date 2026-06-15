@@ -1,4 +1,4 @@
--- kanzi canonical database schema
+-- kogu canonical database schema
 -- Three layers over one character backbone (DESIGN.md §2). Built offline by build.py,
 -- served read-only by the Rust backend. All heavy conversion is precomputed here.
 --

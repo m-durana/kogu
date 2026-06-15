@@ -13,7 +13,7 @@ use serde_json::{json, Value};
 
 use crate::state::AppState;
 
-const ENDPOINT: &str = "https://inputtools.google.com/request?ime=handwriting&app=kanzi&dbg=0&cs=1&oe=UTF-8";
+const ENDPOINT: &str = "https://inputtools.google.com/request?ime=handwriting&app=kogu&dbg=0&cs=1&oe=UTF-8";
 
 /// A stroke is an ordered list of [x, y, t] points (t = ms timestamp, may be 0).
 type Point = [f64; 3];

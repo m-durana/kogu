@@ -46,7 +46,7 @@ def ingest(conn) -> None:
                         badge_rows.add((lid, b))
 
     if not files:
-        print("      (no etymology extracts found — run kanzipipe.extract_etymology; skipping)")
+        print("      (no etymology extracts found — run kogupipe.extract_etymology; skipping)")
         return
 
     conn.executemany(

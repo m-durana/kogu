@@ -1,16 +1,16 @@
-"""Database helpers: create a fresh kanzi DB from schema.sql, and common paths."""
+"""Database helpers: create a fresh kogu DB from schema.sql, and common paths."""
 from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
 
-# pipeline/kanzipipe/db.py -> pipeline/ -> kanzi/
+# pipeline/kogupipe/db.py -> pipeline/ -> kogu/
 PIPELINE_DIR = Path(__file__).resolve().parent.parent
 PROJECT_DIR = PIPELINE_DIR.parent
 SCHEMA_PATH = PIPELINE_DIR / "schema.sql"
 SOURCES_DIR = PIPELINE_DIR / "sources"
 DATA_DIR = PROJECT_DIR / "data"
-DB_PATH = DATA_DIR / "kanzi.sqlite"
+DB_PATH = DATA_DIR / "kogu.sqlite"
 
 
 def connect(path: str | Path) -> sqlite3.Connection:

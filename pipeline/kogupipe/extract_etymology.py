@@ -6,7 +6,7 @@ surface form already in our DB, and writes a compact JSONL per language to sourc
 
 No LLM — just passthrough of Wiktionary's own etymology_text + structured origin templates.
 
-Run (rarely):  python -m kanzipipe.extract_etymology
+Run (rarely):  python -m kogupipe.extract_etymology
 """
 from __future__ import annotations
 

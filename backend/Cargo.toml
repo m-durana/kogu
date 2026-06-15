@@ -1,17 +1,17 @@
 [package]
-name = "kanzi"
+name = "kogu"
 version = "0.0.0"
 edition = "2021"
-description = "Serving binary for the kanzi CJK dictionary (Axum + SQLite/FTS5)"
+description = "Serving binary for the kogu CJK dictionary (Axum + SQLite/FTS5)"
 license = "CC-BY-SA-4.0"
 publish = false
 
 [lib]
-name = "kanzi"
+name = "kogu"
 path = "src/lib.rs"
 
 [[bin]]
-name = "kanzi"
+name = "kogu"
 path = "src/main.rs"
 
 [dev-dependencies]

@@ -4,12 +4,12 @@ import sqlite3
 
 import pytest
 
-from kanzipipe.build import build
+from kogupipe.build import build
 
 
 @pytest.fixture(scope="session")
 def built_db(tmp_path_factory):
-    out = tmp_path_factory.mktemp("kanzi_db") / "kanzi.sqlite"
+    out = tmp_path_factory.mktemp("kogu_db") / "kogu.sqlite"
     build(out)
     return out
 

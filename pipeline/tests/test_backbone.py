@@ -98,12 +98,17 @@ def test_guang_two_distinct_children(conn):
 
 
 # E3. Readings are populated across varieties for 學 (pinyin / jyutping / onyomi).
+#     on/kun come from Kanjidic as KANA (not Unihan's romaji "GAKU") — see ingest/backbone.py.
 def test_readings_present(conn):
     got = {(k, v) for k, v in conn.execute(
         "SELECT kind, value FROM char_reading WHERE cp=?", (cp("學"),))}
     assert ("pinyin", "xué") in got
     assert ("jyutping", "hok6") in got
-    assert ("onyomi", "GAKU") in got
+    assert ("onyomi", "ガク") in got
+    # on/kun must be kana, never romaji
+    for k, v in got:
+        if k in ("onyomi", "kunyomi"):
+            assert not any(c.isascii() and c.isalpha() for c in v), f"romaji {k}: {v!r}"
 
 
 # E4. No placeholder leaks and the closure terminated (build would have failed otherwise),

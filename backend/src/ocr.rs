@@ -19,8 +19,8 @@ use crate::state::AppState;
 pub fn load_engine() -> Option<OAROCR> {
     // tests (and any non-OCR deployment) can skip the ONNX runtime entirely — loading it without
     // ORT_DYLIB_PATH blocks, and the search/entry API doesn't need it.
-    if std::env::var("KANZI_SKIP_OCR").is_ok() {
-        tracing::info!("KANZI_SKIP_OCR set — /ocr disabled");
+    if std::env::var("KOGU_SKIP_OCR").is_ok() {
+        tracing::info!("KOGU_SKIP_OCR set — /ocr disabled");
         return None;
     }
     let dir = std::env::var("KOGU_OAR_DIR")

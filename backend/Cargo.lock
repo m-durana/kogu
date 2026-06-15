@@ -1433,7 +1433,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "kanzi"
+name = "kogu"
 version = "0.0.0"
 dependencies = [
  "anyhow",

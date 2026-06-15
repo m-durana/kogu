@@ -1,6 +1,6 @@
 //! Phase 1.5 — handwriting proxy: pure payload-builder + response-parser tests (no network).
 
-use kanzi::recognize::{build_payload, parse_candidates};
+use kogu::recognize::{build_payload, parse_candidates};
 use serde_json::json;
 
 fn stroke(points: &[(f64, f64, f64)]) -> Vec<[f64; 3]> {

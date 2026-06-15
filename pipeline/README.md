@@ -1,7 +1,7 @@
-# kanzi ingestion pipeline
+# kogu ingestion pipeline
 
 Build-time only. Compiles all open upstream sources into **one normalised SQLite database**
-(`../data/kanzi.sqlite`, with FTS5) that the Rust backend serves. Runs rarely. Language doesn't
+(`../data/kogu.sqlite`, with FTS5) that the Rust backend serves. Runs rarely. Language doesn't
 matter here (Python/JS allowed) — **none of this is in the serving path**.
 
 All heavy conversions (OpenCC simp/trad/shinjitai, Middle Chinese tagging, variant-graph closure,
@@ -32,7 +32,7 @@ Downloaded sources land in `sources/` (gitignored). The built DB lands in `../da
 pipeline/
 ├── sources/      Downloaded raw upstream data (gitignored)
 ├── fetch.py      Download + pin upstream sources
-├── build.py      Orchestrate: sources → kanzi.sqlite
+├── build.py      Orchestrate: sources → kogu.sqlite
 └── schema.sql    Canonical DB schema (character backbone / lexeme / concept layers)
 ```
 

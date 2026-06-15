@@ -1,7 +1,7 @@
 # Deploying Wenbun (wenbun.miro.build)
 
 Three-tier on the VPS, matching the existing `*.miro.build` convention:
-- **Rust API** (`wenbun.service`) on `127.0.0.1:4100`, reads `data/kanzi.sqlite`.
+- **Rust API** (`wenbun.service`) on `127.0.0.1:4100`, reads `data/kogu.sqlite`.
 - **Static SPA** (Svelte build) at `/var/www/miro/wenbun`, served by nginx.
 - **nginx** vhost `wenbun.miro.build` → static + `/api/*` reverse-proxy, TLS via Let's Encrypt.
 
@@ -24,7 +24,7 @@ prints the exact DNS + certbot steps. After step 2, re-run to go live.
 
 ## Rebuilding the dictionary DB
 ```
-cd pipeline && .venv/bin/python -m kanzipipe.fetch && .venv/bin/python -m kanzipipe.build
+cd pipeline && .venv/bin/python -m kogupipe.fetch && .venv/bin/python -m kogupipe.build
 sudo systemctl restart wenbun
 ```
 

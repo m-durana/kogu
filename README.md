@@ -1,4 +1,4 @@
-# kanzi
+# kogu
 
 > Working title. Open-source successor to **CJKV Dict** — a dictionary for the living
 > Han-script written systems (Traditional Chinese, Simplified Chinese, Cantonese, Japanese)
@@ -40,7 +40,7 @@ See `docs/PLAN.md` for the phase-by-phase build plan.
 ## Layout
 
 ```
-kanzi/
+kogu/
 ├── backend/    Rust serving binary (Axum + rusqlite)
 ├── frontend/   Svelte + Vite SPA/PWA
 ├── pipeline/   Offline ingestion: open sources → one normalised SQLite DB

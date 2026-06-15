@@ -5,9 +5,9 @@ so a build is reproducible. Re-running skips files already present with a matchi
 ``--force`` is given.
 
 Usage:
-    python -m kanzipipe.fetch                 # fetch everything needed so far
-    python -m kanzipipe.fetch unihan cedict   # fetch a subset
-    python -m kanzipipe.fetch --force
+    python -m kogupipe.fetch                 # fetch everything needed so far
+    python -m kogupipe.fetch unihan cedict   # fetch a subset
+    python -m kogupipe.fetch --force
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from .db import PIPELINE_DIR, SOURCES_DIR
 
 LOCKFILE = PIPELINE_DIR / "sources.lock.json"
-UA = "kanzi-pipeline/0.0 (+https://miro.build)"
+UA = "kogu-pipeline/0.0 (+https://miro.build)"
 
 
 @dataclass
