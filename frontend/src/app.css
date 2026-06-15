@@ -15,10 +15,11 @@
   --ja: var(--text);
   --yue: var(--text);
 
-  /* Kogu brand type: Newsreader (serif body/wordmark), Space Mono (labels), Noto Serif (Han). */
+  /* Kogu brand type: Newsreader (serif body/wordmark), Space Mono (labels). Han uses the system
+     serif (no web-font download) — Songti/Hiragino on iOS, Noto on Android. */
   --mono: "Space Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --sans: "Newsreader", Georgia, "Times New Roman", serif;
-  --han: "Noto Serif SC", "Noto Serif JP", "Songti SC", "Hiragino Mincho ProN", "MS Mincho", serif;
+  --han: "Songti SC", "Hiragino Mincho ProN", "Noto Serif SC", "Noto Serif JP", "MS Mincho", serif;
 
   /* subtle rounding (iOS-ish), monochrome */
   --r: 9px;

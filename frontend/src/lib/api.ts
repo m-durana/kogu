@@ -44,11 +44,22 @@ export async function recognize(
   strokes: Stroke[],
   languages: string[] = ['zh', 'ja'],
 ): Promise<{ candidates: string[]; languages: string[] }> {
-  const r = await fetch(`${BASE}/recognize`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ width, height, strokes, languages }),
-  })
-  if (!r.ok) throw new Error(`recognize failed: ${r.status}`)
-  return r.json()
+  const body = JSON.stringify({ width, height, strokes, languages })
+  // Retry once: the first request after a cold PWA launch (radio/TLS waking) often fails.
+  let lastErr: unknown
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt) await new Promise((res) => setTimeout(res, 400))
+    try {
+      const r = await fetch(`${BASE}/recognize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      })
+      if (!r.ok) throw new Error(`recognize failed: ${r.status}`)
+      return await r.json()
+    } catch (e) {
+      lastErr = e
+    }
+  }
+  throw lastErr
 }

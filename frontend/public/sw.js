@@ -1,6 +1,6 @@
 // Kogu service worker — installability + fast loads. Offline is deferred (DESIGN Appendix A),
 // so this caches the app shell + hashed assets but never caches API responses.
-const CACHE = 'kogu-v3'
+const CACHE = 'kogu-v4'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg', '/icon-192.png?v=3', '/icon-512.png?v=3']
 
 self.addEventListener('install', (e) => {
@@ -20,9 +20,20 @@ self.addEventListener('fetch', (e) => {
   if (url.origin !== location.origin) return // let cross-origin (fonts, etc.) pass through
   if (url.pathname.startsWith('/api/')) return // never cache the API
 
-  // Navigations: network-first, fall back to cached shell (so the app opens offline-installed).
+  // Navigations: cache-FIRST so the installed PWA opens instantly (no black screen waiting on the
+  // network); revalidate the shell in the background for next launch.
   if (req.mode === 'navigate') {
-    e.respondWith(fetch(req).catch(() => caches.match('/index.html')))
+    e.respondWith(
+      caches.match('/index.html').then((cached) => {
+        const network = fetch(req)
+          .then((res) => {
+            if (res.ok) caches.open(CACHE).then((c) => c.put('/index.html', res.clone()))
+            return res
+          })
+          .catch(() => cached)
+        return cached || network
+      }),
+    )
     return
   }
 

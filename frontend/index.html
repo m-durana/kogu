@@ -11,12 +11,20 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Kogu" />
     <meta name="description" content="Kogu 古古 - an open-source dictionary for the living Han script: Traditional, Simplified, Cantonese, Japanese." />
+    <!-- Only the small latin brand fonts are downloaded; CJK uses the system serif (Songti/
+         Hiragino on iOS, Noto on Android) so multi-MB CJK font downloads never block startup.
+         Loaded non-render-blocking (media=print + onload) so first paint isn't delayed. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300&family=Space+Mono:wght@400;700&family=Noto+Serif+SC:wght@300;500;700&family=Noto+Serif+JP:wght@300;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300&family=Space+Mono:wght@400;700&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
     />
+    <noscript>
+      <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+    </noscript>
     <title>Kogu 古古 · Han-script dictionary</title>
   </head>
   <body>

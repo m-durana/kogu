@@ -2,7 +2,7 @@
   import { recognize, type Stroke } from './api'
   import { X } from '@lucide/svelte'
 
-  let { onpick }: { onpick: (ch: string) => void } = $props()
+  let { onpick, onclose }: { onpick: (ch: string) => void; onclose?: () => void } = $props()
 
   const SIZE = 384 // backing resolution; CSS size scales independently
   let canvas: HTMLCanvasElement
@@ -57,6 +57,11 @@
     timer = setTimeout(run, 1000)
   }
   function clear() {
+    // nothing drawn yet → the X doubles as "close the draw box"
+    if (strokes.length === 0 && current.length === 0 && candidates.length === 0) {
+      onclose?.()
+      return
+    }
     clearTimeout(timer)
     strokes = []
     current = []

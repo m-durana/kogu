@@ -7,11 +7,13 @@
   let {
     hits = [],
     entry = null,
+    enriching = false,
     anchor = '',
     onsearch,
   }: {
     hits?: Hit[]
     entry?: Entry | null
+    enriching?: boolean
     anchor?: string
     onsearch: (q: string) => void
   } = $props()
@@ -278,6 +280,15 @@
         </div>
       {/each}
     </section>
+  {:else if enriching}
+    <!-- reserve the structure + words space while the entry loads, so nothing pops in below -->
+    <section class="skel" aria-hidden="true">
+      <div class="skel-h"></div>
+      <div class="skel-line"></div>
+      <div class="skel-line w60"></div>
+      <div class="skel-h"></div>
+      <div class="skel-chips">{#each Array(10) as _}<span class="skel-chip"></span>{/each}</div>
+    </section>
   {/if}
 
   {#if entry && entry.compounds.length}
@@ -378,4 +389,14 @@
   .ety .kanji:hover { text-decoration: underline; }
   /* phonological reconstructions de-emphasised so the narrative reads first */
   .ety .recon { font-size: 0.78em; color: var(--faint); font-family: var(--mono); }
+
+  /* loading skeleton - reserves the lower sections' space so they don't pop in */
+  .skel { margin-top: 1.4rem; }
+  .skel-h { height: 0.7rem; width: 5rem; border-radius: 4px; background: var(--surface-2); margin: 1rem 0 0.7rem; }
+  .skel-line { height: 0.95rem; border-radius: 4px; background: var(--surface); margin-bottom: 0.5rem; }
+  .skel-line.w60 { width: 60%; }
+  .skel-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .skel-chip { height: 1.8rem; width: 3.4rem; border-radius: var(--r); background: var(--surface); }
+  .skel-h, .skel-line, .skel-chip { animation: skelpulse 1.3s ease-in-out infinite; }
+  @keyframes skelpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 </style>

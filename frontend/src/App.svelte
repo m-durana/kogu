@@ -13,6 +13,7 @@
   let classified = $state('')
   let entry = $state<Entry | null>(null)
   let enrichEntry = $state<Entry | null>(null)
+  let enriching = $state(false)
   let unified = $state(false)
   let view = $state<'results' | 'entry'>('results')
   // inline input panel below the search row: 'draw' shows the pad; 'photo' shows the picked image
@@ -32,10 +33,14 @@
 
   async function doSearch(query: string, mode: NavMode = 'push') {
     const term = query.trim()
+    // already showing this exact query (e.g. tapped the row/character for the page you're on):
+    // do nothing, so the view doesn't blank and reload.
+    if (term && term === q.trim() && searched && !loading && (results.length || entry)) return
     q = query
     view = 'results'
     entry = null
     enrichEntry = null
+    enriching = false
     unified = false
     if (!term) {
       results = []
@@ -58,12 +63,16 @@
       // no list step. Enrich it with the top lexeme's decomposition + origin in the background.
       if (res.classified_as === 'han' && results.length) {
         unified = true
+        enriching = true
         const topId = results[0].lexeme_id
         fetchEntry(topId)
           .then((e) => {
             if (q.trim() === term && unified) enrichEntry = e
           })
           .catch(() => {})
+          .finally(() => {
+            if (q.trim() === term) enriching = false
+          })
       }
     } catch (e) {
       if ((e as Error).name !== 'AbortError') err = 'search failed'
@@ -83,8 +92,10 @@
   async function openEntry(id: number, mode: NavMode = 'push') {
     loading = true
     err = ''
+    if (view === 'entry' && entry?.lexeme_id === id) return // already on this entry
     try {
       entry = await fetchEntry(id)
+      enriching = false
       unified = false
       view = 'entry'
       if (mode === 'push') history.pushState({ view: 'entry', id, q }, '', `#/entry/${id}`)
@@ -143,6 +154,7 @@
     results = []
     entry = null
     enrichEntry = null
+    enriching = false
     unified = false
     searched = false
     err = ''
@@ -203,7 +215,7 @@
   </div>
 
   {#if panel === 'draw'}
-    <section class="inputpanel"><Pad onpick={fromInput} /></section>
+    <section class="inputpanel"><Pad onpick={fromInput} onclose={() => (panel = 'none')} /></section>
   {:else if panel === 'photo' && ocrFile}
     <section class="inputpanel"><Ocr file={ocrFile} onpick={fromInput} /></section>
   {/if}
@@ -215,7 +227,7 @@
       <Unified entry={entry} anchor={q} onsearch={doSearch} />
     {/key}
   {:else if unified && results.length}
-    <Unified hits={results} entry={enrichEntry} anchor={q} onsearch={doSearch} />
+    <Unified hits={results} entry={enrichEntry} {enriching} anchor={q} onsearch={doSearch} />
   {:else}
     {#if searched && !loading && results.length}
       <div class="meta">{results.length} {results.length === 1 ? 'result' : 'results'}</div>
