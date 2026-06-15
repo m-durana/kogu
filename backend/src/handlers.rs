@@ -280,15 +280,37 @@ const GLOSS_STOPWORDS: &[&str] = &[
     "all", "such", "more", "less", "very", "his", "her", "its", "who", "whom", "way", "are",
 ];
 
-/// Content words (≥3 letters, not stopwords) from a lexeme's first few glosses.
+/// A gloss segment that is a cross-reference, not a meaning — "the Japanese word for company",
+/// "Mandarin equivalent: 的", "variant of X", "see also X". Its words must not count as shared
+/// meaning, or false friends whose dictionary gloss *describes the other language* slip through
+/// (会社: jp "company" vs zh "…the Japanese word for company").
+fn is_meta_segment(seg: &str) -> bool {
+    const META: &[&str] = &[
+        "word for", "term for", "equivalent", "variant of", "used in", "abbr", "see also",
+        "japanese", "mandarin", "cantonese", "korean",
+    ];
+    let s = seg.to_lowercase();
+    META.iter().any(|m| s.contains(m))
+}
+
+/// Content words from a lexeme's PRIMARY sense only (meta cross-references skipped). The first
+/// sense is the discriminator: two same-form words are cognates iff their main meanings overlap.
+/// Using only sense 1 avoids both false negatives from rich glosses (愛 shares "love" but has many
+/// other senses) and false positives from peripheral senses (大丈夫's archaic "great man", 娘's
+/// "young (woman)") that incidentally overlap the other language.
 fn gloss_words(conn: &rusqlite::Connection, id: i64) -> rusqlite::Result<std::collections::HashSet<String>> {
-    let mut s = conn.prepare("SELECT gloss_en FROM sense WHERE lexeme_id=?1 ORDER BY sense_order LIMIT 5")?;
+    let mut s = conn.prepare("SELECT gloss_en FROM sense WHERE lexeme_id=?1 ORDER BY sense_order LIMIT 1")?;
     let glosses: Vec<String> = s.query_map([id], |r| r.get(0))?.collect::<Result<_, _>>()?;
     let mut out = std::collections::HashSet::new();
     for g in glosses {
-        for tok in g.to_lowercase().split(|c: char| !c.is_ascii_alphabetic()) {
-            if tok.len() >= 3 && !GLOSS_STOPWORDS.contains(&tok) {
-                out.insert(tok.to_string());
+        for seg in g.split(|c| c == ';' || c == ',') {
+            if is_meta_segment(seg) {
+                continue;
+            }
+            for tok in seg.to_lowercase().split(|c: char| !c.is_ascii_alphabetic()) {
+                if tok.len() >= 3 && !GLOSS_STOPWORDS.contains(&tok) {
+                    out.insert(tok.to_string());
+                }
             }
         }
     }
@@ -363,21 +385,20 @@ fn variant_spelling(conn: &rusqlite::Connection, a: i64, b: i64) -> rusqlite::Re
 /// friends it wrongly tied together). Variant spellings (这/這, 汉/漢) and bare variant glyphs with
 /// no glosses stay cognate; genuine same-form divergences (手紙, 汽車, 大丈夫, 娘) flag.
 fn classify_relation(conn: &rusqlite::Connection, a: i64, b: i64) -> rusqlite::Result<&'static str> {
-    if variant_spelling(conn, a, b)? {
+    // A variant spelling means "the same word, written differently" — but only WITHIN a language.
+    // Across languages, variant-equivalent forms can still be false friends (会社 jp "company" vs
+    // 會社 zh "guild" — 会 is just the shinjitai of 會), so only short-circuit same-variety pairs.
+    let va: String = conn.query_row("SELECT variety FROM lexeme WHERE id=?1", [a], |r| r.get(0))?;
+    let vb: String = conn.query_row("SELECT variety FROM lexeme WHERE id=?1", [b], |r| r.get(0))?;
+    if va == vb && variant_spelling(conn, a, b)? {
         return Ok("cognate");
     }
+    // primary senses share no word → a false friend (手紙, 汽車, 大丈夫, 娘, 会社); any shared
+    // primary-sense word → cognate (砂糖 = sugar, 愛 = love). One side unglossed → cognate.
     let wa = gloss_words(conn, a)?;
     let wb = gloss_words(conn, b)?;
-    if wa.is_empty() || wb.is_empty() {
-        return Ok("cognate");
-    }
-    // overlap coefficient = shared words / smaller gloss. Plain disjointness is too lenient —
-    // 大丈夫 (jp "OK") and 娘 (jp "daughter") share an incidental word with their zh sense ("man",
-    // "young") yet are real false friends. Requiring a meaningful *share* (≥40% of the smaller
-    // gloss) flags those while keeping 砂糖 (both "sugar") and 機 (both "opportunity") cognate.
-    let inter = wa.iter().filter(|w| wb.contains(*w)).count() as f64;
-    let min_len = wa.len().min(wb.len()) as f64;
-    Ok(if inter < 0.4 * min_len { "false-friend" } else { "cognate" })
+    let diverges = !wa.is_empty() && !wb.is_empty() && wa.is_disjoint(&wb);
+    Ok(if diverges { "false-friend" } else { "cognate" })
 }
 
 pub async fn why_handler(
