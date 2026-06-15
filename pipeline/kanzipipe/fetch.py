@@ -79,6 +79,13 @@ SOURCES: dict[str, Source] = {
     "cccanto-readings": Source(
         "cccanto-readings", "https://cantonese.org/cccedict-canto-readings-150923.zip",
         "cccanto-readings.zip", "CC-BY-SA"),
+    # Word frequency (OpenSubtitles via hermitdave/FrequencyWords) — ranks common words first.
+    "freq-zh": Source(
+        "freq-zh", "https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/zh_cn/zh_cn_50k.txt",
+        "freq_zh_cn.txt", "MIT"),
+    "freq-ja": Source(
+        "freq-ja", "https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2016/ja/ja_50k.txt",
+        "freq_ja.txt", "MIT"),
 }
 
 

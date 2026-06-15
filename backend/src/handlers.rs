@@ -49,6 +49,10 @@ fn build_entry(
     conn: &rusqlite::Connection,
     id: i64,
 ) -> rusqlite::Result<Option<Entry>> {
+    // negative id = a character-only entry (kokuji / char with no word-lexeme), keyed by codepoint
+    if id < 0 {
+        return build_char_entry(conn, (-id) as u32);
+    }
     let row = conn.query_row(
         "SELECT variety, headword, reading, freq FROM lexeme WHERE id = ?1",
         [id],
@@ -159,24 +163,11 @@ fn build_entry(
         }
     }
 
-    // 熟語 — for a single character, the common words that contain it (across all systems),
-    // shortest first and the entry's own language preferred. Powered by the form_char index.
+    // 熟語 — for a single character, the common words that contain it (across all systems).
     let mut compounds = Vec::new();
     if headword.chars().count() == 1 {
         if let Some(ch) = headword.chars().next() {
-            let mut cs = conn.prepare(
-                "SELECT l.id FROM form_char fc JOIN lexeme l ON l.id = fc.lexeme_id \
-                 WHERE fc.cp = ?1 AND l.id <> ?2 \
-                 GROUP BY l.id ORDER BY (l.variety = ?3) DESC, MIN(fc.flen) ASC, l.id ASC LIMIT 30",
-            )?;
-            let ids: Vec<i64> = cs
-                .query_map(rusqlite::params![ch as i64, id, variety], |r| r.get(0))?
-                .collect::<Result<_, _>>()?;
-            for cid in ids {
-                if let Some(l) = link_lite(conn, cid, "compound", None)? {
-                    compounds.push(l);
-                }
-            }
+            compounds = char_compounds(conn, ch, &variety, id)?;
         }
     }
 
@@ -205,7 +196,68 @@ fn build_entry(
     }))
 }
 
-/// Do two lexemes share any concept? (cognate vs false-friend discriminator)
+/// 熟語 — words containing a character, shortest then most-frequent first, the given variety preferred.
+fn char_compounds(
+    conn: &rusqlite::Connection,
+    ch: char,
+    variety: &str,
+    exclude_id: i64,
+) -> rusqlite::Result<Vec<LinkLite>> {
+    let mut cs = conn.prepare(
+        "SELECT l.id FROM form_char fc JOIN lexeme l ON l.id = fc.lexeme_id \
+         WHERE fc.cp = ?1 AND l.id <> ?2 GROUP BY l.id \
+         ORDER BY (l.variety = ?3) DESC, MIN(fc.flen) ASC, l.freq IS NULL, l.freq DESC, l.id ASC LIMIT 30",
+    )?;
+    let ids: Vec<i64> = cs
+        .query_map(rusqlite::params![ch as i64, exclude_id, variety], |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    let mut out = Vec::new();
+    for cid in ids {
+        if let Some(l) = link_lite(conn, cid, "compound", None)? {
+            out.push(l);
+        }
+    }
+    Ok(out)
+}
+
+/// Character-only entry (kokuji / a character with no word-lexeme): readings, decomposition and the
+/// words that use it, synthesised from the character tables. Returns None if the codepoint isn't ours.
+fn build_char_entry(conn: &rusqlite::Connection, cp: u32) -> rusqlite::Result<Option<Entry>> {
+    let ch = match char::from_u32(cp) {
+        Some(c) => c,
+        None => return Ok(None),
+    };
+    let ci = match char_info(conn, ch)? {
+        Some(ci) => ci,
+        None => return Ok(None),
+    };
+    let variety = crate::search::char_variety(conn, cp as i64)?.to_string();
+    let gloss: Option<String> = conn
+        .query_row("SELECT gloss_en FROM character WHERE cp=?1", [cp as i64], |r| r.get(0))
+        .ok()
+        .flatten();
+    let senses: Vec<Sense> = gloss.into_iter().map(|g| Sense { pos: None, gloss_en: g }).collect();
+    let compounds = char_compounds(conn, ch, &variety, 0)?;
+    Ok(Some(Entry {
+        lexeme_id: -(cp as i64),
+        variety,
+        headword: ch.to_string(),
+        reading: None,
+        freq: None,
+        forms: vec![Form { form: ch.to_string(), script: "other".into(), region: None, is_primary: true }],
+        readings: Vec::new(),
+        senses,
+        characters: vec![ci],
+        same_form: Vec::new(),
+        translations: Vec::new(),
+        compounds,
+        origin_badges: Vec::new(),
+        etymology: None,
+    }))
+}
+
+/// Do two lexemes share any concept? (kept for reference; relation now uses gloss disjointness)
+#[allow(dead_code)]
 fn shares_concept(conn: &rusqlite::Connection, a: i64, b: i64) -> rusqlite::Result<bool> {
     let n: i64 = conn.query_row(
         "SELECT EXISTS( \
@@ -304,20 +356,28 @@ fn variant_spelling(conn: &rusqlite::Connection, a: i64, b: i64) -> rusqlite::Re
     Ok(true)
 }
 
-/// Classify the relation between two same-form lexemes. A false-friend label needs POSITIVE
-/// evidence of divergence: not a shared concept, not a shared gloss word, not a mere variant
-/// spelling, and both sides actually glossed. This avoids the mislabel classes seen in testing:
-/// cognates the concept layer didn't link (砂糖 = sugar/sugar), bare variant glyphs with no
-/// glosses (廣/广), and 1:1 variant spellings of one word (这/這, 汉/漢, 癡/痴) — while keeping
-/// genuine simplification *merges* (发←髮/發, 干←乾/幹) flagged.
+/// Classify the relation between two same-form lexemes. Gloss DISJOINTNESS is the decisive signal:
+/// two glossed forms that share no meaning word are a false friend; any shared word (or a mere
+/// variant spelling, or one side unglossed) is a cognate. This is more reliable than the concept
+/// layer, which both under-links (砂糖 = sugar/sugar) and over-links (大丈夫, 娘 — classic false
+/// friends it wrongly tied together). Variant spellings (这/這, 汉/漢) and bare variant glyphs with
+/// no glosses stay cognate; genuine same-form divergences (手紙, 汽車, 大丈夫, 娘) flag.
 fn classify_relation(conn: &rusqlite::Connection, a: i64, b: i64) -> rusqlite::Result<&'static str> {
-    if shares_concept(conn, a, b)? || variant_spelling(conn, a, b)? {
+    if variant_spelling(conn, a, b)? {
         return Ok("cognate");
     }
     let wa = gloss_words(conn, a)?;
     let wb = gloss_words(conn, b)?;
-    let diverges = !wa.is_empty() && !wb.is_empty() && wa.is_disjoint(&wb);
-    Ok(if diverges { "false-friend" } else { "cognate" })
+    if wa.is_empty() || wb.is_empty() {
+        return Ok("cognate");
+    }
+    // overlap coefficient = shared words / smaller gloss. Plain disjointness is too lenient —
+    // 大丈夫 (jp "OK") and 娘 (jp "daughter") share an incidental word with their zh sense ("man",
+    // "young") yet are real false friends. Requiring a meaningful *share* (≥40% of the smaller
+    // gloss) flags those while keeping 砂糖 (both "sugar") and 機 (both "opportunity") cognate.
+    let inter = wa.iter().filter(|w| wb.contains(*w)).count() as f64;
+    let min_len = wa.len().min(wb.len()) as f64;
+    Ok(if inter < 0.4 * min_len { "false-friend" } else { "cognate" })
 }
 
 pub async fn why_handler(

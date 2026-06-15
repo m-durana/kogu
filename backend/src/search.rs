@@ -73,6 +73,35 @@ pub fn pinyin_plain(q: &str) -> String {
     out
 }
 
+/// Fold a romaji query to the same canonical key the pipeline stores in romaji_plain: lowercase
+/// a–z, macrons unfolded, n before a labial, long vowels collapsed (tokyo=toukyou=tōkyō,
+/// shinbun=shimbun). Mirrors pipeline/kanzipipe/ingest/romaji.py::fold.
+pub fn romaji_plain(q: &str) -> String {
+    let mut s = String::with_capacity(q.len());
+    for ch in q.chars() {
+        let c = match ch {
+            'ā' | 'â' => 'a',
+            'ī' | 'î' => 'i',
+            'ū' | 'û' => 'u',
+            'ē' | 'ê' => 'e',
+            'ō' | 'ô' => 'o',
+            c => c,
+        };
+        for low in c.to_lowercase() {
+            if low.is_ascii_alphabetic() {
+                s.push(low);
+            }
+        }
+    }
+    for lab in ["mb", "mp", "mm"] {
+        s = s.replace(lab, &format!("n{}", &lab[1..]));
+    }
+    for (a, b) in [("ou", "o"), ("oo", "o"), ("uu", "u"), ("ee", "e"), ("ei", "e"), ("aa", "a"), ("ii", "i")] {
+        s = s.replace(a, b);
+    }
+    s
+}
+
 /// Build a safe FTS5 AND-query so word order doesn't change results (predictable English search).
 fn fts_query(q: &str) -> Option<String> {
     let tokens: Vec<String> = q
@@ -206,6 +235,18 @@ pub fn search(
                     bump(&mut cand, id, "reading", W_READING);
                 }
             }
+            // romaji reading (Japanese): tolerant of long-vowel / n-m spelling (tokyo, toukyou, …)
+            let rp = romaji_plain(q);
+            if rp.len() >= 2 {
+                let mut stmt = conn.prepare(
+                    "SELECT lexeme_id FROM lexeme_reading WHERE kind='romaji_plain' AND value = ?1",
+                )?;
+                let ids: Vec<i64> =
+                    stmt.query_map([&rp], |r| r.get(0))?.collect::<Result<_, _>>()?;
+                for id in ids {
+                    bump(&mut cand, id, "reading", W_READING);
+                }
+            }
             // english gloss full-text, ranked by how well the gloss matches (exactness + bm25),
             // so "airport" surfaces 空港/機場 above words where airport is merely incidental.
             if let Some(fq) = fts_query(q) {
@@ -236,9 +277,73 @@ pub fn search(
         }
     }
     hits.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+
+    // kokuji fallback: a single valid character with no word-lexeme (峠 has one; 込/凪 don't)
+    // still deserves a character page. Synthesise a hit keyed by a negative codepoint id.
+    if kind == Kind::Han && hits.is_empty() {
+        let mut chars = q.chars();
+        if let (Some(ch), None) = (chars.next(), chars.next()) {
+            if let Some(hit) = char_only_hit(conn, ch)? {
+                hits.push(hit);
+            }
+        }
+    }
     hits.truncate(limit);
 
     Ok(SearchResponse { query: q.to_string(), classified_as: kind.as_str().to_string(), results: hits })
+}
+
+/// Guess a character's variety for display: kana on/kun present → Japanese, else Chinese.
+pub fn char_variety(conn: &Connection, cp: i64) -> rusqlite::Result<&'static str> {
+    let has_kana: i64 = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM char_reading WHERE cp=?1 AND kind IN ('onyomi','kunyomi'))",
+        [cp],
+        |r| r.get(0),
+    )?;
+    let has_pinyin: i64 = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM char_reading WHERE cp=?1 AND kind='pinyin')",
+        [cp],
+        |r| r.get(0),
+    )?;
+    Ok(if has_pinyin == 0 && has_kana != 0 { "ja" } else { "zh" })
+}
+
+/// A character that exists but has no word-lexeme → a synthetic hit (negative codepoint id) so the
+/// frontend can still open a character page. Returns None if the character isn't in the DB.
+fn char_only_hit(conn: &Connection, ch: char) -> rusqlite::Result<Option<Hit>> {
+    let cp = ch as i64;
+    let gloss: Option<String> = conn
+        .query_row("SELECT gloss_en FROM character WHERE cp=?1", [cp], |r| r.get(0))
+        .ok()
+        .flatten();
+    // require the character to actually exist (a reading or a gloss)
+    let exists: i64 = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM character WHERE cp=?1)",
+        [cp],
+        |r| r.get(0),
+    )?;
+    if exists == 0 {
+        return Ok(None);
+    }
+    let variety = char_variety(conn, cp)?;
+    let kind = if variety == "ja" { "kana" } else { "pinyin" };
+    let reading: Option<String> = conn
+        .query_row(
+            "SELECT value FROM char_reading WHERE cp=?1 AND kind=?2 LIMIT 1",
+            rusqlite::params![cp, kind],
+            |r| r.get(0),
+        )
+        .ok();
+    Ok(Some(Hit {
+        lexeme_id: -cp,
+        variety: variety.to_string(),
+        headword: ch.to_string(),
+        reading,
+        forms: vec![Form { form: ch.to_string(), script: "other".into(), region: None, is_primary: true }],
+        glosses: gloss.into_iter().collect(),
+        match_type: "exact".into(),
+        score: 1.0,
+    }))
 }
 
 fn build_hit(
@@ -278,8 +383,9 @@ fn build_hit(
     let glosses: Vec<String> =
         gstmt.query_map([id], |r| r.get(0))?.collect::<Result<_, _>>()?;
 
-    // freq factor: known freq in [0,1]; unknown (most zh) gets a neutral baseline
-    let freq_factor = freq.unwrap_or(0.4);
+    // freq factor: ranked words score in [0.15,1]; unranked get a low baseline so any frequency
+    // signal beats none (a common word always outranks an unknown one).
+    let freq_factor = freq.unwrap_or(0.1);
     let mut score = weight * (1.0 + freq_factor);
     // gentle script preference (not length-based ranking)
     if let Some(ps) = pref_script {
