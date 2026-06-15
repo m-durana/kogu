@@ -15,6 +15,8 @@ use kanzi::{build_router, state::AppState};
 fn state() -> AppState {
     static S: OnceLock<AppState> = OnceLock::new();
     S.get_or_init(|| {
+        // the API tests don't exercise OCR; loading the ONNX runtime without ORT_DYLIB_PATH blocks.
+        std::env::set_var("KANZI_SKIP_OCR", "1");
         let path = std::env::var("KANZI_DB").unwrap_or_else(|_| "../data/kanzi.sqlite".into());
         AppState::load(&path).expect("load DB (run the pipeline build first)")
     })
@@ -403,4 +405,136 @@ async fn entry_and_404() {
     assert!(e["characters"].as_array().unwrap().len() >= 2);
     let (st404, _) = get("/entry/99999999").await;
     assert_eq!(st404, StatusCode::NOT_FOUND);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Probe batteries — the 115-word and 100-edge-case sets, distilled into invariants
+// that must hold on every build. (Run from backend/: `cargo test --release`.)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// search q, then fetch /entry of the top hit.
+async fn entry_top(q: &str) -> Value {
+    let v = search(q).await;
+    let id = v["results"].as_array().unwrap().first().expect("a result")["lexeme_id"].as_i64().unwrap();
+    get(&format!("/entry/{id}")).await.1
+}
+
+fn same_form_has_ff(e: &Value) -> bool {
+    e["same_form"].as_array().unwrap().iter().any(|l| l["relation"] == "false-friend")
+}
+
+// B1. Nothing in the batteries comes back empty — incl. kokuji with no word-lexeme (込/凪/榊,
+// resolved by the character-page fallback) and the keep-vs-convert own-chars (干/缶/糸).
+#[tokio::test]
+async fn probe_no_zero_hits() {
+    let must_resolve = [
+        "鬱", "薔薇", "麒麟", "干", "缶", "糸", "后", "里", "面", "发", "复", "系", "廣", "圖",
+        "驛", "龍", "馬", "門", "夾", "戸", "龜", "峠", "込", "凪", "雫", "躾", "畑", "腺", "働",
+        "榊", "唔", "係", "嘅", "喺", "咗", "冇", "嘢", "啲", "揾", "嚟", "行", "和", "重", "差",
+        "己", "已", "巳", "未", "末", "龘", "手紙", "汽車", "会社", "自転車", "空港", "機場",
+        "中国", "日本", "学校", "先生", "音楽",
+    ];
+    for q in must_resolve {
+        let n = search(q).await["results"].as_array().unwrap().len();
+        assert!(n >= 1, "{q} returned zero results");
+    }
+}
+
+// B2. The L-section false friends are labelled false-friend on the looked-up entry.
+#[tokio::test]
+async fn probe_false_friends_flag() {
+    for q in ["手紙", "汽車", "娘", "勉強", "大丈夫", "留守", "会社"] {
+        let e = entry_top(q).await;
+        assert!(same_form_has_ff(&e), "{q} should have a false-friend sibling");
+    }
+}
+
+// B3. Clean cognates / same-word pairs must NOT carry a false-friend flag.
+#[tokio::test]
+async fn probe_cognate_controls() {
+    for q in ["砂糖", "愛", "中国", "學校"] {
+        let e = entry_top(q).await;
+        assert!(!same_form_has_ff(&e), "{q} should not be flagged a false friend");
+    }
+}
+
+// B4. Cross-language false friend whose forms are variant glyphs: 会社 (jp "company") and 會社
+// (zh "guild") — 会 is the shinjitai of 會, so the variant-spelling cognate rule must NOT apply
+// across languages (the canonical 会社 case from the probe set).
+#[tokio::test]
+async fn probe_kaisha_cross_language_false_friend() {
+    let hit = entry_of(&search("会社").await, "ja", "会社");
+    let id = hit["lexeme_id"].as_i64().unwrap();
+    let e = get(&format!("/entry/{id}")).await.1;
+    let zh = e["same_form"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|l| l["variety"] == "zh")
+        .expect("zh 會社 in same_form");
+    assert_eq!(zh["relation"], "false-friend", "会社 jp/zh should be a false friend");
+}
+
+// B5. Romaji input resolves, tolerant of long-vowel / n-m spelling.
+#[tokio::test]
+async fn probe_romaji_input() {
+    for (q, want) in [("tokyo", "東京"), ("toukyou", "東京"), ("shinbun", "新聞"), ("shimbun", "新聞"), ("sensei", "先生")] {
+        let hw = headwords(&search(q).await);
+        assert!(hw.iter().any(|h| h == want), "{q} should surface {want}, got {hw:?}");
+    }
+}
+
+// B6. Phonetic queries rank the common word first (frequency data, not arbitrary ties).
+#[tokio::test]
+async fn probe_phonetic_ranking() {
+    for (q, top) in [("ren", "人"), ("nv3", "女"), ("dian4hua4", "電話"), ("diànhuà", "電話")] {
+        let hw = headwords(&search(q).await);
+        assert_eq!(hw.first().map(String::as_str), Some(top), "{q} top should be {top}, got {hw:?}");
+    }
+}
+
+// B7. Japanese on/kun char readings are kana — never romaji junk like "K0"/"ABURA".
+#[tokio::test]
+async fn probe_no_romaji_onkun_junk() {
+    for q in ["愛", "水", "人", "込", "畑", "学校"] {
+        let e = entry_top(q).await;
+        for c in e["characters"].as_array().unwrap() {
+            for r in c["readings"].as_array().unwrap() {
+                let kind = r["kind"].as_str().unwrap();
+                if kind == "onyomi" || kind == "kunyomi" {
+                    let v = r["value"].as_str().unwrap();
+                    assert!(!v.bytes().any(|b| b.is_ascii_alphanumeric()), "{q}: romaji on/kun {v:?}");
+                }
+            }
+        }
+    }
+}
+
+// B8. A kokuji with no word-lexeme resolves to a character page (negative id) with its 熟語.
+#[tokio::test]
+async fn probe_kokuji_fallback() {
+    let v = search("込").await;
+    let top = &v["results"].as_array().unwrap()[0];
+    assert!(top["lexeme_id"].as_i64().unwrap() < 0, "込 should use a synthetic character id");
+    let id = top["lexeme_id"].as_i64().unwrap();
+    let e = get(&format!("/entry/{id}")).await.1;
+    assert!(!e["compounds"].as_array().unwrap().is_empty(), "込 should list 熟語 compounds");
+}
+
+// B9. A single character lists the words that contain it.
+#[tokio::test]
+async fn probe_single_char_compounds() {
+    let e = entry_top("愛").await;
+    assert!(e["compounds"].as_array().unwrap().len() >= 5, "愛 should list compounds");
+}
+
+// B10. SQL/FTS wildcards & injection don't crash or match-everything.
+#[tokio::test]
+async fn probe_wildcard_injection_safe() {
+    for q in ["'", "%", "_", "*", "' OR 1=1 --"] {
+        let (st, v) = get(&format!("/search?q={}", enc(q))).await;
+        assert_eq!(st, StatusCode::OK, "{q} should not error");
+        let n = v["results"].as_array().map(|a| a.len()).unwrap_or(0);
+        assert!(n < 50, "{q} should not wildcard-match everything (got {n})");
+    }
 }

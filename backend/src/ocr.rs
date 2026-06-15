@@ -17,6 +17,12 @@ use crate::state::AppState;
 /// Build the OCR engine from the model files (dir via KOGU_OAR_DIR). Returns None if unavailable,
 /// so the server still runs without OCR.
 pub fn load_engine() -> Option<OAROCR> {
+    // tests (and any non-OCR deployment) can skip the ONNX runtime entirely — loading it without
+    // ORT_DYLIB_PATH blocks, and the search/entry API doesn't need it.
+    if std::env::var("KANZI_SKIP_OCR").is_ok() {
+        tracing::info!("KANZI_SKIP_OCR set — /ocr disabled");
+        return None;
+    }
     let dir = std::env::var("KOGU_OAR_DIR")
         .unwrap_or_else(|_| "/mnt/HC_Volume_102319212/wenbun/oar".to_string());
     let det = format!("{dir}/pp-ocrv5_mobile_det.onnx");
