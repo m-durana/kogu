@@ -72,6 +72,7 @@ export interface Entry {
   characters: CharInfo[]
   same_form: LinkLite[]
   translations: LinkLite[]
+  compounds: LinkLite[]
   origin_badges: string[]
   etymology: string | null
 }

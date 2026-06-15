@@ -44,6 +44,8 @@ pub struct Entry {
     pub same_form: Vec<LinkLite>,
     /// 同義 — lexemes sharing a concept (a different word, same meaning) across the systems.
     pub translations: Vec<LinkLite>,
+    /// 熟語 — common words that contain this character (single-character entries only).
+    pub compounds: Vec<LinkLite>,
     /// lexical "why": origin badges (wasei-kango, borrowed-from-japanese, calque, …) — no LLM.
     pub origin_badges: Vec<String>,
     /// Wiktionary etymology paragraph, passthrough (no generated prose).

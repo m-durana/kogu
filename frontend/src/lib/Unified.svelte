@@ -90,8 +90,9 @@
           relation: l.relation,
         })
       }
-    // collapse to one row per (variety, form), keeping the most meaningful lexeme; this drops
-    // duplicate/minor entries (e.g. a bare "surname Long" 龍 next to the real "dragon" 龍).
+    // collapse to one row per (variety, form), keeping the MOST MEANINGFUL lexeme (tie → the one
+    // you looked up). This drops minor duplicates — e.g. the bare "surname Long" / "radical 广"
+    // entries that share a form with the real word (dragon / wide).
     const primary = hits[0]?.lexeme_id ?? entry?.lexeme_id ?? -1
     const best = new Map<string, Row>()
     for (const r of out) {
@@ -99,10 +100,11 @@
       const prev = best.get(key)
       if (!prev) {
         best.set(key, r)
-      } else {
-        const keep = r.id === primary || meaningfulGlossCount(r.glosses) > meaningfulGlossCount(prev.glosses)
-        if (keep && prev.id !== primary) best.set(key, r)
+        continue
       }
+      const rr = meaningfulGlossCount(r.glosses)
+      const pr = meaningfulGlossCount(prev.glosses)
+      if (rr > pr || (rr === pr && r.id === primary)) best.set(key, r)
     }
     let deduped = [...best.values()]
     // drop rows whose only content is a surname/variant cross-reference — unless it's the row you
@@ -120,11 +122,26 @@
   // the headword glyph: what the user looked up
   const head = $derived(anchor || rows[0]?.form || '')
 
-  // the lexeme this page actually resolved to (the top hit / the opened entry) — marked in the stack
-  const primaryId = $derived(hits[0]?.lexeme_id ?? entry?.lexeme_id ?? -1)
+  // the (language, form) this page resolved to — marked in the stack. Keyed by form, not lexeme id,
+  // because dedupe may keep a richer lexeme of the same written form than the exact top hit.
+  const primaryKey = $derived.by(() => {
+    if (hits.length) {
+      const d = primaryForm(hits[0].forms, hits[0].variety, anchor)
+      return `${hits[0].variety}|${d?.primary.form ?? hits[0].headword}`
+    }
+    if (entry) {
+      const d = primaryForm(entry.forms, entry.variety, anchor)
+      return `${entry.variety}|${d?.primary.form ?? entry.headword}`
+    }
+    return ''
+  })
 
-  // does any pair disagree in meaning? (the false-friend signal CJKV misses)
-  const hasFalseFriend = $derived(rows.some((r) => r.relation === 'false-friend'))
+  // a "different meaning" flag only makes sense as a contrast: another language entry whose meaning
+  // differs from the one you looked up. So it needs ≥2 rows and applies to non-primary rows only.
+  function isFalseFriendRow(r: Row): boolean {
+    return rows.length > 1 && r.relation === 'false-friend' && `${r.variety}|${r.form}` !== primaryKey
+  }
+  const hasFalseFriend = $derived(rows.some(isFalseFriendRow))
 
   const READING_ORDER: [string, string][] = [
     ['pinyin', '拼'],
@@ -147,6 +164,12 @@
   // languages actually present (for the subtitle — hidden when there's only one)
   const varieties = $derived([...new Set(rows.map((r) => r.variety))])
 
+  // single character vs jukugo (compound word) — they get purpose-built layouts:
+  // a character page (readings + structure + the words that use it) vs a word page
+  // (meaning across languages + its component characters).
+  const single = $derived([...head].length === 1)
+  const headChar = $derived(entry?.characters?.[0])
+
   let showOrigin = $state(false)
 </script>
 
@@ -161,14 +184,14 @@
   <!-- the core: this word, read across every language at once -->
   <ul class="langs">
     {#each rows as r (r.id)}
-      <li class:cur={r.id === primaryId}>
+      <li class:cur={`${r.variety}|${r.form}` === primaryKey}>
         <button class="lang" onclick={() => onsearch(r.form)} title="look up {r.form}">
           <span class="v">{varietyLabel(r.variety)}</span>
           <span class="body">
             <span class="top">
               <span class="form">{r.form}{#if r.alt}<span class="alt">{r.alt}</span>{/if}</span>
               {#if r.reading}<span class="read">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>{/if}
-              {#if r.relation === 'false-friend'}<span class="ff">different meaning</span>{/if}
+              {#if isFalseFriendRow(r)}<span class="ff">different meaning</span>{/if}
             </span>
             {#if glossLine(r.glosses)}<span class="gloss">{glossLine(r.glosses)}</span>{/if}
           </span>
@@ -181,9 +204,28 @@
     <p class="note">同字 — same characters, but the meaning differs by language.</p>
   {/if}
 
-  {#if entry && entry.characters.length}
+  {#if entry && single && headChar}
+    <!-- single character: a compact structure line (no repeated glyph), then the words that use it -->
+    <section class="struct">
+      <h3>structure <span class="dim">字源</span></h3>
+      {#if charReadings(headChar).length}
+        <div class="crd">
+          {#each charReadings(headChar) as r}<span class="rd"><span class="rl">{r.label}</span> {r.value}</span>{/each}
+        </div>
+      {/if}
+      <div class="cln">
+        {#if headChar.strokes}<span class="dim">{headChar.strokes}画</span>{/if}
+        {#if headChar.radical}<span class="dim">radical {headChar.radical}</span>{/if}
+        {#if cleanIds(headChar.ids)}<span class="ids">{cleanIds(headChar.ids)}</span>{/if}
+      </div>
+      {#each headChar.variants as v}
+        <div class="vedge">→ <b>{v.parent}</b> <span class="dim">{v.edge_type}{#if v.reform_name} · {v.reform_name}{/if}</span></div>
+      {/each}
+    </section>
+  {:else if entry && entry.characters.length}
+    <!-- jukugo: break the word into its component characters, each tappable -->
     <section class="chars">
-      <h3>characters <span class="dim">字源</span></h3>
+      <h3>characters <span class="dim">字</span></h3>
       {#each entry.characters as c}
         <div class="char">
           <button class="cg" onclick={() => onsearch(c.ch)} title="look up {c.ch}">{c.ch}</button>
@@ -206,7 +248,20 @@
     </section>
   {/if}
 
-  {#if entry && entry.translations.length}
+  {#if entry && entry.compounds.length}
+    <section class="words">
+      <h3>words <span class="dim">熟語</span></h3>
+      <div class="chips">
+        {#each entry.compounds.slice(0, 24) as l}
+          <button class="chip" onclick={() => onsearch(l.headword)} title={glossLine(l.glosses, 1)}>
+            <span class="cv">{varietyLabel(l.variety)}</span>{l.headword}
+          </button>
+        {/each}
+      </div>
+    </section>
+  {/if}
+
+  {#if entry && !single && entry.translations.length}
     <section class="also">
       <h3>same meaning <span class="dim">同義</span></h3>
       <div class="chips">
@@ -273,6 +328,12 @@
   .cln { display: flex; gap: 0.7rem; align-items: center; flex-wrap: wrap; margin-top: 0.3rem; font-size: 0.8rem; }
   .ids { font-family: var(--han); color: var(--muted); }
   .cln b { font-family: var(--han); }
+
+  /* single-character structure block — readings + decomposition, no repeated glyph */
+  .struct .crd { font-size: 0.9rem; gap: 1rem; }
+  .struct .cln { margin-top: 0.5rem; }
+  .vedge { font-size: 0.9rem; margin-top: 0.35rem; }
+  .vedge b { font-family: var(--han); }
 
   .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
   .chip { display: inline-flex; align-items: center; gap: 0.35rem; font-family: var(--han); font-size: 1.05rem; padding: 0.25rem 0.55rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); }

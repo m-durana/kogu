@@ -159,6 +159,27 @@ fn build_entry(
         }
     }
 
+    // 熟語 — for a single character, the common words that contain it (across all systems),
+    // shortest first and the entry's own language preferred. Powered by the form_char index.
+    let mut compounds = Vec::new();
+    if headword.chars().count() == 1 {
+        if let Some(ch) = headword.chars().next() {
+            let mut cs = conn.prepare(
+                "SELECT l.id FROM form_char fc JOIN lexeme l ON l.id = fc.lexeme_id \
+                 WHERE fc.cp = ?1 AND l.id <> ?2 \
+                 GROUP BY l.id ORDER BY (l.variety = ?3) DESC, MIN(fc.flen) ASC, l.id ASC LIMIT 30",
+            )?;
+            let ids: Vec<i64> = cs
+                .query_map(rusqlite::params![ch as i64, id, variety], |r| r.get(0))?
+                .collect::<Result<_, _>>()?;
+            for cid in ids {
+                if let Some(l) = link_lite(conn, cid, "compound", None)? {
+                    compounds.push(l);
+                }
+            }
+        }
+    }
+
     // lexical "why": origin badges + Wiktionary etymology passthrough
     let mut bs = conn.prepare("SELECT badge FROM origin_badge WHERE lexeme_id=?1 ORDER BY badge")?;
     let origin_badges: Vec<String> = bs.query_map([id], |r| r.get(0))?.collect::<Result<_, _>>()?;
@@ -178,6 +199,7 @@ fn build_entry(
         characters,
         same_form,
         translations,
+        compounds,
         origin_badges,
         etymology,
     }))

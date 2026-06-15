@@ -62,9 +62,41 @@ def verify_invariants(conn) -> list[str]:
     return problems
 
 
+def _build_form_char(conn) -> None:
+    """Index: which lexemes contain each CJK character, for the 熟語 (compounds) section on a
+    single-character entry. Stores the shortest containing-form length per (char, lexeme) so the
+    serving layer can rank compounds shortest-first cheaply."""
+    conn.execute("DROP TABLE IF EXISTS form_char")
+    conn.execute(
+        "CREATE TABLE form_char (cp INTEGER NOT NULL, lexeme_id INTEGER NOT NULL, "
+        "flen INTEGER NOT NULL, PRIMARY KEY (cp, lexeme_id)) WITHOUT ROWID"
+    )
+
+    def is_han(ch: str) -> bool:
+        o = ord(ch)
+        return (
+            0x3400 <= o <= 0x9FFF or 0xF900 <= o <= 0xFAFF or 0x20000 <= o <= 0x3FFFF
+        )
+
+    best: dict[tuple[int, int], int] = {}
+    for lex, form in conn.execute("SELECT lexeme_id, form FROM surface_form"):
+        if not form or len(form) < 2:
+            continue
+        for ch in set(form):
+            if is_han(ch):
+                k = (ord(ch), lex)
+                if k not in best or len(form) < best[k]:
+                    best[k] = len(form)
+    conn.executemany(
+        "INSERT OR REPLACE INTO form_char VALUES (?,?,?)",
+        [(cp, lex, fl) for (cp, lex), fl in best.items()],
+    )
+
+
 def finalize(conn, *, built_at: str | None = None) -> None:
     # Rebuild external-content FTS from sense.
     conn.execute("INSERT INTO gloss_fts(gloss_fts) VALUES ('rebuild')")
+    _build_form_char(conn)
     if built_at:
         conn.execute(
             "INSERT OR REPLACE INTO build_meta(key,value) VALUES ('built_at',?)", (built_at,))
