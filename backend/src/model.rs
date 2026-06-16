@@ -72,6 +72,9 @@ pub struct CharInfo {
     pub radical: Option<i64>,
     pub ids: Option<String>,
     pub gloss_en: Option<String>,
+    /// Kanjidic Japanese-perspective English meaning (津 → "haven; port; harbor"), distinct from the
+    /// Chinese-centric Unihan gloss_en. Present only for characters in actual Japanese use.
+    pub gloss_ja: Option<String>,
     pub readings: Vec<ReadingKV>,
     /// orthographic "why" seed: identity edges to orthodox parents with the reform that produced them
     pub variants: Vec<VariantEdge>,

@@ -163,6 +163,7 @@ fn build_entry(
          JOIN sense s2 ON s2.id = sc2.sense_id \
          JOIN concept co ON co.id = sc1.concept_id \
          WHERE s1.lexeme_id = ?1 AND s2.lexeme_id <> ?1 AND co.member_count <= 18 \
+           AND s1.sense_order = 0 AND s2.sense_order = 0 \
          GROUP BY s2.lexeme_id \
          ORDER BY spec ASC \
          LIMIT 120",
@@ -214,25 +215,30 @@ fn build_entry(
     }))
 }
 
-/// 熟語 - words containing a character, shortest then most-frequent first, the given variety preferred.
+/// 熟語 - words containing a character, returned BALANCED across the varieties the character lives in
+/// (中 / 粵 / 日), shortest then most-frequent first within each. A multi-language character like 都 is
+/// a morpheme in both Chinese and Japanese, so a single-variety list would be inaccurate; the serving
+/// frontend groups these by language. `_variety` (the looked-up word's variety) is no longer a filter.
 fn char_compounds(
     conn: &rusqlite::Connection,
     ch: char,
-    variety: &str,
+    _variety: &str,
     exclude_id: i64,
 ) -> rusqlite::Result<Vec<LinkLite>> {
     let mut cs = conn.prepare(
         "SELECT l.id FROM form_char fc JOIN lexeme l ON l.id = fc.lexeme_id \
-         WHERE fc.cp = ?1 AND l.id <> ?2 GROUP BY l.id \
-         ORDER BY (l.variety = ?3) DESC, MIN(fc.flen) ASC, l.freq IS NULL, l.freq DESC, l.id ASC LIMIT 30",
+         WHERE fc.cp = ?1 AND l.id <> ?2 AND l.variety = ?3 GROUP BY l.id \
+         ORDER BY MIN(fc.flen) ASC, l.freq IS NULL, l.freq DESC, l.id ASC LIMIT 14",
     )?;
-    let ids: Vec<i64> = cs
-        .query_map(rusqlite::params![ch as i64, exclude_id, variety], |r| r.get(0))?
-        .collect::<Result<_, _>>()?;
     let mut out = Vec::new();
-    for cid in ids {
-        if let Some(l) = link_lite(conn, cid, "compound", None)? {
-            out.push(l);
+    for v in ["zh", "yue", "ja"] {
+        let ids: Vec<i64> = cs
+            .query_map(rusqlite::params![ch as i64, exclude_id, v], |r| r.get(0))?
+            .collect::<Result<_, _>>()?;
+        for cid in ids {
+            if let Some(l) = link_lite(conn, cid, "compound", None)? {
+                out.push(l);
+            }
         }
     }
     Ok(out)
@@ -457,7 +463,7 @@ fn build_why(conn: &rusqlite::Connection, id: i64) -> rusqlite::Result<Option<Wh
 fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<CharInfo>> {
     let cp = ch as i64;
     let row = conn.query_row(
-        "SELECT is_orthodox, strokes, radical, ids, gloss_en FROM character WHERE cp=?1",
+        "SELECT is_orthodox, strokes, radical, ids, gloss_en, gloss_ja FROM character WHERE cp=?1",
         [cp],
         |r| {
             Ok((
@@ -466,10 +472,11 @@ fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<C
                 r.get::<_, Option<i64>>(2)?,
                 r.get::<_, Option<String>>(3)?,
                 r.get::<_, Option<String>>(4)?,
+                r.get::<_, Option<String>>(5)?,
             ))
         },
     );
-    let (is_orthodox, strokes, radical, ids, gloss_en) = match row {
+    let (is_orthodox, strokes, radical, ids, gloss_en, gloss_ja) = match row {
         Ok(v) => v,
         Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
         Err(e) => return Err(e),
@@ -508,6 +515,7 @@ fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<C
         radical,
         ids,
         gloss_en,
+        gloss_ja,
         readings,
         variants,
         script_forms,

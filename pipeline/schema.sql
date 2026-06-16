@@ -46,7 +46,8 @@ CREATE TABLE character (
     strokes      INTEGER,                 -- total stroke count (kTotalStrokes / kanjidic)
     radical      INTEGER,                 -- Kangxi radical number
     ids          TEXT,                    -- Ideographic Description Sequence (cjkvi-ids), may hold multiple
-    gloss_en     TEXT                     -- short Unihan/Kanjidic English gloss
+    gloss_en     TEXT,                    -- short Unihan English gloss (kDefinition, Chinese-centric)
+    gloss_ja     TEXT                     -- Kanjidic English meaning (Japanese perspective: 津 → "haven; port; harbor")
 );
 CREATE INDEX idx_character_orthodox ON character(is_orthodox);
 

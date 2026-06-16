@@ -21,10 +21,24 @@ KANJIDIC_ZIP = SOURCES_DIR / "kanjidic2-en.json.zip"
 
 def _kanjidic_kana():
     """codepoint -> (onyomi[katakana], kunyomi[hiragana]) from Kanjidic - proper kana, not romaji."""
+    on, kun, _ = _kanjidic()
+    return on, kun
+
+
+def _kanjidic_meanings() -> dict[int, str]:
+    """codepoint -> Japanese-perspective English meaning (Kanjidic), e.g. 津 -> 'haven; port; harbor; ferry'.
+    A character's *Japanese* gloss, distinct from the Chinese-centric Unihan kDefinition."""
+    return _kanjidic()[2]
+
+
+def _kanjidic():
+    """codepoint -> (onyomi, kunyomi, meaning_en). Kanjidic only lists chars in actual Japanese use,
+    so a kana on/kun reading here is a reliable 'used in Japanese' signal."""
     on: dict[int, list[str]] = {}
     kun: dict[int, list[str]] = {}
+    meaning: dict[int, str] = {}
     if not KANJIDIC_ZIP.exists():
-        return on, kun
+        return on, kun, meaning
     with zipfile.ZipFile(KANJIDIC_ZIP) as z:
         name = next(n for n in z.namelist() if n.endswith(".json"))
         data = json.loads(z.read(name))
@@ -34,13 +48,19 @@ def _kanjidic_kana():
             continue
         cp = ord(lit)
         rm = c.get("readingMeaning") or {}
+        ms: list[str] = []
         for g in rm.get("groups", []):
             for r in g.get("readings", []):
                 if r.get("type") == "ja_on":
                     on.setdefault(cp, []).append(r["value"])
                 elif r.get("type") == "ja_kun":
                     kun.setdefault(cp, []).append(r["value"])
-    return on, kun
+            for m in g.get("meanings", []):
+                if m.get("lang") == "en" and m.get("value"):
+                    ms.append(m["value"])
+        if ms:
+            meaning[cp] = "; ".join(ms[:5])
+    return on, kun, meaning
 
 
 def _unihan(file: str):
@@ -126,7 +146,7 @@ def ingest(conn) -> None:
             chars.add(cp)
 
     # ---- override Japanese on/kun with proper kana from Kanjidic (Unihan only has romaji) ----
-    kd_on, kd_kun = _kanjidic_kana()
+    kd_on, kd_kun, kd_mean = _kanjidic()
     for cp, vals in kd_on.items():
         chars.add(cp)
         readings[cp]["onyomi"] = list(dict.fromkeys(vals))
@@ -216,14 +236,14 @@ def ingest(conn) -> None:
     # ---- write characters ----
     char_rows = [
         (cp, chr(cp), 0 if cp in derived else 1,
-         strokes.get(cp), radical.get(cp), ids.get(cp), gloss.get(cp))
+         strokes.get(cp), radical.get(cp), ids.get(cp), gloss.get(cp), kd_mean.get(cp))
         for cp in sorted(chars)
         if 0x3000 <= cp <= 0x3FFFF  # CJK ranges incl. ext; skip stray codepoints
     ]
     valid = {r[0] for r in char_rows}
     conn.executemany(
-        "INSERT OR IGNORE INTO character(cp,char,is_orthodox,strokes,radical,ids,gloss_en) "
-        "VALUES (?,?,?,?,?,?,?)", char_rows)
+        "INSERT OR IGNORE INTO character(cp,char,is_orthodox,strokes,radical,ids,gloss_en,gloss_ja) "
+        "VALUES (?,?,?,?,?,?,?,?)", char_rows)
 
     # ---- write readings ----
     reading_rows = []
