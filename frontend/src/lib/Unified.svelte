@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { CharInfo, Entry, Hit, ReadingKV, Variety } from './types'
-  import { primaryForm, varietyLabel, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, splitRecon, formTag } from './display'
+  import { primaryForm, varietyLabel, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, splitRecon, formTag } from './display'
   import ScriptForms from './ScriptForms.svelte'
+  import { AlertTriangle } from '@lucide/svelte'
 
   // The unified cross-language view - one Han word, seen across 中 / 粵 / 日 at once.
   // Renders instantly from search hits; enriches (decomposition, origin) when the full entry loads.
@@ -49,6 +50,7 @@
     glosses: string[]
     relation: string
     kind: 'form' | 'equiv' // same characters, vs a meaning-equivalent written differently
+    synthetic?: boolean // a Japanese row derived from the character (Kanjidic), not a real ja word-lexeme
   }
 
   // one row per language word, merged from hits (instant) + entry/same_form (enriched)
@@ -105,23 +107,46 @@
           kind: 'form',
         })
       }
-    // collapse to one row per (variety, form), keeping the MOST MEANINGFUL lexeme (tie → the one
-    // you looked up). This drops minor duplicates - e.g. the bare "surname Long" / "radical 广"
-    // entries that share a form with the real word (dragon / wide).
+    // Collapse lexemes that are the SAME word - same variety + form + READING - into one row, MERGING
+    // their senses so no meaning is dropped (京都 jīng dū = "Kyoto (city in Japan)" + "capital of a
+    // country", both kept). Grouping by reading keeps true homographs distinct (行 háng "row" vs xíng
+    // "to walk" stay separate rows). Reading match is case/space-insensitive ("Jing1 du1" == "jing1 du1").
     const primary = hits[0]?.lexeme_id ?? entry?.lexeme_id ?? -1
-    const best = new Map<string, Row>()
+    const readingKey = (s: string | null) => (s ?? '').toLowerCase().replace(/\s+/g, '')
+    const groups = new Map<string, Row[]>()
     for (const r of out) {
-      const key = `${r.variety}|${r.form}`
-      const prev = best.get(key)
-      if (!prev) {
-        best.set(key, r)
-        continue
-      }
-      const rr = meaningfulGlossCount(r.glosses)
-      const pr = meaningfulGlossCount(prev.glosses)
-      if (rr > pr || (rr === pr && r.id === primary)) best.set(key, r)
+      const key = `${r.variety}|${r.form}|${readingKey(r.reading)}`
+      const arr = groups.get(key)
+      if (arr) arr.push(r)
+      else groups.set(key, [r])
     }
-    let deduped = [...best.values()]
+    let deduped: Row[] = []
+    for (const members of groups.values()) {
+      // richest member (tie → the looked-up one) supplies id / reading / form / script tags
+      const best = members.reduce((a, b) => {
+        const ra = meaningfulGlossCount(a.glosses)
+        const rb = meaningfulGlossCount(b.glosses)
+        if (rb > ra) return b
+        if (rb === ra && b.id === primary) return b
+        return a
+      })
+      // merge senses across members, de-duplicating identical glosses (case-insensitive)
+      const seenG = new Set<string>()
+      const glosses: string[] = []
+      for (const m of [best, ...members.filter((m) => m !== best)]) {
+        for (const g of m.glosses) {
+          const k = cleanGloss(g).toLowerCase()
+          if (k && !seenG.has(k)) {
+            seenG.add(k)
+            glosses.push(g)
+          }
+        }
+      }
+      // a false friend only if NO member shares meaning with the other language (every one is one);
+      // 京都 has a cognate sense (Kyoto) so it isn't flagged, 手紙 (all false-friend) still is.
+      const relation = members.find((m) => m.relation !== 'false-friend')?.relation ?? 'false-friend'
+      deduped.push({ ...best, glosses, relation })
+    }
     // drop rows whose only content is a surname/variant cross-reference - unless it's the row you
     // looked up, or it's the sole row for its language (so a purely-minor entry still shows).
     const richByVar = new Set(deduped.filter((r) => meaningfulGlossCount(r.glosses) > 0).map((r) => r.variety))
@@ -132,26 +157,16 @@
         !richByVar.has(r.variety),
     )
     // meaning-equivalents: how this meaning is written in a language that DOESN'T share the glyph
-    // (機場 ↔ 日 空港). Explicit equivalence edges (relation 'equivalent': 冇→沒有, curated cross-lang)
-    // are precise statements and ALWAYS show. Fuzzy gloss-pivot synonyms only fill GAP languages -
-    // never padding a language that already has a same-glyph row - and are capped, to stay tight.
-    const haveForm = new Set(deduped.map((r) => r.variety))
+    // (機場 ↔ 日 空港; 冇 → 中 沒有). Only TRUSTED explicit equivalence edges (relation 'equivalent':
+    // CC-Canto inline + curated cross-language) are shown. The fuzzy English-gloss-pivot synonyms are
+    // deliberately NOT bridged - they produced wrong "written differently" rows (騰→開ける, 津→汗) by
+    // matching a minor/secondary sense, which undermines trust. Precision over coverage.
     const haveKey = new Set(deduped.map((r) => `${r.variety}|${r.form}`))
-    // a curated equivalent for a language is the trusted answer - it suppresses that language's fuzzy
-    // gloss-pivot synonyms (so 自行車 shows 日 自転車, not also the noisy バイク / 夜車 matches).
-    const haveEquivVar = new Set(
-      (entry?.translations ?? []).filter((l) => l.relation === 'equivalent').map((l) => l.variety),
-    )
-    const equivCount: Record<string, number> = {}
     for (const l of entry?.translations ?? []) {
-      const explicit = l.relation === 'equivalent'
-      if (!explicit && haveForm.has(l.variety)) continue // language already represented by its own glyph
-      if (!explicit && haveEquivVar.has(l.variety)) continue // a curated equivalent already covers it
+      if (l.relation !== 'equivalent') continue
       const key = `${l.variety}|${l.headword}`
       if (haveKey.has(key)) continue
-      if (!explicit && (equivCount[l.variety] ?? 0) >= 1) continue // tight cap on fuzzy synonyms
       haveKey.add(key)
-      if (!explicit) equivCount[l.variety] = (equivCount[l.variety] ?? 0) + 1
       deduped.push({
         id: l.lexeme_id,
         variety: l.variety,
@@ -185,6 +200,53 @@
     return ''
   })
 
+  const single = $derived([...head].length === 1)
+  const headChar = $derived(entry?.characters?.[0])
+  const isKana = (s: string) => /[぀-ヿ]/.test(s)
+  // languages this word is actually represented in by a REAL word-lexeme (its same-glyph form rows) -
+  // gates the structure readings so a 粵-only word shows jyutping, not a nominal Mandarin pinyin.
+  const wordVarieties = $derived(new Set(rows.filter((r) => r.kind === 'form').map((r) => r.variety)))
+
+  // A single Han character can be a genuine word in a language WITHOUT a standalone word-lexeme - e.g.
+  // 津 (harbor) is a real kanji (シン/つ) but Japanese only uses it inside compounds, so there is no
+  // ja lexeme and it would wrongly show as Chinese-only. Kanjidic kana on/kun is a reliable "used in
+  // Japanese" signal, so we synthesize a co-equal 日本語 definition row from the character's own data.
+  // (冇 has no on/kun → no synthetic row; its nominal Mandarin pinyin stays suppressed.)
+  const synthJaRow = $derived.by<Row | null>(() => {
+    if (!single || !headChar) return null
+    if (rows.some((r) => r.kind === 'form' && r.variety === 'ja')) return null // a real ja word exists
+    const on = headChar.readings.filter((r) => r.kind === 'onyomi' && isKana(r.value)).map((r) => r.value)
+    const kun = headChar.readings.filter((r) => r.kind === 'kunyomi' && isKana(r.value)).map((r) => r.value)
+    if (!on.length && !kun.length) return null
+    const gloss = headChar.gloss_ja || headChar.gloss_en || ''
+    if (!gloss) return null
+    // the Japanese form is the shinjitai if one exists, else the orthodox (traditional) glyph - NOT
+    // necessarily what was typed: Japan writes 陝 (traditional), never the PRC 陕. If that differs from
+    // the typed glyph, this row naturally falls into the "written differently" bridge instead of block A.
+    const sf = headChar.script_forms
+    const jaForm = sf?.branches.find((b) => b.script.includes('shinjitai'))?.form ?? sf?.orthodox ?? head
+    return {
+      id: -(head.codePointAt(0) ?? 1) - 1,
+      variety: 'ja',
+      form: jaForm,
+      alt: null,
+      formScript: '',
+      altScript: '',
+      reading: [on.join(' '), kun.join(' ')].filter(Boolean).join('    '),
+      glosses: [gloss],
+      relation: 'self',
+      kind: 'form',
+      synthetic: true,
+    }
+  })
+  const allRows = $derived(synthJaRow ? [...rows, synthJaRow] : rows)
+
+  // STRUCTURE readings now only show what block A DOESN'T (block A already gives each language's
+  // reading + meaning). That leaves just the Cantonese jyutping - legitimate (Cantonese reads all Han)
+  // and shown nowhere else - when there's no 粵 definition row. pinyin/on-kun are always either a block-A
+  // duplicate or a nominal reading, so they never appear here (keeps 冇's nominal mǎo suppressed).
+  const structureAllow = $derived(new Set(defRows.some((r) => r.variety === 'yue') ? [] : ['yue']))
+
   // === The co-equal cross-language model ===
   // There is NO single privileged headword. A Han glyph that is a real word in two or more languages
   // is the NORM, not the exception - it is the whole point of the app. So the typed glyph's meaning is
@@ -196,9 +258,10 @@
   // the language whose form you actually typed leads (it's the top search hit), the rest follow in
   // 中/粵/日 order. Query-driven, not a hard-coded language rank - so no language is privileged by fiat.
   const defRows = $derived(
-    rows
+    allRows
       .filter((r) => r.kind === 'form' && r.form === head)
       .sort((a, b) => {
+        // frequency-led: the top search hit (highest-frequency form) leads, then 中/粵/日.
         const am = `${a.variety}|${a.form}` === primaryKey ? 0 : 1
         const bm = `${b.variety}|${b.form}` === primaryKey ? 0 : 1
         return am !== bm ? am - bm : VORDER.indexOf(a.variety) - VORDER.indexOf(b.variety)
@@ -211,7 +274,7 @@
   // once there's a glyph definition to bridge FROM.
   const bridgeRows = $derived(
     isGlyphSearch
-      ? rows
+      ? allRows
           .filter((r) => !(r.kind === 'form' && r.form === head))
           // trusted curated equivalents lead; fuzzy gloss-pivot synonyms follow. Within each, 中/粵/日.
           .sort((a, b) => {
@@ -223,7 +286,7 @@
   )
 
   // English / pinyin search (nothing matches the typed glyph): fall back to a plain results list.
-  const listRows = $derived(isGlyphSearch ? [] : rows)
+  const listRows = $derived(isGlyphSearch ? [] : allRows)
 
   // numbered senses for a definition row - the full hit glosses (every sense), cleaned. Identical
   // treatment for every language (no POS on one and not another) so the languages stay co-equal.
@@ -231,8 +294,11 @@
   const SENSE_CAP = 6
   let expanded = $state(new Set<number>())
   function senseList(r: Row): string[] {
-    return r.glosses.map(cleanGloss).filter(Boolean)
+    const all = r.glosses.map(cleanGloss).filter(Boolean)
+    // real meanings lead; "surname X" / "variant of" / "used in" cross-refs sink to the end (stable)
+    return [...all.filter((g) => !isMinorGloss(g)), ...all.filter((g) => isMinorGloss(g))]
   }
+
   function toggleSenses(id: number) {
     const n = new Set(expanded)
     if (n.has(id)) n.delete(id)
@@ -243,45 +309,81 @@
   // false friends are SAME-glyph words whose meaning diverges (手紙) - they sit co-equally in block A,
   // flagged by a single note. (A different-glyph bridge row is never a false friend - it's just the
   // other language's word.)
-  const hasFalseFriend = $derived(defRows.length > 1 && defRows.some((r) => r.relation === 'false-friend'))
+  // distinct languages among the same-glyph definition rows
+  const defLangs = $derived([...new Set(defRows.map((r) => sectionName[r.variety]))])
+  // flag a false friend only in the clean case: exactly TWO same-glyph rows in TWO languages, with a
+  // false-friend relation and NO cognate (shared) meaning. Multi-reading homographs (行 háng/héng/xíng)
+  // or words with any shared sense (京都 = Kyoto in both) are not flagged.
+  const hasFalseFriend = $derived(
+    defRows.length === 2 &&
+      defLangs.length === 2 &&
+      defRows.some((r) => r.relation === 'false-friend') &&
+      !defRows.some((r) => r.relation === 'cognate'),
+  )
+  const falseFriendLangs = $derived(defLangs.join(' and '))
 
-  // reading systems, labelled in plain words (中 Mandarin pinyin, 粵 Cantonese jyutping,
-  // 日 Japanese on'yomi / kun'yomi) so it's obvious which language each reading is. Each maps to the
-  // language that uses it, so we can hide readings for languages this word isn't actually used in.
-  const READING_ORDER: [string, string, Variety][] = [
-    ['pinyin', 'pinyin', 'zh'],
-    ['jyutping', 'jyutping', 'yue'],
-    ['onyomi', "on'yomi", 'ja'],
-    ['kunyomi', "kun'yomi", 'ja'],
-  ]
-  const isKana = (s: string) => /[぀-ヿ]/.test(s)
-  // `allow`: if given, hide pinyin / on'yomi / kun'yomi for languages this word isn't used in. 冇
-  // carries a nominal Unihan pinyin (mǎo) but is a Cantonese-only word - showing it contradicts the
-  // 粵 label above. Jyutping is NEVER gated: Cantonese is written with essentially all Han
-  // characters, so a jyutping reading is legitimate even without a separate 粵 lexeme (e.g. 氣 hei3).
-  function charReadings(c: CharInfo, allow?: Set<string>) {
-    const out: { label: string; value: string }[] = []
-    for (const [kind, label, variety] of READING_ORDER) {
-      if (allow && variety !== 'yue' && !allow.has(variety)) continue
-      // Japanese on/kun readings must be kana - drop corrupt values like "K0"
-      let v = c.readings.filter((r) => r.kind === kind).map((r) => r.value)
-      if (kind === 'onyomi' || kind === 'kunyomi') v = v.filter(isKana)
-      if (v.length) out.push({ label, value: v.join(' ') })
+  // Character readings GROUPED by language (中 pinyin / 粵 jyutping / 日 on'yomi · kun'yomi), so it's
+  // always clear which language a reading belongs to - a Chinese reader shouldn't have to puzzle over
+  // kana. `allow` gates pinyin / on-kun to the languages this word is actually used in (so a 粵-only
+  // word doesn't show a nominal Mandarin pinyin); jyutping is never gated (Cantonese writes all Han).
+  type RGroup = { vh: string; text: string }
+  function charReadingGroups(c: CharInfo, allow?: Set<string>): RGroup[] {
+    const g: RGroup[] = []
+    const pinyin = c.readings.filter((r) => r.kind === 'pinyin').map((r) => r.value)
+    if (pinyin.length && (!allow || allow.has('zh'))) g.push({ vh: '中', text: pinyin.join('  ') })
+    const jyut = c.readings.filter((r) => r.kind === 'jyutping').map((r) => r.value)
+    if (jyut.length && (!allow || allow.has('yue'))) g.push({ vh: '粵', text: jyut.join('  ') })
+    const on = c.readings.filter((r) => r.kind === 'onyomi').map((r) => r.value).filter(isKana)
+    const kun = c.readings.filter((r) => r.kind === 'kunyomi').map((r) => r.value).filter(isKana)
+    if ((on.length || kun.length) && (!allow || allow.has('ja'))) {
+      const parts: string[] = []
+      if (on.length) parts.push(on.join(' '))
+      if (kun.length) parts.push(kun.join(' '))
+      g.push({ vh: '日', text: parts.join('    ') })
     }
+    return g
+  }
+
+  // which languages a character actually belongs to (for the lean breakdown): 中 if it has a Mandarin
+  // reading, 粵 jyutping, 日 a kana on/kun reading.
+  function charLangs(c: CharInfo): string[] {
+    const out: string[] = []
+    if (c.readings.some((r) => r.kind === 'pinyin')) out.push('中')
+    if (c.readings.some((r) => r.kind === 'jyutping')) out.push('粵')
+    if (c.readings.some((r) => (r.kind === 'onyomi' || r.kind === 'kunyomi') && isKana(r.value))) out.push('日')
     return out
   }
 
-  // languages this word is actually represented in (its same-glyph rows) - used to gate the
-  // single-character structure readings so e.g. a 粵-only word shows jyutping, not Mandarin pinyin.
-  const wordVarieties = $derived(new Set(rows.filter((r) => r.kind === 'form').map((r) => r.variety)))
+  // first MEANINGFUL sense only, cleaned - the character breakdown stays lean and never leads with a
+  // "surname X" cross-reference when a real meaning exists.
+  function firstSense(g: string | null): string {
+    const parts = cleanGloss(g ?? '').split(';').map((s) => s.trim()).filter(Boolean)
+    return parts.find((p) => !isMinorGloss(p)) ?? parts[0] ?? ''
+  }
 
-  // single character vs jukugo (compound word) - they get purpose-built layouts:
-  // a character page (readings + structure + the words that use it) vs a word page
-  // (meaning across languages + its component characters).
-  const single = $derived([...head].length === 1)
-  const headChar = $derived(entry?.characters?.[0])
+  // Chinese always carries a trad/simp clarifier. When the two scripts differ we show 繁 X · 简 Y; when
+  // they're identical we show one glyph tagged 繁简 (same in both). Other varieties don't get this.
+  function zhPair(r: Row): { trad: string; simp: string; same: boolean } {
+    if (r.alt) {
+      const trad = r.formScript === 'simp' ? r.alt : r.form
+      const simp = r.formScript === 'simp' ? r.form : r.alt
+      return { trad, simp, same: trad === simp }
+    }
+    return { trad: r.form, simp: r.form, same: true }
+  }
+
+  // 熟語 grouped by language - the character is a morpheme in several languages, so the words that use
+  // it are shown per language (中 / 粵 / 日) rather than as one misleading single-language list.
+  const wordGroups = $derived(
+    VORDER.map((v) => ({
+      variety: v as Variety,
+      items: (entry?.compounds ?? []).filter((l) => l.variety === v).slice(0, 16),
+    })).filter((g) => g.items.length),
+  )
 
   let showOrigin = $state(false)
+  let showWords = $state(false)
+  const wordCount = $derived(wordGroups.reduce((n, g) => n + g.items.length, 0))
 </script>
 
 <article class="u">
@@ -311,7 +413,12 @@
           <div class="dl">
             <div class="dlh">
               <span class="dvar">{sectionName[r.variety]}</span>
-              {#if r.alt}<span class="dform"><span class="ftag">{formTag(r.formScript)}</span>{r.form}<span class="fsep">·</span><span class="ftag">{formTag(r.altScript)}</span>{r.alt}</span>{/if}
+              {#if r.variety === 'zh'}
+                {@const zp = zhPair(r)}
+                {#if zp.same}<span class="dform"><span class="ftag">繁简</span>{zp.trad}</span>{:else}<span class="dform"><span class="ftag">繁</span>{zp.trad}<span class="fsep">·</span><span class="ftag">简</span>{zp.simp}</span>{/if}
+              {:else if r.alt}
+                <span class="dform"><span class="ftag">{formTag(r.formScript)}</span>{r.form}<span class="fsep">·</span><span class="ftag">{formTag(r.altScript)}</span>{r.alt}</span>
+              {/if}
               {#if r.reading}<span class="dread">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>{/if}
             </div>
             {#if ss.length}
@@ -326,14 +433,14 @@
         {/each}
       </div>
       {#if hasFalseFriend}
-        <p class="note">同字 · same characters, different meaning by language.</p>
+        <p class="note"><AlertTriangle size={14} /> {head} is written the same in {falseFriendLangs} but means different things.</p>
       {/if}
     </section>
 
     {#if bridgeRows.length}
       <!-- Block B - the bridge: the same meaning, written differently elsewhere. Tappable pivots. -->
       <section class="bridge">
-        <h3>written differently <span class="dim">異形</span></h3>
+        <h3>written differently</h3>
         <ul class="langs">
           {#each bridgeRows as r (r.id)}{@render rowItem(r)}{/each}
         </ul>
@@ -351,10 +458,10 @@
   {#if entry && single && headChar}
     <!-- single character: a compact structure line (no repeated glyph), then the words that use it -->
     <section class="struct">
-      <h3>structure <span class="dim">字源</span></h3>
-      {#if charReadings(headChar, wordVarieties).length}
+      <h3>structure</h3>
+      {#if charReadingGroups(headChar, structureAllow).length}
         <div class="crd">
-          {#each charReadings(headChar, wordVarieties) as r}<span class="rd"><span class="rl">{r.label}</span> {r.value}</span>{/each}
+          {#each charReadingGroups(headChar, structureAllow) as g}<div class="rgrp"><span class="rvh">{g.vh}</span><span class="rtext">{g.text}</span></div>{/each}
         </div>
       {/if}
       {#if headChar.script_forms}
@@ -366,26 +473,16 @@
       </div>
     </section>
   {:else if entry && entry.characters.length}
-    <!-- jukugo: break the word into its component characters, each tappable -->
+    <!-- jukugo: break the word into its component characters. Lean: which languages it lives in + one
+         meaning. Tap to open the full character page. -->
     <section class="chars">
-      <h3>characters <span class="dim">字</span></h3>
+      <h3>characters</h3>
       {#each entry.characters as c}
         <div class="char">
           <button class="cg" onclick={() => onsearch(c.ch)} title="look up {c.ch}">{c.ch}</button>
           <div class="cmeta">
-            {#if charReadings(c).length}
-              <div class="crd">
-                {#each charReadings(c) as r}<span class="rd"><span class="rl">{r.label}</span> {r.value}</span>{/each}
-              </div>
-            {/if}
-            {#if cleanGloss(c.gloss_en ?? '')}<div class="cgl">{cleanGloss(c.gloss_en ?? '')}</div>{/if}
-            <div class="cln">
-              {#if c.strokes}<span class="dim">{c.strokes} strokes</span>{/if}
-              {#if cleanIds(c.ids)}<span class="ids">{cleanIds(c.ids)}</span>{/if}
-            </div>
-            {#if c.script_forms}
-              <div class="strip"><ScriptForms forms={c.script_forms} anchor={c.ch} {onsearch} compact /></div>
-            {/if}
+            <div class="clangs">{#each charLangs(c) as l}<span class="clang">{l}</span>{/each}</div>
+            {#if firstSense(c.gloss_en)}<div class="cgl">{firstSense(c.gloss_en)}</div>{/if}
           </div>
         </div>
       {/each}
@@ -401,23 +498,30 @@
     </section>
   {/if}
 
-  {#if entry && entry.compounds.length}
+  {#if entry && wordGroups.length}
     <section class="words">
-      <h3>words <span class="dim">熟語</span></h3>
-      <div class="chips">
-        {#each entry.compounds.slice(0, 24) as l}
-          <button class="chip" onclick={() => onsearch(l.headword)} title={glossLine(l.glosses, 1)}>
-            <span class="cv">{varietyLabel(l.variety)}</span>{l.headword}
-          </button>
+      <button class="oh" aria-expanded={showWords} onclick={() => (showWords = !showWords)}>
+        words <span class="count">{wordCount}</span> <span class="chev">{showWords ? '−' : '+'}</span>
+      </button>
+      {#if showWords}
+        {#each wordGroups as wg (wg.variety)}
+          <div class="wgroup">
+            <div class="wglabel">{sectionName[wg.variety]}</div>
+            <div class="chips">
+              {#each wg.items as l (l.lexeme_id)}
+                <button class="chip" onclick={() => onsearch(l.headword)} title={glossLine(l.glosses, 1)}>{l.headword}</button>
+              {/each}
+            </div>
+          </div>
         {/each}
-      </div>
+      {/if}
     </section>
   {/if}
 
   {#if entry && entry.etymology}
     <section class="origin">
       <button class="oh" aria-expanded={showOrigin} onclick={() => (showOrigin = !showOrigin)}>
-        origin <span class="dim">語源</span> <span class="chev">{showOrigin ? '−' : '+'}</span>
+        origin <span class="chev">{showOrigin ? '−' : '+'}</span>
       </button>
       {#if showOrigin}
         <p class="ety">
@@ -439,11 +543,12 @@
   .glyph { font-family: var(--han); font-size: clamp(3rem, 16vw, 4.5rem); line-height: 1; margin: 0 0 1.1rem; font-weight: 500; }
   .defs { display: flex; flex-direction: column; gap: 1.2rem; }
   .dlh { display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap; }
-  .dvar { font-family: var(--han); font-size: 0.95rem; color: var(--muted); letter-spacing: 0.03em; }
-  .dform { font-family: var(--han); font-size: 1.2rem; }
+  /* the language leads (it's the heading of the definition); the reading is secondary */
+  .dvar { font-family: var(--han); font-size: 1.1rem; color: var(--text); font-weight: 500; letter-spacing: 0.02em; }
+  .dform { font-family: var(--han); font-size: 1.15rem; }
   .dform .ftag { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); margin-right: 0.18rem; vertical-align: 0.35em; }
   .dform .fsep { color: var(--faint); margin: 0 0.35rem; }
-  .dread { font-family: var(--mono); font-size: 1rem; color: var(--text); }
+  .dread { font-family: var(--mono); font-size: 0.9rem; color: var(--muted); }
   .senses { margin: 0.5rem 0 0; padding: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 0.35rem; }
   .senses li { position: relative; padding-left: 1.5rem; font-size: 1rem; line-height: 1.45; color: var(--text); counter-increment: s; }
   .senses li::before { content: counter(s); position: absolute; left: 0; top: 0.05rem; font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
@@ -468,26 +573,34 @@
   .read { font-family: var(--mono); color: var(--muted); font-size: 0.9rem; }
   .gloss { color: var(--text); font-size: 0.98rem; line-height: 1.4; }
 
-  .note { color: var(--faint); font-size: 0.8rem; margin: 0.3rem 0 0; }
+  .note { color: var(--faint); font-size: 0.82rem; margin: 0.5rem 0 0; line-height: 1.5; display: flex; align-items: flex-start; gap: 0.4rem; }
+  .note :global(svg) { flex: none; margin-top: 0.15rem; color: var(--muted); }
 
-  h3 { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 1.4rem 0 0.5rem; }
-  h3 .dim { font-family: var(--han); }
+  h3 { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 1.9rem 0 0.8rem; }
   .dim { color: var(--faint); }
 
-  .char { display: flex; gap: 0.9rem; padding: 0.7rem 0; border-top: 1px solid var(--border); }
+  /* jukugo component characters - lean: tappable glyph, language tags, one meaning */
+  .char { display: flex; gap: 0.9rem; align-items: center; padding: 0.7rem 0; border-top: 1px solid var(--border); }
   .cg { font-family: var(--han); font-size: 2.4rem; line-height: 1; padding: 0 0.3rem; background: none; border: none; }
   .cg:hover { background: var(--surface); }
   .cmeta { flex: 1; min-width: 0; }
-  .crd { display: flex; flex-wrap: wrap; gap: 0.8rem; font-family: var(--mono); font-size: 0.8rem; }
-  .crd .rl { font-family: var(--mono); font-size: 0.85em; color: var(--muted); margin-right: 0.2rem; }
-  .cgl { font-size: 0.92rem; color: var(--muted); margin-top: 0.25rem; }
-  .cln { display: flex; gap: 0.7rem; align-items: center; flex-wrap: wrap; margin-top: 0.3rem; font-size: 0.8rem; }
+  .clangs { display: flex; gap: 0.3rem; margin-bottom: 0.25rem; }
+  .clang { font-family: var(--han); font-size: 0.8rem; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0.05rem 0.32rem; }
+  .cgl { font-size: 0.95rem; color: var(--text); }
+
+  /* single-character structure block - readings grouped by language (中/粵/日), then decomposition */
+  .crd { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.1rem; }
+  .rgrp { display: flex; gap: 0.7rem; align-items: baseline; font-family: var(--mono); font-size: 0.95rem; }
+  .rvh { font-family: var(--han); color: var(--muted); font-size: 1rem; flex: none; min-width: 1.2em; }
+  .rtext { color: var(--text); }
+  .cln { display: flex; gap: 0.7rem; align-items: center; flex-wrap: wrap; margin-top: 0.5rem; font-size: 0.8rem; }
   .ids { font-family: var(--han); color: var(--muted); }
 
-  /* single-character structure block - readings + decomposition, no repeated glyph */
-  .struct .crd { font-size: 0.9rem; gap: 1rem; }
-  .struct .cln { margin-top: 0.5rem; }
-
+  /* words: collapsible (toggle header like origin), grouped by language with breathing room */
+  .words { margin-top: 1.6rem; }
+  .words .count { color: var(--faint); }
+  .wgroup { margin-top: 1rem; }
+  .wglabel { font-family: var(--han); font-size: 0.9rem; color: var(--muted); margin: 0 0 0.5rem; letter-spacing: 0.02em; }
   .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
   .chip { display: inline-flex; align-items: center; gap: 0.35rem; font-family: var(--han); font-size: 1.05rem; padding: 0.25rem 0.55rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); }
   .chip:hover { border-color: var(--border-strong); }

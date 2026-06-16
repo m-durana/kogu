@@ -1,7 +1,7 @@
 <script lang="ts">
   import { search, entry as fetchEntry } from './lib/api'
-  import type { Entry, Hit } from './lib/types'
-  import { primaryForm, varietyLabel, regionsOf, shortGloss } from './lib/display'
+  import type { Entry, Hit, CharInfo } from './lib/types'
+  import { primaryForm, varietyLabel, regionsOf, shortGloss, cleanGloss } from './lib/display'
   import Unified from './lib/Unified.svelte'
   import Pad from './lib/Pad.svelte'
   import Ocr from './lib/Ocr.svelte'
@@ -23,6 +23,24 @@
   let loading = $state(false)
   let err = $state('')
   let searched = $state(false)
+  // When a Han query yields no word, we break it into its component characters (char-only entries).
+  let breakdown = $state<CharInfo[]>([])
+
+  const HAN = /\p{Script=Han}/u
+
+  // first language-flagged meaning for a component character, kept short
+  function charMeaning(c: CharInfo): string {
+    const g = cleanGloss(c.gloss_en ?? '')
+    return g.split(';')[0].trim()
+  }
+  function charLangs(c: CharInfo): string[] {
+    const tags: string[] = []
+    const has = (k: string) => c.readings.some((r) => r.kind === k && r.value)
+    if (has('pinyin')) tags.push('中')
+    if (has('jyutping')) tags.push('粵')
+    if (has('onyomi') || has('kunyomi')) tags.push('日')
+    return tags
+  }
 
   let composing = false
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -42,6 +60,7 @@
     enrichEntry = null
     enriching = false
     unified = false
+    breakdown = []
     if (!term) {
       results = []
       searched = false
@@ -79,6 +98,21 @@
           .finally(() => {
             if (q.trim() === term) enriching = false
           })
+      } else if (!results.length && HAN.test(term)) {
+        // No word matched, but the query is Han - break it into its component characters so the
+        // user still gets per-character meanings and can drill into any one. Char-only entries live
+        // at /entry/{-codepoint}. Fetch the unique Han chars in parallel; ignore any that fail.
+        const chars = [...new Set([...term].filter((c) => HAN.test(c)))]
+        Promise.all(
+          chars.map((c) =>
+            fetchEntry(-c.codePointAt(0)!)
+              .then((e) => e.characters[0] ?? null)
+              .catch(() => null),
+          ),
+        ).then((infos) => {
+          // only apply if this is still the active query (guard against a newer search)
+          if (q.trim() === term) breakdown = infos.filter((c): c is CharInfo => !!c)
+        })
       }
     } catch (e) {
       if ((e as Error).name !== 'AbortError') err = 'search failed'
@@ -163,6 +197,7 @@
     enriching = false
     unified = false
     searched = false
+    breakdown = []
     err = ''
     history.replaceState({ view: 'results', q: '' }, '', location.pathname)
   }
@@ -242,7 +277,7 @@
       {#each results as r (r.lexeme_id)}
         {@const d = primaryForm(r.forms, r.variety, q)}
         <li>
-          <button class="hit" onclick={() => openEntry(r.lexeme_id)}>
+          <button class="hit" onclick={() => doSearch(d?.primary.form ?? r.headword)}>
             <span class="hw">
               {d?.primary.form ?? r.headword}{#if d?.alternate}<span class="alt">{d.alternate.form}</span>{/if}
             </span>
@@ -259,7 +294,31 @@
       {/each}
     </ul>
     {#if searched && !loading && results.length === 0}
-      <div class="empty">nothing for “{q}”.</div>
+      {#if breakdown.length}
+        <section class="noword" data-testid="breakdown">
+          <div class="nw-head">
+            <span class="nw-q">{q}</span>
+            <span class="nw-note">no known word</span>
+          </div>
+          <ul class="nw-list">
+            {#each breakdown as c (c.ch)}
+              <li>
+                <button class="nw-char" onclick={() => doSearch(c.ch)}>
+                  <span class="nw-glyph">{c.ch}</span>
+                  <span class="nw-col">
+                    <span class="nw-tags">
+                      {#each charLangs(c) as t}<span class="nw-tag">{t}</span>{/each}
+                    </span>
+                    {#if charMeaning(c)}<span class="nw-mean">{charMeaning(c)}</span>{/if}
+                  </span>
+                </button>
+              </li>
+            {/each}
+          </ul>
+        </section>
+      {:else}
+        <div class="empty">nothing for “{q}”.</div>
+      {/if}
     {/if}
     {#if !searched && !q && panel === 'none'}
       <div class="intro">
@@ -328,6 +387,24 @@
   .rg { font-size: 0.6rem; color: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 0 0.2rem; font-family: var(--mono); }
   .gl { color: var(--muted); font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .empty { color: var(--faint); padding: 1.2rem 0; }
+
+  /* no-word breakdown: the query shown big (like a headword), a quiet note, then tappable chars */
+  .noword { padding: 0.6rem 0; }
+  .nw-head { display: flex; align-items: baseline; gap: 0.9rem; margin-bottom: 0.9rem; flex-wrap: wrap; }
+  .nw-q { font-family: var(--han); font-size: 2.1rem; line-height: 1.05; color: var(--text); }
+  .nw-note { color: var(--faint); font-size: 0.7rem; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.1em; }
+  .nw-list { list-style: none; margin: 0; padding: 0; }
+  .nw-list li + li { border-top: 1px solid var(--border); }
+  .nw-char {
+    display: flex; align-items: center; gap: 0.9rem; width: 100%; text-align: left;
+    background: none; border: none; border-radius: var(--r); padding: 0.7rem 0.5rem;
+  }
+  .nw-char:hover { background: var(--surface); color: var(--text); }
+  .nw-glyph { font-family: var(--han); font-size: 1.7rem; line-height: 1.05; flex: none; min-width: 1.4em; }
+  .nw-col { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }
+  .nw-tags { display: flex; gap: 0.3rem; }
+  .nw-tag { font-family: var(--han); font-size: 0.72rem; color: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 0 0.25rem; }
+  .nw-mean { color: var(--muted); font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .intro { padding: 0.4rem 0.2rem; }
   .tag { font-family: var(--sans); font-size: 1.35rem; line-height: 1.5; color: var(--text); margin: 0 0 0.8rem; }
   .tag b { font-family: var(--han); font-weight: 500; }

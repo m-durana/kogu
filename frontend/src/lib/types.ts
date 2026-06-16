@@ -56,6 +56,7 @@ export interface CharInfo {
   radical: number | null
   ids: string | null
   gloss_en: string | null
+  gloss_ja: string | null
   readings: ReadingKV[]
   variants: VariantEdge[]
   script_forms: ScriptForms | null
