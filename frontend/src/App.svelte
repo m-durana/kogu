@@ -60,11 +60,17 @@
       classified = res.classified_as
       searched = true
       // Han queries resolve to one word seen across languages - show the unified view directly,
-      // no list step. Enrich it with the top lexeme's decomposition + origin in the background.
+      // no list step. Enrich the lexeme whose form is EXACTLY what was typed (so 氣 enriches the
+      // Chinese 氣, not the Japanese 気 that may rank first) - this is the word shown in the field, so
+      // its senses / words / origin must come from the same lexeme. Falls back to the top hit.
       if (res.classified_as === 'han' && results.length) {
         unified = true
         enriching = true
-        const topId = results[0].lexeme_id
+        const exact =
+          results.find((r) => r.headword === term) ??
+          results.find((r) => r.forms.some((f) => f.form === term && f.is_primary)) ??
+          results[0]
+        const topId = exact.lexeme_id
         fetchEntry(topId)
           .then((e) => {
             if (q.trim() === term && unified) enrichEntry = e

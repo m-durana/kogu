@@ -160,16 +160,6 @@
     return deduped.sort((a, b) => VORDER.indexOf(a.variety) - VORDER.indexOf(b.variety))
   })
 
-  // group rows into per-language sections (中文 / 粵語 / 日本語), same-glyph rows before equivalents
-  const sections = $derived(
-    VORDER.map((v) => ({
-      variety: v as Variety,
-      rows: rows
-        .filter((r) => r.variety === v)
-        .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'form' ? -1 : 1)),
-    })).filter((s) => s.rows.length > 0),
-  )
-
   // the headword glyph: what the user looked up
   const head = $derived(anchor || rows[0]?.form || '')
 
@@ -187,8 +177,36 @@
     return ''
   })
 
-  // a "different meaning" flag only makes sense as a contrast: another language entry whose meaning
-  // differs from the one you looked up. So it needs ≥2 rows and applies to non-primary rows only.
+  // the searched word itself - promoted into the definition FIELD at the top (glyph + reading + full
+  // senses), so it never appears as a clickable "same entry" row in the comparison below. Prefer the
+  // row whose form is EXACTLY what was typed (搜 氣 → the Chinese 氣, not the Japanese 気 that ranked
+  // first), then the top search hit, then anything.
+  const primaryRow = $derived(
+    rows.find((r) => r.form === head && `${r.variety}|${r.form}` === primaryKey) ??
+      rows.find((r) => r.form === head) ??
+      rows.find((r) => `${r.variety}|${r.form}` === primaryKey) ??
+      rows[0],
+  )
+
+  // full senses for the field: the entry's POS-tagged senses when loaded, else the instant hit glosses
+  const fieldSenses = $derived.by<{ pos: string | null; gloss: string }[]>(() => {
+    if (entry && primaryRow && entry.lexeme_id === primaryRow.id && entry.senses.length)
+      return entry.senses.map((s) => ({ pos: s.pos, gloss: cleanGloss(s.gloss_en) })).filter((s) => s.gloss)
+    return (primaryRow?.glosses ?? []).map(cleanGloss).filter(Boolean).map((g) => ({ pos: null, gloss: g }))
+  })
+
+  // the comparison below the field: every OTHER language entry, grouped (中文 / 粵語 / 日本語),
+  // same-glyph rows before meaning-equivalents. The searched word is excluded (it's the field).
+  const sections = $derived(
+    VORDER.map((v) => ({
+      variety: v as Variety,
+      rows: rows
+        .filter((r) => r.variety === v && r !== primaryRow)
+        .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'form' ? -1 : 1)),
+    })).filter((s) => s.rows.length > 0),
+  )
+
+  // a "different meaning" flag is a contrast against the searched word - applies to the other rows.
   function isFalseFriendRow(r: Row): boolean {
     return rows.length > 1 && r.relation === 'false-friend' && `${r.variety}|${r.form}` !== primaryKey
   }
@@ -234,11 +252,25 @@
 </script>
 
 <article class="u">
-  <header class="head">
-    <h2 class="glyph">{head}</h2>
-  </header>
+  <!-- the searched word + its full definition, right under the search box -->
+  {#if primaryRow}
+    <section class="field">
+      <div class="fhead">
+        <h2 class="glyph">{#if primaryRow.alt}<span class="ftag">{formTag(primaryRow.formScript)}</span>{primaryRow.form}<span class="fsep">·</span><span class="ftag">{formTag(primaryRow.altScript)}</span>{primaryRow.alt}{:else}{primaryRow.form}{/if}</h2>
+        <div class="fmeta">
+          <span class="fvar">{varietyLabel(primaryRow.variety)} {sectionName[primaryRow.variety]}</span>
+          {#if primaryRow.reading}<span class="fread">{primaryRow.variety === 'zh' ? pinyinMarks(primaryRow.reading) : primaryRow.reading}</span>{/if}
+        </div>
+      </div>
+      {#if fieldSenses.length}
+        <ol class="senses">
+          {#each fieldSenses as s}<li>{#if s.pos}<span class="pos">{s.pos}</span>{/if}<span class="sg">{s.gloss}</span></li>{/each}
+        </ol>
+      {/if}
+    </section>
+  {/if}
 
-  <!-- the core: this word across every language - grouped by language, one concise line each -->
+  <!-- the comparison: how this word lives in the OTHER languages -->
   {#each sections as sec (sec.variety)}
     <section class="langsec">
       <h3 class="seclabel"><span class="vh">{varietyLabel(sec.variety)}</span> <span class="dim">{sectionName[sec.variety]}</span></h3>
@@ -347,8 +379,20 @@
 
 <style>
   .u { display: flex; flex-direction: column; }
-  .head { margin-bottom: 1.1rem; }
   .glyph { font-family: var(--han); font-size: clamp(3rem, 16vw, 4.5rem); line-height: 1; margin: 0; font-weight: 500; }
+  .glyph .ftag { font-family: var(--mono); font-size: 0.9rem; color: var(--muted); margin-right: 0.25rem; vertical-align: 0.5em; }
+  .glyph .fsep { color: var(--faint); margin: 0 0.35rem; }
+
+  /* the searched word + its full definition - the hero block under the search box */
+  .field { margin-bottom: 1.4rem; }
+  .fhead { display: flex; align-items: baseline; gap: 0.9rem; flex-wrap: wrap; }
+  .fmeta { display: flex; flex-direction: column; gap: 0.1rem; }
+  .fvar { font-family: var(--han); font-size: 0.8rem; color: var(--muted); letter-spacing: 0.04em; }
+  .fread { font-family: var(--mono); font-size: 1rem; color: var(--text); }
+  .senses { margin: 0.9rem 0 0; padding: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 0.45rem; }
+  .senses li { position: relative; padding-left: 1.6rem; font-size: 1rem; line-height: 1.45; color: var(--text); counter-increment: s; }
+  .senses li::before { content: counter(s); position: absolute; left: 0; top: 0.05rem; font-family: var(--mono); font-size: 0.72rem; color: var(--faint); }
+  .senses .pos { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0.05rem 0.3rem; margin-right: 0.4rem; vertical-align: 0.08em; }
 
   /* the cross-language comparison - one section per language, the heart of the app */
   .langsec { margin-bottom: 0.6rem; }
