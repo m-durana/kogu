@@ -26,8 +26,33 @@
       <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
     </noscript>
     <title>Kogu 古古 · Han-script dictionary</title>
+    <!-- App shell: paints the brand + search box from inline HTML/CSS the instant the document loads,
+         so an installed iOS PWA (which cold-starts the webview every launch and shows no manifest
+         splash) isn't a black void while the SPA's JS downloads/parses/mounts. Removed in main.ts the
+         moment the real app mounts, so there's never a duplicate header. -->
+    <style>
+      html, body { margin: 0; background: #0b0b0c; color: #ededeb; -webkit-font-smoothing: antialiased; }
+      #shell { max-width: 680px; margin: 0 auto;
+        padding: calc(1.4rem + env(safe-area-inset-top)) calc(1.35rem + env(safe-area-inset-right)) 0 calc(1.35rem + env(safe-area-inset-left)); }
+      #shell .brand { display: inline-flex; align-items: baseline; gap: 0.45rem; margin: 0 0 1rem; }
+      #shell .mark { font-family: "Songti SC", "Hiragino Mincho ProN", "Noto Serif CJK SC", "Noto Serif SC", serif;
+        font-weight: 500; font-size: 1.4rem; letter-spacing: -0.04em; color: #ededeb; line-height: 1; }
+      #shell .word { font-family: "Newsreader", Georgia, "Times New Roman", serif; font-size: 1.05rem; letter-spacing: 0.06em; color: #b4b4ba; line-height: 1; }
+      #shell .field { position: relative; display: flex; }
+      #shell .searchicon { position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: #9c9ca3; display: flex; }
+      #shell .fakeinput { width: 100%; padding: 0.6rem 0.9rem 0.6rem 2.4rem; font-size: 1.05rem;
+        font-family: "Newsreader", Georgia, serif; color: #9c9ca3;
+        background: #141416; border: 1px solid #2a2a2e; border-radius: 13px; }
+    </style>
   </head>
   <body>
+    <div id="shell" aria-hidden="true">
+      <h1 class="brand"><span class="mark">古古</span><span class="word">Kogu</span></h1>
+      <div class="field">
+        <span class="searchicon"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></span>
+        <div class="fakeinput">character · reading · meaning</div>
+      </div>
+    </div>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
