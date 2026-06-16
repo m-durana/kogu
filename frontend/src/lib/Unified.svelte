@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { CharInfo, Entry, Hit, ReadingKV, Variety } from './types'
-  import { primaryForm, varietyLabel, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, meaningfulGlossCount, splitRecon } from './display'
+  import { primaryForm, varietyLabel, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, meaningfulGlossCount, splitRecon, formTag } from './display'
+  import ScriptForms from './ScriptForms.svelte'
 
   // The unified cross-language view - one Han word, seen across 中 / 粵 / 日 at once.
   // Renders instantly from search hits; enriches (decomposition, origin) when the full entry loads.
@@ -42,6 +43,8 @@
     variety: Variety
     form: string
     alt: string | null
+    formScript: string
+    altScript: string
     reading: string
     glosses: string[]
     relation: string
@@ -60,6 +63,8 @@
         variety: h.variety,
         form: d?.primary.form ?? h.headword,
         alt: d?.alternate?.form ?? null,
+        formScript: d?.primary.script ?? '',
+        altScript: d?.alternate?.script ?? '',
         reading: h.reading ?? '',
         glosses: h.glosses,
         relation: relFor(h.lexeme_id),
@@ -73,6 +78,8 @@
         variety: entry.variety,
         form: d?.primary.form ?? entry.headword,
         alt: d?.alternate?.form ?? null,
+        formScript: d?.primary.script ?? '',
+        altScript: d?.alternate?.script ?? '',
         reading: readingFor(entry.variety, entry.readings),
         glosses: entry.senses.map((s) => s.gloss_en),
         relation: 'self',
@@ -87,6 +94,8 @@
           variety: l.variety,
           form: l.headword,
           alt: null,
+          formScript: '',
+          altScript: '',
           reading: l.reading ?? '',
           glosses: l.glosses,
           relation: l.relation,
@@ -177,28 +186,6 @@
   const single = $derived([...head].length === 1)
   const headChar = $derived(entry?.characters?.[0])
 
-  // is this glyph the traditional/simplified/Japanese form? (answers "trad or simple?")
-  function scriptLabel(c: CharInfo): string {
-    if (c.is_orthodox) return 'traditional'
-    const types = new Set(c.variants.map((v) => v.edge_type))
-    const parts: string[] = []
-    if (types.has('simplification')) parts.push('simplified')
-    if (types.has('shinjitai')) parts.push('Japanese shinjitai')
-    return parts.join(' · ') || 'variant'
-  }
-  // plain-language name for an edge to a parent form
-  function edgeWord(edgeType: string): string {
-    return (
-      {
-        simplification: 'traditional',
-        shinjitai: 'traditional',
-        'z-variant': 'variant',
-        'semantic-variant': 'related',
-        'region-standard': 'regional',
-      }[edgeType] ?? edgeType
-    )
-  }
-
   let showOrigin = $state(false)
 </script>
 
@@ -218,7 +205,7 @@
           <span class="v">{varietyLabel(r.variety)}</span>
           <span class="body">
             <span class="top">
-              <span class="form">{r.form}{#if r.alt}<span class="alt">{r.alt}</span>{/if}</span>
+              <span class="form">{#if r.alt}<span class="ftag">{formTag(r.formScript)}</span>{r.form}<span class="fsep">·</span><span class="ftag">{formTag(r.altScript)}</span>{r.alt}{:else}{r.form}{/if}</span>
               {#if r.reading}<span class="read">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>{/if}
               {#if isFalseFriendRow(r)}<span class="ff">different meaning</span>{/if}
             </span>
@@ -242,15 +229,9 @@
           {#each charReadings(headChar) as r}<span class="rd"><span class="rl">{r.label}</span> {r.value}</span>{/each}
         </div>
       {/if}
-      <div class="cln">
-        {#if head && headChar.ch !== head}
-          <!-- the looked-up glyph is a simplified/variant form of the entry's canonical char -->
-          <span class="dim">simplified · traditional <b>{headChar.ch}</b></span>
-        {:else}
-          <span class="dim">{scriptLabel(headChar)}</span>
-          {#each headChar.variants as v}<span class="dim">· {edgeWord(v.edge_type)} <b>{v.parent}</b></span>{/each}
-        {/if}
-      </div>
+      {#if headChar.script_forms}
+        <div class="strip"><ScriptForms forms={headChar.script_forms} anchor={head} {onsearch} /></div>
+      {/if}
       <div class="cln">
         {#if headChar.strokes}<span class="dim">{headChar.strokes} strokes</span>{/if}
         {#if cleanIds(headChar.ids)}<span class="dim">parts</span> <span class="ids">{cleanIds(headChar.ids)}</span>{/if}
@@ -271,11 +252,12 @@
             {/if}
             {#if cleanGloss(c.gloss_en ?? '')}<div class="cgl">{cleanGloss(c.gloss_en ?? '')}</div>{/if}
             <div class="cln">
-              {#if c.strokes}<span class="dim">{c.strokes}画</span>{/if}
-              {#if c.radical}<span class="dim">rad {c.radical}</span>{/if}
+              {#if c.strokes}<span class="dim">{c.strokes} strokes</span>{/if}
               {#if cleanIds(c.ids)}<span class="ids">{cleanIds(c.ids)}</span>{/if}
-              {#each c.variants as v}<span class="dim">→ <b>{v.parent}</b> {v.edge_type}{#if v.reform_name} · {v.reform_name}{/if}</span>{/each}
             </div>
+            {#if c.script_forms}
+              <div class="strip"><ScriptForms forms={c.script_forms} anchor={c.ch} {onsearch} compact /></div>
+            {/if}
           </div>
         </div>
       {/each}
@@ -347,7 +329,10 @@
   .body { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; flex: 1; }
   .top { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
   .form { font-family: var(--han); font-size: 1.5rem; line-height: 1.1; }
-  .form .alt { color: var(--faint); font-size: 0.62em; margin-left: 0.25rem; }
+  /* trad + simp shown as equal peers (no demoting bracket), each with a small 繁/简 tag */
+  .form .ftag { font-family: var(--mono); font-size: 0.55rem; color: var(--faint); margin-right: 0.15rem; vertical-align: 0.35em; }
+  .form .fsep { color: var(--faint); margin: 0 0.4rem; }
+  .strip { margin-top: 0.5rem; }
   .read { font-family: var(--mono); color: var(--muted); font-size: 0.9rem; }
   .ff { font-size: 0.6rem; line-height: 1; color: var(--faint); border: 1px dashed var(--border-strong); border-radius: 4px; padding: 0.2rem 0.35rem; align-self: center; display: inline-flex; align-items: center; }
   .gloss { color: var(--text); font-size: 0.98rem; line-height: 1.4; }
@@ -367,7 +352,6 @@
   .cgl { font-size: 0.92rem; color: var(--muted); margin-top: 0.25rem; }
   .cln { display: flex; gap: 0.7rem; align-items: center; flex-wrap: wrap; margin-top: 0.3rem; font-size: 0.8rem; }
   .ids { font-family: var(--han); color: var(--muted); }
-  .cln b { font-family: var(--han); }
 
   /* single-character structure block - readings + decomposition, no repeated glyph */
   .struct .crd { font-size: 0.9rem; gap: 1rem; }

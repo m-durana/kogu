@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, isMinorGloss, meaningfulGlossCount, splitRecon } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -211,6 +211,25 @@ describe('cleanGloss - strip CC-CEDICT markup', () => {
   })
   it('glossLine cleans, filters empties, caps count', () => {
     expect(glossLine(['a', 'CL:个[ge4]', 'b', 'c', 'd', 'e'], 4)).toBe('a; b; c; d')
+  })
+})
+
+describe('script-forms helpers', () => {
+  it('scriptShort maps single + joined scripts to CJK tags', () => {
+    expect(scriptShort('traditional')).toBe('繁')
+    expect(scriptShort('simplified')).toBe('简')
+    expect(scriptShort('shinjitai')).toBe('日')
+    expect(scriptShort('simplified+shinjitai')).toBe('简 日')
+  })
+  it('formTag maps surface-form scripts', () => {
+    expect(formTag('trad')).toBe('繁')
+    expect(formTag('simp')).toBe('简')
+    expect(formTag('kana')).toBe('')
+  })
+  it('orderBranches sorts traditional → simplified → shinjitai', () => {
+    const b = (script: string) => ({ form: 'x', script, reform_id: null, reform_label: null, is_orthodox: false })
+    const out = orderBranches([b('shinjitai'), b('simplified'), b('traditional')])
+    expect(out.map((x) => x.script)).toEqual(['traditional', 'simplified', 'shinjitai'])
   })
 })
 

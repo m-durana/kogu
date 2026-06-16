@@ -118,6 +118,36 @@ export function pinyinMarks(reading: string): string {
 /** Split etymology prose so the academic phonological reconstructions can be de-emphasised:
  * parentheticals like "(OC *n̥ˁar)" / "(*ʔɨts)" and slashed forms like "/*ʔɨts/". The narrative
  * stays prominent; the reconstructions render small + faint. */
+import type { FormBranch } from './types'
+
+// Short CJK tag(s) for a branch's script. The script may be "+"-joined (学 is both 简 and 日).
+const SCRIPT_TAG: Record<string, string> = {
+  traditional: '繁',
+  simplified: '简',
+  shinjitai: '日',
+  'z-variant': '異',
+}
+export function scriptShort(script: string): string {
+  return script
+    .split('+')
+    .map((s) => SCRIPT_TAG[s] ?? '異')
+    .filter((v, i, a) => a.indexOf(v) === i)
+    .join(' ')
+}
+
+// Tag for a surface_form's script (trad/simp/shinjitai) — used to label both Chinese forms equally.
+export function formTag(script: string): string {
+  return ({ trad: '繁', simp: '简', shinjitai: '日' } as Record<string, string>)[script] ?? ''
+}
+
+// Stable display order for the forms strip: traditional → simplified → shinjitai → z-variant.
+const SCRIPT_RANK: Record<string, number> = { traditional: 0, simplified: 1, shinjitai: 2, 'z-variant': 3 }
+export function orderBranches(branches: FormBranch[]): FormBranch[] {
+  return [...branches].sort(
+    (a, b) => (SCRIPT_RANK[a.script.split('+')[0]] ?? 9) - (SCRIPT_RANK[b.script.split('+')[0]] ?? 9),
+  )
+}
+
 export type EtyToken = { t: 'text' | 'recon'; v: string }
 export function splitRecon(s: string): EtyToken[] {
   // a parenthetical containing a "*" reconstruction, a tight /…*…/ form, or an (OC …)/(MC …) note.

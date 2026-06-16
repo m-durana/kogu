@@ -75,6 +75,9 @@ pub struct CharInfo {
     pub readings: Vec<ReadingKV>,
     /// orthographic "why" seed: identity edges to orthodox parents with the reform that produced them
     pub variants: Vec<VariantEdge>,
+    /// the character's script family across reforms (繁→简·日), for the forms strip. None when the
+    /// glyph has no living cross-script branches and isn't a kokuji (nothing to show).
+    pub script_forms: Option<ScriptForms>,
 }
 
 #[derive(Serialize)]
@@ -84,6 +87,24 @@ pub struct VariantEdge {
     pub reform: Option<String>,
     pub reform_name: Option<String>,
     pub reform_year: Option<i64>,
+}
+
+/// The script forms of one character family, anchored on the orthodox glyph. Branches include the
+/// orthodox form itself plus its living simplified/shinjitai/z-variant children.
+#[derive(Serialize)]
+pub struct ScriptForms {
+    pub orthodox: String,
+    pub is_kokuji: bool,
+    pub branches: Vec<FormBranch>,
+}
+
+#[derive(Serialize)]
+pub struct FormBranch {
+    pub form: String,
+    pub script: String, // "traditional" | "simplified" | "shinjitai" | "z-variant"
+    pub reform_id: Option<String>,
+    pub reform_label: Option<String>, // plain-language: "PRC simplification", "Tōyō shinjitai", …
+    pub is_orthodox: bool,
 }
 
 /// /why response - the orthographic + phonological "why" for a word (DESIGN.md §4).

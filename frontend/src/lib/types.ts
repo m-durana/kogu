@@ -37,6 +37,18 @@ export interface VariantEdge {
   reform_name: string | null
   reform_year: number | null
 }
+export interface FormBranch {
+  form: string
+  script: string // "traditional" | "simplified" | "shinjitai" | "z-variant" (may be "+"-joined)
+  reform_id: string | null
+  reform_label: string | null
+  is_orthodox: boolean
+}
+export interface ScriptForms {
+  orthodox: string
+  is_kokuji: boolean
+  branches: FormBranch[]
+}
 export interface CharInfo {
   ch: string
   is_orthodox: boolean
@@ -46,6 +58,7 @@ export interface CharInfo {
   gloss_en: string | null
   readings: ReadingKV[]
   variants: VariantEdge[]
+  script_forms: ScriptForms | null
 }
 export interface Sense {
   pos: string | null

@@ -481,6 +481,8 @@ fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<C
         })?
         .collect::<Result<_, _>>()?;
 
+    let script_forms = build_script_forms(conn, cp, ch, is_orthodox)?;
+
     Ok(Some(CharInfo {
         ch: ch.to_string(),
         is_orthodox,
@@ -490,7 +492,136 @@ fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<C
         gloss_en,
         readings,
         variants,
+        script_forms,
     }))
+}
+
+fn script_of(edge_type: &str) -> &'static str {
+    match edge_type {
+        "simplification" => "simplified",
+        "shinjitai" => "shinjitai",
+        "z-variant" => "z-variant",
+        _ => "variant",
+    }
+}
+
+/// Plain-language name for the reform that produced a branch (the orthographic "why").
+fn reform_label(reform_id: Option<&str>) -> Option<String> {
+    let id = reform_id?;
+    let label = match id {
+        "opencc" | "prc-1956" | "prc-1964" => "PRC simplification",
+        "jp-toyo" => "Tōyō shinjitai",
+        "jp-joyo" => "Jōyō shinjitai",
+        "hk-std" => "HK standard",
+        "tw-std" => "TW standard",
+        "unihan-variant" => "variant",
+        other => return Some(other.to_string()),
+    };
+    Some(label.to_string())
+}
+
+/// The character's script family (繁→简·日) anchored on the orthodox glyph: the orthodox form itself
+/// plus its living simplified/shinjitai/z-variant children, each reform-labelled. Returns None when
+/// there's nothing to show (no cross-script branches and not a kokuji).
+fn build_script_forms(
+    conn: &rusqlite::Connection,
+    cp: i64,
+    ch: char,
+    is_orthodox: bool,
+) -> rusqlite::Result<Option<ScriptForms>> {
+    use rusqlite::OptionalExtension;
+    // resolve the orthodox anchor of this character's family
+    let (anchor_cp, anchor_char): (i64, String) = if is_orthodox {
+        (cp, ch.to_string())
+    } else {
+        conn.query_row(
+            &format!(
+                "SELECT p.cp, p.char FROM glyph_edge e JOIN character p ON p.cp = e.parent_cp \
+                 WHERE e.child_cp = ?1 AND e.type IN {IDENTITY_TYPES} AND p.is_orthodox = 1 LIMIT 1"
+            ),
+            [cp],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()?
+        .unwrap_or((cp, ch.to_string()))
+    };
+
+    // children of the anchor, merged per glyph (一字 can be BOTH a PRC-simp and a JP-shinjitai of the
+    // same orthodox char, e.g. 学←學: show one 学 branch carrying both reform labels)
+    let mut s = conn.prepare(&format!(
+        "SELECT c.char, c.is_orthodox, e.type, e.reform_id FROM glyph_edge e \
+         JOIN character c ON c.cp = e.child_cp \
+         WHERE e.parent_cp = ?1 AND e.type IN {IDENTITY_TYPES}"
+    ))?;
+    let rows: Vec<(String, bool, String, Option<String>)> = s
+        .query_map([anchor_cp], |r| {
+            Ok((r.get(0)?, r.get::<_, i64>(1)? != 0, r.get(2)?, r.get(3)?))
+        })?
+        .collect::<Result<_, _>>()?;
+
+    let mut order: Vec<String> = Vec::new();
+    let mut merged: std::collections::HashMap<String, (Vec<String>, Vec<String>, bool)> =
+        std::collections::HashMap::new();
+    for (form, child_orth, etype, rid) in rows {
+        let e = merged.entry(form.clone()).or_insert_with(|| {
+            order.push(form.clone());
+            (Vec::new(), Vec::new(), child_orth)
+        });
+        let sc = script_of(&etype).to_string();
+        if !e.0.contains(&sc) {
+            e.0.push(sc);
+        }
+        if let Some(lbl) = reform_label(rid.as_deref()) {
+            if !e.1.contains(&lbl) {
+                e.1.push(lbl);
+            }
+        }
+    }
+
+    let mut branches = vec![FormBranch {
+        form: anchor_char.clone(),
+        script: "traditional".into(),
+        reform_id: None,
+        reform_label: None,
+        is_orthodox: true,
+    }];
+    for form in order {
+        let (scripts, labels, child_orth) = merged.remove(&form).unwrap();
+        branches.push(FormBranch {
+            form,
+            script: scripts.join("+"),
+            reform_id: None,
+            reform_label: if labels.is_empty() { None } else { Some(labels.join(" · ")) },
+            is_orthodox: child_orth,
+        });
+    }
+
+    // kokuji ("Japanese-coined, no Chinese form"): orthodox, no identity edges, has Japanese
+    // readings, and NO Chinese (zh/yue) word uses the glyph. The "no zh/yue lexeme" test is what
+    // separates pure kokuji (峠 辻 凪 榊) from kokuji reborrowed into Chinese (働 腺 畑) — Unihan's
+    // nominal pinyin can't distinguish them.
+    let has_edge: i64 = conn.query_row(
+        &format!("SELECT EXISTS(SELECT 1 FROM glyph_edge WHERE (child_cp=?1 OR parent_cp=?1) AND type IN {IDENTITY_TYPES})"),
+        [anchor_cp],
+        |r| r.get(0),
+    )?;
+    let has_kana: i64 = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM char_reading WHERE cp=?1 AND kind IN ('onyomi','kunyomi'))",
+        [anchor_cp],
+        |r| r.get(0),
+    )?;
+    let chinese_uses: i64 = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM surface_form sf JOIN lexeme l ON l.id=sf.lexeme_id \
+         WHERE sf.form=?1 AND l.variety IN ('zh','yue'))",
+        [&anchor_char],
+        |r| r.get(0),
+    )?;
+    let is_kokuji = is_orthodox && has_edge == 0 && has_kana != 0 && chinese_uses == 0;
+
+    if branches.len() <= 1 && !is_kokuji {
+        return Ok(None);
+    }
+    Ok(Some(ScriptForms { orthodox: anchor_char, is_kokuji, branches }))
 }
 
 fn link_lite(

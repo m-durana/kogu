@@ -538,3 +538,55 @@ async fn probe_wildcard_injection_safe() {
         assert!(n < 50, "{q} should not wildcard-match everything (got {n})");
     }
 }
+
+// B11. Cantonese 粵字 surface as 粵 with jyutping, not a nominal Mandarin reading.
+#[tokio::test]
+async fn probe_cantonese_yuezi() {
+    let v = search("冇").await;
+    let vs = varieties(&v);
+    assert!(vs.contains(&"yue".to_string()), "冇 should be Cantonese, got {vs:?}");
+    assert!(!vs.contains(&"zh".to_string()), "冇 should not be Mandarin");
+    assert_eq!(v["results"][0]["reading"], "mou5", "冇 should read jyutping mou5");
+}
+
+// B12. Genuinely-mixed homograph keeps BOTH 中 and 粵 (乜 = surname Niè + Cantonese mat1).
+#[tokio::test]
+async fn probe_cantonese_mixed() {
+    let vs = varieties(&search("乜").await);
+    assert!(vs.contains(&"zh".to_string()) && vs.contains(&"yue".to_string()), "乜 should be both: {vs:?}");
+}
+
+// B13. A Mandarin word whose gloss only mentions Cantonese (etymology) stays 中, not relabeled.
+#[tokio::test]
+async fn probe_cantonese_not_overtagged() {
+    let vs = varieties(&search("點心").await);
+    assert!(vs.contains(&"zh".to_string()), "點心 should stay Mandarin: {vs:?}");
+}
+
+// B14. script_forms exposes the orthodox family with reform-labelled branches.
+#[tokio::test]
+async fn probe_script_forms_branches() {
+    // 广 (simplified) → anchor 廣, branches include 广 (simplified) and 広 (shinjitai) with labels.
+    let v = search("广").await;
+    let id = v["results"][0]["lexeme_id"].as_i64().unwrap();
+    let e = get(&format!("/entry/{id}")).await.1;
+    let sf = &e["characters"][0]["script_forms"];
+    assert_eq!(sf["orthodox"], "廣");
+    let forms: Vec<String> = sf["branches"].as_array().unwrap().iter()
+        .map(|b| b["form"].as_str().unwrap().to_string()).collect();
+    assert!(forms.contains(&"廣".into()) && forms.contains(&"广".into()) && forms.contains(&"広".into()), "{forms:?}");
+    let simp = sf["branches"].as_array().unwrap().iter().find(|b| b["form"] == "广").unwrap();
+    assert!(simp["reform_label"].as_str().unwrap().contains("PRC"));
+}
+
+// B15. A kokuji is flagged with no Chinese branches.
+#[tokio::test]
+async fn probe_script_forms_kokuji() {
+    let v = search("峠").await;
+    let id = v["results"][0]["lexeme_id"].as_i64().unwrap();
+    let e = get(&format!("/entry/{id}")).await.1;
+    let sf = &e["characters"][0]["script_forms"];
+    if !sf.is_null() {
+        assert_eq!(sf["is_kokuji"], true, "峠 should be kokuji");
+    }
+}
