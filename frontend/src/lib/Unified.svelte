@@ -436,17 +436,17 @@
   /* matches .bridge so def→next-heading spacing is identical whether a bridge band follows or not
      (margins don't collapse inside the flex column, so keep both sides small + let h3's top margin lead) */
   .def { margin-bottom: 0.6rem; }
-  .glyph { font-family: var(--han); font-size: clamp(3rem, 16vw, 4.5rem); line-height: 1; margin: 0 0 0.9rem; font-weight: 500; }
+  .glyph { font-family: var(--han); font-size: clamp(3rem, 16vw, 4.5rem); line-height: 1; margin: 0 0 1.1rem; font-weight: 500; }
   .defs { display: flex; flex-direction: column; gap: 1.2rem; }
   .dlh { display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap; }
   .dvar { font-family: var(--han); font-size: 0.95rem; color: var(--muted); letter-spacing: 0.03em; }
   .dform { font-family: var(--han); font-size: 1.2rem; }
-  .dform .ftag { font-family: var(--mono); font-size: 0.62rem; color: var(--muted); margin-right: 0.18rem; vertical-align: 0.35em; }
+  .dform .ftag { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); margin-right: 0.18rem; vertical-align: 0.35em; }
   .dform .fsep { color: var(--faint); margin: 0 0.35rem; }
   .dread { font-family: var(--mono); font-size: 1rem; color: var(--text); }
   .senses { margin: 0.5rem 0 0; padding: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 0.35rem; }
   .senses li { position: relative; padding-left: 1.5rem; font-size: 1rem; line-height: 1.45; color: var(--text); counter-increment: s; }
-  .senses li::before { content: counter(s); position: absolute; left: 0; top: 0.05rem; font-family: var(--mono); font-size: 0.72rem; color: var(--faint); }
+  .senses li::before { content: counter(s); position: absolute; left: 0; top: 0.05rem; font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
   .more { background: none; border: none; padding: 0.3rem 0; margin-top: 0.1rem; font-family: var(--mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
   .more:hover { color: var(--text); background: none; }
 
@@ -454,7 +454,7 @@
   .bridge { margin-bottom: 0.6rem; }
   .langs { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
   .langs li { border-bottom: 1px solid var(--border); }
-  .lang { display: flex; gap: 0.8rem; align-items: flex-start; width: 100%; text-align: left; background: none; border: none; border-radius: 0; padding: 0.7rem 0.3rem; }
+  .lang { display: flex; gap: 0.8rem; align-items: flex-start; width: 100%; text-align: left; background: none; border: none; border-radius: 0; padding: 0.7rem 0.5rem; }
   .lang:hover { background: var(--surface); }
   .body { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; flex: 1; }
   .top { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }

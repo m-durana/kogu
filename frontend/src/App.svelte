@@ -274,8 +274,8 @@
   .wrap {
     max-width: 680px;
     margin: 0 auto;
-    padding: calc(1.4rem + env(safe-area-inset-top)) calc(1.15rem + env(safe-area-inset-right))
-      calc(4rem + env(safe-area-inset-bottom)) calc(1.15rem + env(safe-area-inset-left));
+    padding: calc(1.4rem + env(safe-area-inset-top)) calc(1.35rem + env(safe-area-inset-right))
+      calc(4rem + env(safe-area-inset-bottom)) calc(1.35rem + env(safe-area-inset-left));
   }
   .bar { margin-bottom: 1rem; }
   .brand { margin: 0; font-weight: 400; }
