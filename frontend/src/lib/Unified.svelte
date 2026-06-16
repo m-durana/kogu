@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CharInfo, Entry, Hit, ReadingKV, Variety } from './types'
-  import { primaryForm, varietyLabel, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, meaningfulGlossCount, splitRecon, formTag } from './display'
+  import { primaryForm, varietyLabel, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, splitRecon, formTag } from './display'
   import ScriptForms from './ScriptForms.svelte'
 
   // The unified cross-language view - one Han word, seen across 中 / 粵 / 日 at once.
@@ -20,7 +20,7 @@
   } = $props()
 
   const VORDER = ['zh', 'yue', 'ja']
-  const fullName: Record<string, string> = { zh: 'Chinese', yue: 'Cantonese', ja: 'Japanese' }
+  const sectionName: Record<string, string> = { zh: '中文', yue: '粵語', ja: '日本語' }
 
   function readingFor(variety: string, readings: ReadingKV[]): string {
     const order =
@@ -48,6 +48,7 @@
     reading: string
     glosses: string[]
     relation: string
+    kind: 'form' | 'equiv' // same characters, vs a meaning-equivalent written differently
   }
 
   // one row per language word, merged from hits (instant) + entry/same_form (enriched)
@@ -68,6 +69,7 @@
         reading: h.reading ?? '',
         glosses: h.glosses,
         relation: relFor(h.lexeme_id),
+        kind: 'form',
       })
     }
     if (entry && !seen.has(entry.lexeme_id)) {
@@ -83,6 +85,7 @@
         reading: readingFor(entry.variety, entry.readings),
         glosses: entry.senses.map((s) => s.gloss_en),
         relation: 'self',
+        kind: 'form',
       })
     }
     if (entry)
@@ -99,6 +102,7 @@
           reading: l.reading ?? '',
           glosses: l.glosses,
           relation: l.relation,
+          kind: 'form',
         })
       }
     // collapse to one row per (variety, form), keeping the MOST MEANINGFUL lexeme (tie → the one
@@ -127,8 +131,44 @@
         meaningfulGlossCount(r.glosses) > 0 ||
         !richByVar.has(r.variety),
     )
+    // meaning-equivalents: how this meaning is written in a language that DOESN'T share the glyph
+    // (機場 ↔ 日 空港). Only fill GAP languages - never pad a language that already has a same-glyph
+    // row with its synonyms (that just re-clutters). Cap per gap language so the comparison stays tight.
+    const haveForm = new Set(deduped.map((r) => r.variety))
+    const haveKey = new Set(deduped.map((r) => `${r.variety}|${r.form}`))
+    const equivCount: Record<string, number> = {}
+    for (const l of entry?.translations ?? []) {
+      if (haveForm.has(l.variety)) continue // language already represented by its own glyph
+      const key = `${l.variety}|${l.headword}`
+      if (haveKey.has(key)) continue
+      if ((equivCount[l.variety] ?? 0) >= 2) continue
+      haveKey.add(key)
+      equivCount[l.variety] = (equivCount[l.variety] ?? 0) + 1
+      deduped.push({
+        id: l.lexeme_id,
+        variety: l.variety,
+        form: l.headword,
+        alt: null,
+        formScript: '',
+        altScript: '',
+        reading: l.reading ?? '',
+        glosses: l.glosses,
+        relation: l.relation,
+        kind: 'equiv',
+      })
+    }
     return deduped.sort((a, b) => VORDER.indexOf(a.variety) - VORDER.indexOf(b.variety))
   })
+
+  // group rows into per-language sections (中文 / 粵語 / 日本語), same-glyph rows before equivalents
+  const sections = $derived(
+    VORDER.map((v) => ({
+      variety: v as Variety,
+      rows: rows
+        .filter((r) => r.variety === v)
+        .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'form' ? -1 : 1)),
+    })).filter((s) => s.rows.length > 0),
+  )
 
   // the headword glyph: what the user looked up
   const head = $derived(anchor || rows[0]?.form || '')
@@ -174,12 +214,6 @@
     return out
   }
 
-  // languages this exact form is actually used in (the varieties of its rows). NOT inferred from
-  // readings: 汉 reads カン in Japanese as a character, but Japanese writes it 漢 — so the simplified
-  // glyph 汉 is Chinese-only. The cross-script equivalent (traditional/Japanese 漢) is shown in the
-  // structure block instead.
-  const varieties = $derived([...new Set(rows.map((r) => r.variety))])
-
   // single character vs jukugo (compound word) - they get purpose-built layouts:
   // a character page (readings + structure + the words that use it) vs a word page
   // (meaning across languages + its component characters).
@@ -191,30 +225,31 @@
 
 <article class="u">
   <header class="head">
-    {#if varieties.length > 1}
-      <p class="sub">{varieties.map((v) => varietyLabel(v)).join(' · ')}</p>
-    {/if}
     <h2 class="glyph">{head}</h2>
   </header>
 
-  <!-- the core: this word, read across every language at once -->
-  <ul class="langs">
-    {#each rows as r (r.id)}
-      <li>
-        <button class="lang" onclick={() => onsearch(r.form)} title="look up {r.form}">
-          <span class="v">{varietyLabel(r.variety)}</span>
-          <span class="body">
-            <span class="top">
-              <span class="form">{#if r.alt}<span class="ftag">{formTag(r.formScript)}</span>{r.form}<span class="fsep">·</span><span class="ftag">{formTag(r.altScript)}</span>{r.alt}{:else}{r.form}{/if}</span>
-              {#if r.reading}<span class="read">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>{/if}
-              {#if isFalseFriendRow(r)}<span class="ff">different meaning</span>{/if}
-            </span>
-            {#if glossLine(r.glosses)}<span class="gloss">{glossLine(r.glosses)}</span>{/if}
-          </span>
-        </button>
-      </li>
-    {/each}
-  </ul>
+  <!-- the core: this word across every language - grouped by language, one concise line each -->
+  {#each sections as sec (sec.variety)}
+    <section class="langsec">
+      <h3 class="seclabel"><span class="vh">{varietyLabel(sec.variety)}</span> <span class="dim">{sectionName[sec.variety]}</span></h3>
+      <ul class="langs">
+        {#each sec.rows as r (r.id)}
+          <li>
+            <button class="lang" onclick={() => onsearch(r.form)} title="look up {r.form}">
+              <span class="body">
+                <span class="top">
+                  <span class="form">{#if r.alt}<span class="ftag">{formTag(r.formScript)}</span>{r.form}<span class="fsep">·</span><span class="ftag">{formTag(r.altScript)}</span>{r.alt}{:else}{r.form}{/if}</span>
+                  {#if r.reading}<span class="read">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>{/if}
+                  {#if r.kind === 'equiv'}<span class="eq">same meaning</span>{:else if isFalseFriendRow(r)}<span class="ff">different meaning</span>{/if}
+                </span>
+                {#if briefGloss(r.glosses)}<span class="gloss">{briefGloss(r.glosses)}</span>{/if}
+              </span>
+            </button>
+          </li>
+        {/each}
+      </ul>
+    </section>
+  {/each}
 
   {#if hasFalseFriend}
     <p class="note">同字 · same characters, but the meaning differs by language.</p>
@@ -286,19 +321,6 @@
     </section>
   {/if}
 
-  {#if entry && !single && entry.translations.length}
-    <section class="also">
-      <h3>same meaning <span class="dim">同義</span></h3>
-      <div class="chips">
-        {#each entry.translations.slice(0, 6) as l}
-          <button class="chip" onclick={() => onsearch(l.headword)}>
-            <span class="cv">{varietyLabel(l.variety)}</span>{l.headword}
-          </button>
-        {/each}
-      </div>
-    </section>
-  {/if}
-
   {#if entry && entry.etymology}
     <section class="origin">
       <button class="oh" aria-expanded={showOrigin} onclick={() => (showOrigin = !showOrigin)}>
@@ -315,18 +337,18 @@
 
 <style>
   .u { display: flex; flex-direction: column; }
-  .head { margin-bottom: 1rem; }
+  .head { margin-bottom: 1.1rem; }
   .glyph { font-family: var(--han); font-size: clamp(3rem, 16vw, 4.5rem); line-height: 1; margin: 0; font-weight: 500; }
-  .sub { font-family: var(--han); color: var(--faint); font-size: 0.85rem; margin: 0 0 0.4rem; letter-spacing: 0.1em; }
 
-  /* the cross-language stack - the heart of the app */
-  .langs { list-style: none; margin: 0 0 0.4rem; padding: 0; border-top: 1px solid var(--border); }
+  /* the cross-language comparison - one section per language, the heart of the app */
+  .langsec { margin-bottom: 0.6rem; }
+  .seclabel { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 0.6rem 0 0.1rem; }
+  .seclabel .vh { font-family: var(--han); font-size: 0.95rem; margin-right: 0.1rem; }
+  .langs { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
   .langs li { border-bottom: 1px solid var(--border); }
-  .lang { display: flex; gap: 0.8rem; align-items: flex-start; width: 100%; text-align: left; background: none; border: none; border-radius: 0; padding: 0.85rem 0.3rem; }
+  .lang { display: flex; gap: 0.8rem; align-items: flex-start; width: 100%; text-align: left; background: none; border: none; border-radius: 0; padding: 0.7rem 0.3rem; }
   .lang:hover { background: var(--surface); }
-  .v { font-family: var(--han); font-size: 1rem; color: var(--muted); flex: none;
-       display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; }
-  .body { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; flex: 1; }
+  .body { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; flex: 1; }
   .top { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
   .form { font-family: var(--han); font-size: 1.5rem; line-height: 1.1; }
   /* trad + simp shown as equal peers (no demoting bracket), each with a small 繁/简 tag */
@@ -335,6 +357,7 @@
   .strip { margin-top: 0.5rem; }
   .read { font-family: var(--mono); color: var(--muted); font-size: 0.9rem; }
   .ff { font-size: 0.6rem; line-height: 1; color: var(--faint); border: 1px dashed var(--border-strong); border-radius: 4px; padding: 0.2rem 0.35rem; align-self: center; display: inline-flex; align-items: center; }
+  .eq { font-size: 0.6rem; line-height: 1; color: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 0.2rem 0.35rem; align-self: center; display: inline-flex; align-items: center; }
   .gloss { color: var(--text); font-size: 0.98rem; line-height: 1.4; }
 
   .note { color: var(--faint); font-size: 0.8rem; margin: 0.3rem 0 0; }

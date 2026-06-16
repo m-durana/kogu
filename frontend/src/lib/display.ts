@@ -198,6 +198,16 @@ export function glossLine(glosses: string[], max = 4): string {
   return glosses.map(cleanGloss).filter(Boolean).slice(0, max).join('; ')
 }
 
+/** One concise gloss line for a comparison row - the leading sense(s), capped so a row stays
+ * scannable instead of dumping every sense. Cuts on a clause boundary when it can. */
+export function briefGloss(glosses: string[], max = 64): string {
+  const g = glossLine(glosses, 2)
+  if (g.length <= max) return g
+  const cut = g.slice(0, max)
+  const sep = Math.max(cut.lastIndexOf('; '), cut.lastIndexOf(', '))
+  return (sep > max / 3 ? cut.slice(0, sep) : cut.replace(/\s+\S*$/, '')) + '…'
+}
+
 /** A "minor" gloss carries no real meaning for a cross-language comparison - a bare surname,
  * a "variant of"/"used in"/"see" cross-reference, or a radical definition. */
 export function isMinorGloss(g: string): boolean {

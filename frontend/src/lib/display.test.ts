@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -211,6 +211,15 @@ describe('cleanGloss - strip CC-CEDICT markup', () => {
   })
   it('glossLine cleans, filters empties, caps count', () => {
     expect(glossLine(['a', 'CL:个[ge4]', 'b', 'c', 'd', 'e'], 4)).toBe('a; b; c; d')
+  })
+  it('briefGloss keeps short glosses whole', () => {
+    expect(briefGloss(['to study; to learn'])).toBe('to study; to learn')
+  })
+  it('briefGloss caps long glosses on a clause boundary', () => {
+    const out = briefGloss(['airport; airfield; service provider for circumventing censorship online'])
+    expect(out.endsWith('…')).toBe(true)
+    expect(out.length).toBeLessThanOrEqual(66)
+    expect(out.startsWith('airport; airfield')).toBe(true)
   })
 })
 

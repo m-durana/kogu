@@ -1,6 +1,6 @@
 // Kogu service worker — installability + fast loads. Offline is deferred (DESIGN Appendix A),
 // so this caches the app shell + hashed assets but never caches API responses.
-const CACHE = 'kogu-v5'
+const CACHE = 'kogu-v6'
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg', '/icon-192.png?v=3', '/icon-512.png?v=3']
 
 self.addEventListener('install', (e) => {
