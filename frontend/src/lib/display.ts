@@ -24,7 +24,10 @@ export function primaryForm(forms: Form[], variety: Variety, query = ''): Displa
     const alt = forms.find((f) => f.form !== primary.form) ?? null
     return { primary, alternate: alt }
   }
-  const primary = matched ?? forms.find((f) => f.is_primary) ?? forms.find((f) => f.script !== 'kana') ?? forms[0]
+  // ja / yue: show the language's OWN canonical form, never the cross-script form the user typed.
+  // Japanese writes 気 even when you searched the Chinese 氣 (which only appears in the Japanese form
+  // list as a kyūjitai variant). The top headword still echoes what you typed; the rows localise.
+  const primary = forms.find((f) => f.is_primary) ?? forms.find((f) => f.script !== 'kana') ?? forms[0]
   return { primary, alternate: null }
 }
 

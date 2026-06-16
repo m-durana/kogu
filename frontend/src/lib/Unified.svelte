@@ -195,17 +195,23 @@
   const hasFalseFriend = $derived(rows.some(isFalseFriendRow))
 
   // reading systems, labelled in plain words (中 Mandarin pinyin, 粵 Cantonese jyutping,
-  // 日 Japanese on'yomi / kun'yomi) so it's obvious which language each reading is.
-  const READING_ORDER: [string, string][] = [
-    ['pinyin', 'pinyin'],
-    ['jyutping', 'jyutping'],
-    ['onyomi', "on'yomi"],
-    ['kunyomi', "kun'yomi"],
+  // 日 Japanese on'yomi / kun'yomi) so it's obvious which language each reading is. Each maps to the
+  // language that uses it, so we can hide readings for languages this word isn't actually used in.
+  const READING_ORDER: [string, string, Variety][] = [
+    ['pinyin', 'pinyin', 'zh'],
+    ['jyutping', 'jyutping', 'yue'],
+    ['onyomi', "on'yomi", 'ja'],
+    ['kunyomi', "kun'yomi", 'ja'],
   ]
   const isKana = (s: string) => /[぀-ヿ]/.test(s)
-  function charReadings(c: CharInfo) {
+  // `allow`: if given, hide pinyin / on'yomi / kun'yomi for languages this word isn't used in. 冇
+  // carries a nominal Unihan pinyin (mǎo) but is a Cantonese-only word - showing it contradicts the
+  // 粵 label above. Jyutping is NEVER gated: Cantonese is written with essentially all Han
+  // characters, so a jyutping reading is legitimate even without a separate 粵 lexeme (e.g. 氣 hei3).
+  function charReadings(c: CharInfo, allow?: Set<string>) {
     const out: { label: string; value: string }[] = []
-    for (const [kind, label] of READING_ORDER) {
+    for (const [kind, label, variety] of READING_ORDER) {
+      if (allow && variety !== 'yue' && !allow.has(variety)) continue
       // Japanese on/kun readings must be kana - drop corrupt values like "K0"
       let v = c.readings.filter((r) => r.kind === kind).map((r) => r.value)
       if (kind === 'onyomi' || kind === 'kunyomi') v = v.filter(isKana)
@@ -213,6 +219,10 @@
     }
     return out
   }
+
+  // languages this word is actually represented in (its same-glyph rows) - used to gate the
+  // single-character structure readings so e.g. a 粵-only word shows jyutping, not Mandarin pinyin.
+  const wordVarieties = $derived(new Set(rows.filter((r) => r.kind === 'form').map((r) => r.variety)))
 
   // single character vs jukugo (compound word) - they get purpose-built layouts:
   // a character page (readings + structure + the words that use it) vs a word page
@@ -259,9 +269,9 @@
     <!-- single character: a compact structure line (no repeated glyph), then the words that use it -->
     <section class="struct">
       <h3>structure <span class="dim">字源</span></h3>
-      {#if charReadings(headChar).length}
+      {#if charReadings(headChar, wordVarieties).length}
         <div class="crd">
-          {#each charReadings(headChar) as r}<span class="rd"><span class="rl">{r.label}</span> {r.value}</span>{/each}
+          {#each charReadings(headChar, wordVarieties) as r}<span class="rd"><span class="rl">{r.label}</span> {r.value}</span>{/each}
         </div>
       {/if}
       {#if headChar.script_forms}
@@ -352,7 +362,7 @@
   .top { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
   .form { font-family: var(--han); font-size: 1.5rem; line-height: 1.1; }
   /* trad + simp shown as equal peers (no demoting bracket), each with a small 繁/简 tag */
-  .form .ftag { font-family: var(--mono); font-size: 0.55rem; color: var(--faint); margin-right: 0.15rem; vertical-align: 0.35em; }
+  .form .ftag { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); margin-right: 0.2rem; vertical-align: 0.3em; }
   .form .fsep { color: var(--faint); margin: 0 0.4rem; }
   .strip { margin-top: 0.5rem; }
   .read { font-family: var(--mono); color: var(--muted); font-size: 0.9rem; }
@@ -371,7 +381,7 @@
   .cg:hover { background: var(--surface); }
   .cmeta { flex: 1; min-width: 0; }
   .crd { display: flex; flex-wrap: wrap; gap: 0.8rem; font-family: var(--mono); font-size: 0.8rem; }
-  .crd .rl { font-family: var(--mono); font-size: 0.85em; color: var(--faint); margin-right: 0.2rem; }
+  .crd .rl { font-family: var(--mono); font-size: 0.85em; color: var(--muted); margin-right: 0.2rem; }
   .cgl { font-size: 0.92rem; color: var(--muted); margin-top: 0.25rem; }
   .cln { display: flex; gap: 0.7rem; align-items: center; flex-wrap: wrap; margin-top: 0.3rem; font-size: 0.8rem; }
   .ids { font-family: var(--han); color: var(--muted); }
