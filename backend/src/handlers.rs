@@ -136,6 +136,24 @@ fn build_entry(
     let mut translations = Vec::new();
     let mut seen = same_form_ids;
     seen.insert(id);
+
+    // explicit equivalence edges first (colloquial-Cantonese → standard-Chinese 冇→沒有; curated
+    // cross-language 機場→空港). These are precise lexicographer/curated statements, so they lead the
+    // "written differently" bridge and are never crowded out by the fuzzy gloss-pivot synonyms below.
+    let mut eq = conn.prepare(
+        "SELECT CASE WHEN src_lexeme_id=?1 THEN dst_lexeme_id ELSE src_lexeme_id END \
+         FROM lexeme_equivalent WHERE src_lexeme_id=?1 OR dst_lexeme_id=?1",
+    )?;
+    let eq_ids: Vec<i64> = eq.query_map([id], |r| r.get(0))?.collect::<Result<_, _>>()?;
+    for other in eq_ids {
+        if !seen.insert(other) {
+            continue;
+        }
+        if let Some(l) = link_lite(conn, other, "equivalent", None)? {
+            translations.push(l);
+        }
+    }
+
     // prefer tight (specific) concepts; skip hopelessly generic ones to cut polysemy noise
     let mut s = conn.prepare(
         "SELECT s2.lexeme_id, co.label_en, MIN(co.member_count) AS spec \

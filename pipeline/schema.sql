@@ -147,6 +147,21 @@ CREATE TABLE sense_concept (
 ) WITHOUT ROWID;
 CREATE INDEX idx_sense_concept_concept ON sense_concept(concept_id);
 
+-- Explicit cross-variety equivalence: a precise lexicographer/curated statement that a word in one
+-- variety is normally written with a DIFFERENT word in another (colloquial Cantonese 冇 → standard
+-- Chinese 沒有; ja 空港 → zh 機場). Stronger and cleaner than the fuzzy English-gloss-pivot concept
+-- layer, so it drives the "written differently" bridge directly. Directed; the serving layer reads
+-- it in both directions.
+CREATE TABLE lexeme_equivalent (
+    src_lexeme_id INTEGER NOT NULL REFERENCES lexeme(id),
+    dst_lexeme_id INTEGER NOT NULL REFERENCES lexeme(id),
+    relation      TEXT NOT NULL,   -- 'colloquial-standard' (粵→中) | 'cross-lang'
+    source        TEXT NOT NULL,   -- 'cc-canto-inline' | 'curated'
+    PRIMARY KEY (src_lexeme_id, dst_lexeme_id, relation)
+) WITHOUT ROWID;
+CREATE INDEX idx_lex_equiv_src ON lexeme_equivalent(src_lexeme_id);
+CREATE INDEX idx_lex_equiv_dst ON lexeme_equivalent(dst_lexeme_id);
+
 -- ============================================================================
 -- 4. "Why" payloads (Phases 3-4) -- origin badges + etymology passthrough, phonology notes
 -- ============================================================================

@@ -1,0 +1,63 @@
+concept_en	zh_trad	yue_trad	ja	confidence	source
+airport	機場	機場	空港	high	Wiktionary 空港 (ja=airport; zh normal 機場, 空港 only Jp-influenced short for 航空港)
+bicycle	自行車	單車	自転車	high	Wiktionary 單車/自転車; zh-TW also 腳踏車
+mobile phone	手機	手提電話	携帯電話	high	Wiktionary 手提電話 (yue, HK/Macau); ja keitai denwa
+refrigerator	冰箱	雪櫃	冷蔵庫	high	Wiktionary 雪櫃 (chiefly Cantonese); ja reizōko 冷蔵庫
+taxi	計程車	的士	タクシー	high	Wiktionary 計程車 (zh-TW) / 的士 (yue dik-si); zh-CN 出租車; ja katakana loan
+film / movie	電影		映画	high	ja eiga 映画 vs zh 電影
+photograph	照片	相	写真	high	ja shashin 写真 vs zh 照片; yue colloq 相
+train	火車		電車	high	ja densha 電車 (trains generally) vs zh 火車; zh 電車=tram (false-friend)
+hospital	醫院		病院	high	Wikipedia Sino-Japanese vocab: zh 醫院 vs ja byōin 病院
+letter (mail)	信		手紙	high	SLJ FAQ false-friends; ja tegami 手紙 vs zh 信 (手紙=toilet paper in zh)
+newspaper	報紙		新聞	high	ja shinbun 新聞 vs zh 報紙; zh 新聞=news (false-friend)
+to study	學習		勉強	high	ja benkyō 勉強=study vs zh 勉強=reluctantly/force (false-friend)
+soap	肥皂	番梘		high	Wiktionary 番梘 (Cantonese) vs Mandarin 肥皂
+umbrella	雨傘	遮		high	Wiktionary 遮 (Cantonese, taboo avoidance) vs Mandarin 傘/雨傘
+key	鑰匙	鎖匙		high	Wiktionary 鎖匙 (Cantonese) vs Mandarin 鑰匙
+to drink	喝	飲		high	Wiktionary 飲 (Cantonese/literary) vs Mandarin 喝
+to eat	吃	食		high	Wiktionary: yue 食 (sik) vs Mandarin 吃 (chī)
+to sleep	睡	瞓		high	yue 瞓 (fan3) vs Mandarin 睡
+bento / boxed lunch	盒飯	飯盒	弁当	high	ja bentō 弁当; zh-CN 盒飯, yue/zh-TW 飯盒/便當
+company / firm	公司		会社	high	ja kaisha 会社 vs zh 公司 (公司 in ja = suffix '& Co.' only)
+desk	書桌		机	high	ja tsukue 机 vs zh 書桌; zh 机=machine (simp false-friend)
+vegetable	蔬菜		野菜	high	ja yasai 野菜 vs zh 蔬菜
+fruit	水果		果物	high	ja kudamono 果物 vs zh 水果
+egg	雞蛋	雞蛋	卵	high	ja tamago 卵 vs zh 雞蛋
+cooked rice / meal	米飯		ご飯	high	ja gohan ご飯/御飯 vs zh 米飯/飯
+milk	牛奶		牛乳	high	ja gyūnyū 牛乳 (also ミルク) vs zh 牛奶
+beer	啤酒	啤酒	ビール	high	ja bīru ビール (Dutch loan) vs zh 啤酒
+bread	麵包		パン	high	ja pan パン (Portuguese loan) vs zh 麵包
+station (train)	車站	車站	駅	high	ja eki 駅 (ja-only shinjitai of 驛) vs zh 車站
+ticket	票		切符	high	ja kippu 切符 (transport) vs zh 票
+airplane	飛機	飛機	飛行機	high	ja hikōki 飛行機 vs zh 飛機
+post office	郵局	郵局	郵便局	high	ja yūbinkyoku 郵便局 vs zh 郵局
+teacher	老師		先生	high	ja sensei 先生 vs zh 老師; zh 先生=Mr./sir (false-friend)
+book	書		本	high	ja hon 本 vs zh 書; zh 本=measure word/root
+dog	狗		犬	high	ja inu 犬 vs zh 狗
+money	錢		お金	high	ja okane お金/金 vs zh 錢
+shoes	鞋子	鞋	靴	high	ja kutsu 靴 vs zh 鞋(子); zh 靴=boot specifically
+to run	跑	走	走る	high	ja hashiru 走る=run vs zh 走=walk / 跑=run (false-friend)
+to walk	走	行	歩く	high	ja aruku 歩く vs zh 走; yue 行 (haang4)
+to look / watch	看		見る	high	ja miru 見る vs zh 看
+expensive	貴		高い	high	ja takai 高い (also of price) vs zh 貴; ja 貴=noble (false-friend)
+delicious	好吃	好食	美味しい	high	ja oishii 美味しい (wago) vs zh 好吃 / yue 好食
+restaurant	餐廳		レストラン	medium	ja resutoran レストラン (Western) / 食堂 native vs zh 餐廳
+toilet	廁所		トイレ	medium	ja toire トイレ / お手洗い vs zh 廁所/洗手間
+elevator	電梯	較	エレベーター	medium	ja erebētā エレベーター; zh 電梯; yue 較 colloquial
+bus	公車	巴士	バス	high	zh-TW 公車 / zh-CN 公共汽車; yue 巴士 (loan); ja basu バス
+toothbrush	牙刷	牙刷	歯ブラシ	medium	ja ha-burashi 歯ブラシ vs zh 牙刷
+toothpaste	牙膏	牙膏	歯磨き粉	medium	ja hamigakiko 歯磨き粉 vs zh 牙膏
+spoon	湯匙	匙羹	スプーン	medium	zh-TW 湯匙 / yue 匙羹 / ja supūn スプーン
+fork	叉子		フォーク	medium	ja fōku フォーク (loan) vs zh 叉子/叉
+tumbler / cup	杯子		コップ	medium	ja koppu コップ (Dutch loan, tumbler) vs zh 杯子
+door	門		ドア	medium	ja doa ドア (Western door) / 戸・扉 native vs zh 門
+shop / store	商店		店	medium	ja mise 店 vs zh 商店/店鋪
+juice	果汁		ジュース	medium	ja jūsu ジュース (loan) vs zh 果汁
+holiday / day off	假期	假期	休み	medium	ja yasumi 休み vs zh 假期
+breakfast	早餐	早餐	朝食	medium	ja chōshoku 朝食 / 朝ご飯 vs zh 早餐
+car / automobile	汽車	車	自動車	medium	ja jidōsha 自動車 / 車 vs zh 汽車; yue colloq 車
+road / street	街道	街	道路	medium	ja dōro 道路 / 道 vs zh 街道; yue 街
+clothes	衣服		服	medium	ja fuku 服 / 服装 vs zh 衣服
+knee	膝蓋	膝頭哥		medium	Wiktionary 膝頭哥 (Cantonese) vs Mandarin 膝蓋
+to enjoy (treat self)	享受	嘆		medium	Wiktionary 嘆 (yue taan3, e.g. 嘆冷氣) vs Mandarin 享受
+wine (grape)	葡萄酒		ワイン	medium	ja ワイン (loan) normal vs zh 葡萄酒

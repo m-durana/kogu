@@ -271,9 +271,26 @@ async fn translations_same_meaning() {
     let e = get(&format!("/entry/{id}")).await.1;
     let trans = e["translations"].as_array().unwrap();
     assert!(!trans.is_empty(), "expected 同義 translations for 手紙");
-    // every translation carries a concept label and is not the anchor word itself
-    assert!(trans.iter().all(|t| t["concept"].is_string()));
+    // every translation is either a concept-pivot synonym (carries a concept label) or an explicit
+    // equivalence edge (relation "equivalent"); never the anchor word itself.
+    assert!(trans.iter().all(|t| t["concept"].is_string() || t["relation"] == "equivalent"));
     assert!(trans.iter().any(|t| t["variety"] == "ja"), "expected a cross-language synonym");
+}
+
+// P4b. explicit equivalence: colloquial Cantonese 冇 bridges to standard Chinese 沒有 (the precise
+// CC-Canto "Mandarin equivalent" note, lifted into a structured lexeme_equivalent edge).
+#[tokio::test]
+async fn cantonese_equivalent_bridge() {
+    let hit = entry_of(&search("冇").await, "yue", "冇");
+    let id = hit["lexeme_id"].as_i64().unwrap();
+    let e = get(&format!("/entry/{id}")).await.1;
+    let trans = e["translations"].as_array().unwrap();
+    assert!(
+        trans
+            .iter()
+            .any(|t| t["relation"] == "equivalent" && t["variety"] == "zh" && t["headword"] == "沒有"),
+        "expected 冇 → 中 沒有 equivalent bridge, got {trans:?}"
+    );
 }
 
 // P6. orthographic "why": 学 carries reform-tagged edges to orthodox 學 (simp + shinjitai),
