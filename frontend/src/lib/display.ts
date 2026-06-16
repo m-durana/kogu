@@ -183,6 +183,10 @@ export function cleanIds(ids: string | null): string {
 export function cleanGloss(g: string): string {
   if (!g) return ''
   let s = g
+  // CC-Canto cross-reference notes: the variety is shown by the 粵語 row label, and the standard
+  // form by the "written differently" bridge - so drop them from the definition prose itself.
+  s = s.replace(/[;,]?\s*\(?\s*Mandarin equivalent\s*:[^)]*\)?/gi, '') // "(Mandarin equivalent: 沒有…)"
+  s = s.replace(/\s*\((?:Cantonese|Mandarin)\)/gi, '') // bare variety tags
   s = s.replace(/\s*\bCL:[^;]*(?=;|$)/g, '') // classifier clauses
   s = s.replace(/\[[A-Za-zÀ-ÿüÜ0-9·,.\s]*\]/g, '') // [hang2 kong1 gang3], [fa3] - before pipes
   s = s.replace(/([^\s;,，|[\]]+)\|([^\s;,，|[\]]+)/g, '$1') // 處|处 -> 處

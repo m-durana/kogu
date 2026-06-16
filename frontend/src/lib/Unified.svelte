@@ -132,18 +132,26 @@
         !richByVar.has(r.variety),
     )
     // meaning-equivalents: how this meaning is written in a language that DOESN'T share the glyph
-    // (機場 ↔ 日 空港). Only fill GAP languages - never pad a language that already has a same-glyph
-    // row with its synonyms (that just re-clutters). Cap per gap language so the comparison stays tight.
+    // (機場 ↔ 日 空港). Explicit equivalence edges (relation 'equivalent': 冇→沒有, curated cross-lang)
+    // are precise statements and ALWAYS show. Fuzzy gloss-pivot synonyms only fill GAP languages -
+    // never padding a language that already has a same-glyph row - and are capped, to stay tight.
     const haveForm = new Set(deduped.map((r) => r.variety))
     const haveKey = new Set(deduped.map((r) => `${r.variety}|${r.form}`))
+    // a curated equivalent for a language is the trusted answer - it suppresses that language's fuzzy
+    // gloss-pivot synonyms (so 自行車 shows 日 自転車, not also the noisy バイク / 夜車 matches).
+    const haveEquivVar = new Set(
+      (entry?.translations ?? []).filter((l) => l.relation === 'equivalent').map((l) => l.variety),
+    )
     const equivCount: Record<string, number> = {}
     for (const l of entry?.translations ?? []) {
-      if (haveForm.has(l.variety)) continue // language already represented by its own glyph
+      const explicit = l.relation === 'equivalent'
+      if (!explicit && haveForm.has(l.variety)) continue // language already represented by its own glyph
+      if (!explicit && haveEquivVar.has(l.variety)) continue // a curated equivalent already covers it
       const key = `${l.variety}|${l.headword}`
       if (haveKey.has(key)) continue
-      if ((equivCount[l.variety] ?? 0) >= 2) continue
+      if (!explicit && (equivCount[l.variety] ?? 0) >= 1) continue // tight cap on fuzzy synonyms
       haveKey.add(key)
-      equivCount[l.variety] = (equivCount[l.variety] ?? 0) + 1
+      if (!explicit) equivCount[l.variety] = (equivCount[l.variety] ?? 0) + 1
       deduped.push({
         id: l.lexeme_id,
         variety: l.variety,
@@ -177,40 +185,65 @@
     return ''
   })
 
-  // the searched word itself - promoted into the definition FIELD at the top (glyph + reading + full
-  // senses), so it never appears as a clickable "same entry" row in the comparison below. Prefer the
-  // row whose form is EXACTLY what was typed (搜 氣 → the Chinese 氣, not the Japanese 気 that ranked
-  // first), then the top search hit, then anything.
-  const primaryRow = $derived(
-    rows.find((r) => r.form === head && `${r.variety}|${r.form}` === primaryKey) ??
-      rows.find((r) => r.form === head) ??
-      rows.find((r) => `${r.variety}|${r.form}` === primaryKey) ??
-      rows[0],
+  // === The co-equal cross-language model ===
+  // There is NO single privileged headword. A Han glyph that is a real word in two or more languages
+  // is the NORM, not the exception - it is the whole point of the app. So the typed glyph's meaning is
+  // shown for EVERY language that writes it that way, side by side, co-equally (學 = 中 learn + 日
+  // learning; 手紙 = 中 toilet-paper + 日 letter). Then, separately, we show how the SAME meaning is
+  // written with a DIFFERENT glyph in another language (機場 ↔ 日 空港) as tappable bridges.
+
+  // Block A - the definition: every language that writes the word exactly as typed. Best-match-first:
+  // the language whose form you actually typed leads (it's the top search hit), the rest follow in
+  // 中/粵/日 order. Query-driven, not a hard-coded language rank - so no language is privileged by fiat.
+  const defRows = $derived(
+    rows
+      .filter((r) => r.kind === 'form' && r.form === head)
+      .sort((a, b) => {
+        const am = `${a.variety}|${a.form}` === primaryKey ? 0 : 1
+        const bm = `${b.variety}|${b.form}` === primaryKey ? 0 : 1
+        return am !== bm ? am - bm : VORDER.indexOf(a.variety) - VORDER.indexOf(b.variety)
+      }),
+  )
+  const isGlyphSearch = $derived(defRows.length > 0)
+
+  // Block B - the bridge: how the same meaning is written DIFFERENTLY in another language (a different
+  // glyph or the cross-script form). Everything that isn't a same-glyph definition. Only meaningful
+  // once there's a glyph definition to bridge FROM.
+  const bridgeRows = $derived(
+    isGlyphSearch
+      ? rows
+          .filter((r) => !(r.kind === 'form' && r.form === head))
+          // trusted curated equivalents lead; fuzzy gloss-pivot synonyms follow. Within each, 中/粵/日.
+          .sort((a, b) => {
+            const ae = a.relation === 'equivalent' ? 0 : 1
+            const be = b.relation === 'equivalent' ? 0 : 1
+            return ae !== be ? ae - be : VORDER.indexOf(a.variety) - VORDER.indexOf(b.variety)
+          })
+      : [],
   )
 
-  // full senses for the field: the entry's POS-tagged senses when loaded, else the instant hit glosses
-  const fieldSenses = $derived.by<{ pos: string | null; gloss: string }[]>(() => {
-    if (entry && primaryRow && entry.lexeme_id === primaryRow.id && entry.senses.length)
-      return entry.senses.map((s) => ({ pos: s.pos, gloss: cleanGloss(s.gloss_en) })).filter((s) => s.gloss)
-    return (primaryRow?.glosses ?? []).map(cleanGloss).filter(Boolean).map((g) => ({ pos: null, gloss: g }))
-  })
+  // English / pinyin search (nothing matches the typed glyph): fall back to a plain results list.
+  const listRows = $derived(isGlyphSearch ? [] : rows)
 
-  // the comparison below the field: every OTHER language entry, grouped (中文 / 粵語 / 日本語),
-  // same-glyph rows before meaning-equivalents. The searched word is excluded (it's the field).
-  const sections = $derived(
-    VORDER.map((v) => ({
-      variety: v as Variety,
-      rows: rows
-        .filter((r) => r.variety === v && r !== primaryRow)
-        .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'form' ? -1 : 1)),
-    })).filter((s) => s.rows.length > 0),
-  )
-
-  // a "different meaning" flag is a contrast against the searched word - applies to the other rows.
-  function isFalseFriendRow(r: Row): boolean {
-    return rows.length > 1 && r.relation === 'false-friend' && `${r.variety}|${r.form}` !== primaryKey
+  // numbered senses for a definition row - the full hit glosses (every sense), cleaned. Identical
+  // treatment for every language (no POS on one and not another) so the languages stay co-equal.
+  // Capped with a per-row toggle so a 13-sense kanji doesn't wall off the bridge below.
+  const SENSE_CAP = 6
+  let expanded = $state(new Set<number>())
+  function senseList(r: Row): string[] {
+    return r.glosses.map(cleanGloss).filter(Boolean)
   }
-  const hasFalseFriend = $derived(rows.some(isFalseFriendRow))
+  function toggleSenses(id: number) {
+    const n = new Set(expanded)
+    if (n.has(id)) n.delete(id)
+    else n.add(id)
+    expanded = n
+  }
+
+  // false friends are SAME-glyph words whose meaning diverges (手紙) - they sit co-equally in block A,
+  // flagged by a single note. (A different-glyph bridge row is never a false friend - it's just the
+  // other language's word.)
+  const hasFalseFriend = $derived(defRows.length > 1 && defRows.some((r) => r.relation === 'false-friend'))
 
   // reading systems, labelled in plain words (中 Mandarin pinyin, 粵 Cantonese jyutping,
   // 日 Japanese on'yomi / kun'yomi) so it's obvious which language each reading is. Each maps to the
@@ -252,49 +285,67 @@
 </script>
 
 <article class="u">
-  <!-- the searched word + its full definition, right under the search box -->
-  {#if primaryRow}
-    <section class="field">
-      <div class="fhead">
-        <h2 class="glyph">{#if primaryRow.alt}<span class="ftag">{formTag(primaryRow.formScript)}</span>{primaryRow.form}<span class="fsep">·</span><span class="ftag">{formTag(primaryRow.altScript)}</span>{primaryRow.alt}{:else}{primaryRow.form}{/if}</h2>
-        <div class="fmeta">
-          <span class="fvar">{varietyLabel(primaryRow.variety)} {sectionName[primaryRow.variety]}</span>
-          {#if primaryRow.reading}<span class="fread">{primaryRow.variety === 'zh' ? pinyinMarks(primaryRow.reading) : primaryRow.reading}</span>{/if}
-        </div>
+  <!-- one tappable cross-language row (bridge band + plain results list) -->
+  {#snippet rowItem(r: Row)}
+    <li>
+      <button class="lang" onclick={() => onsearch(r.form)} title="look up {r.form}">
+        <span class="body">
+          <span class="top">
+            <span class="lvar"><span class="vh">{varietyLabel(r.variety)}</span></span>
+            <span class="form">{#if r.alt}<span class="ftag">{formTag(r.formScript)}</span>{r.form}<span class="fsep">·</span><span class="ftag">{formTag(r.altScript)}</span>{r.alt}{:else}{r.form}{/if}</span>
+            {#if r.reading}<span class="read">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>{/if}
+          </span>
+          {#if briefGloss(r.glosses)}<span class="gloss">{briefGloss(r.glosses)}</span>{/if}
+        </span>
+      </button>
+    </li>
+  {/snippet}
+
+  {#if isGlyphSearch}
+    <!-- Block A - the definition: the typed glyph across every language that writes it, co-equally -->
+    <section class="def">
+      <h2 class="glyph">{head}</h2>
+      <div class="defs">
+        {#each defRows as r (r.id)}
+          {@const ss = senseList(r)}
+          <div class="dl">
+            <div class="dlh">
+              <span class="dvar">{sectionName[r.variety]}</span>
+              {#if r.alt}<span class="dform"><span class="ftag">{formTag(r.formScript)}</span>{r.form}<span class="fsep">·</span><span class="ftag">{formTag(r.altScript)}</span>{r.alt}</span>{/if}
+              {#if r.reading}<span class="dread">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>{/if}
+            </div>
+            {#if ss.length}
+              <ol class="senses">
+                {#each (expanded.has(r.id) ? ss : ss.slice(0, SENSE_CAP)) as g}<li><span class="sg">{g}</span></li>{/each}
+              </ol>
+              {#if ss.length > SENSE_CAP}
+                <button class="more" onclick={() => toggleSenses(r.id)}>{expanded.has(r.id) ? 'show less' : `show all ${ss.length}`}</button>
+              {/if}
+            {/if}
+          </div>
+        {/each}
       </div>
-      {#if fieldSenses.length}
-        <ol class="senses">
-          {#each fieldSenses as s}<li>{#if s.pos}<span class="pos">{s.pos}</span>{/if}<span class="sg">{s.gloss}</span></li>{/each}
-        </ol>
+      {#if hasFalseFriend}
+        <p class="note">同字 · same characters, different meaning by language.</p>
       {/if}
     </section>
-  {/if}
 
-  <!-- the comparison: how this word lives in the OTHER languages -->
-  {#each sections as sec (sec.variety)}
-    <section class="langsec">
-      <h3 class="seclabel"><span class="vh">{varietyLabel(sec.variety)}</span> <span class="dim">{sectionName[sec.variety]}</span></h3>
+    {#if bridgeRows.length}
+      <!-- Block B - the bridge: the same meaning, written differently elsewhere. Tappable pivots. -->
+      <section class="bridge">
+        <h3>written differently <span class="dim">異形</span></h3>
+        <ul class="langs">
+          {#each bridgeRows as r (r.id)}{@render rowItem(r)}{/each}
+        </ul>
+      </section>
+    {/if}
+  {:else if listRows.length}
+    <!-- English / reading search: a plain results list -->
+    <section class="bridge">
       <ul class="langs">
-        {#each sec.rows as r (r.id)}
-          <li>
-            <button class="lang" onclick={() => onsearch(r.form)} title="look up {r.form}">
-              <span class="body">
-                <span class="top">
-                  <span class="form">{#if r.alt}<span class="ftag">{formTag(r.formScript)}</span>{r.form}<span class="fsep">·</span><span class="ftag">{formTag(r.altScript)}</span>{r.alt}{:else}{r.form}{/if}</span>
-                  {#if r.reading}<span class="read">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>{/if}
-                  {#if r.kind === 'equiv'}<span class="eq">same meaning</span>{:else if isFalseFriendRow(r)}<span class="ff">different meaning</span>{/if}
-                </span>
-                {#if briefGloss(r.glosses)}<span class="gloss">{briefGloss(r.glosses)}</span>{/if}
-              </span>
-            </button>
-          </li>
-        {/each}
+        {#each listRows as r (r.id)}{@render rowItem(r)}{/each}
       </ul>
     </section>
-  {/each}
-
-  {#if hasFalseFriend}
-    <p class="note">同字 · same characters, but the meaning differs by language.</p>
   {/if}
 
   {#if entry && single && headChar}
@@ -379,39 +430,42 @@
 
 <style>
   .u { display: flex; flex-direction: column; }
-  .glyph { font-family: var(--han); font-size: clamp(3rem, 16vw, 4.5rem); line-height: 1; margin: 0; font-weight: 500; }
-  .glyph .ftag { font-family: var(--mono); font-size: 0.9rem; color: var(--muted); margin-right: 0.25rem; vertical-align: 0.5em; }
-  .glyph .fsep { color: var(--faint); margin: 0 0.35rem; }
 
-  /* the searched word + its full definition - the hero block under the search box */
-  .field { margin-bottom: 1.4rem; }
-  .fhead { display: flex; align-items: baseline; gap: 0.9rem; flex-wrap: wrap; }
-  .fmeta { display: flex; flex-direction: column; gap: 0.1rem; }
-  .fvar { font-family: var(--han); font-size: 0.8rem; color: var(--muted); letter-spacing: 0.04em; }
-  .fread { font-family: var(--mono); font-size: 1rem; color: var(--text); }
-  .senses { margin: 0.9rem 0 0; padding: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 0.45rem; }
-  .senses li { position: relative; padding-left: 1.6rem; font-size: 1rem; line-height: 1.45; color: var(--text); counter-increment: s; }
+  /* Block A - the definition: the typed glyph (shared form, shown once), then every language that
+     writes it, co-equally. No language is the hero; the glyph is. */
+  /* matches .bridge so def→next-heading spacing is identical whether a bridge band follows or not
+     (margins don't collapse inside the flex column, so keep both sides small + let h3's top margin lead) */
+  .def { margin-bottom: 0.6rem; }
+  .glyph { font-family: var(--han); font-size: clamp(3rem, 16vw, 4.5rem); line-height: 1; margin: 0 0 0.9rem; font-weight: 500; }
+  .defs { display: flex; flex-direction: column; gap: 1.2rem; }
+  .dlh { display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap; }
+  .dvar { font-family: var(--han); font-size: 0.95rem; color: var(--muted); letter-spacing: 0.03em; }
+  .dform { font-family: var(--han); font-size: 1.2rem; }
+  .dform .ftag { font-family: var(--mono); font-size: 0.62rem; color: var(--muted); margin-right: 0.18rem; vertical-align: 0.35em; }
+  .dform .fsep { color: var(--faint); margin: 0 0.35rem; }
+  .dread { font-family: var(--mono); font-size: 1rem; color: var(--text); }
+  .senses { margin: 0.5rem 0 0; padding: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 0.35rem; }
+  .senses li { position: relative; padding-left: 1.5rem; font-size: 1rem; line-height: 1.45; color: var(--text); counter-increment: s; }
   .senses li::before { content: counter(s); position: absolute; left: 0; top: 0.05rem; font-family: var(--mono); font-size: 0.72rem; color: var(--faint); }
-  .senses .pos { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0.05rem 0.3rem; margin-right: 0.4rem; vertical-align: 0.08em; }
+  .more { background: none; border: none; padding: 0.3rem 0; margin-top: 0.1rem; font-family: var(--mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .more:hover { color: var(--text); background: none; }
 
-  /* the cross-language comparison - one section per language, the heart of the app */
-  .langsec { margin-bottom: 0.6rem; }
-  .seclabel { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 0.6rem 0 0.1rem; }
-  .seclabel .vh { font-family: var(--han); font-size: 0.95rem; margin-right: 0.1rem; }
+  /* Block B - the bridge: the same meaning written differently elsewhere. Tappable rows. */
+  .bridge { margin-bottom: 0.6rem; }
   .langs { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
   .langs li { border-bottom: 1px solid var(--border); }
   .lang { display: flex; gap: 0.8rem; align-items: flex-start; width: 100%; text-align: left; background: none; border: none; border-radius: 0; padding: 0.7rem 0.3rem; }
   .lang:hover { background: var(--surface); }
   .body { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; flex: 1; }
   .top { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
+  .lvar { align-self: center; }
+  .lvar .vh { font-family: var(--han); font-size: 0.95rem; color: var(--muted); }
   .form { font-family: var(--han); font-size: 1.5rem; line-height: 1.1; }
   /* trad + simp shown as equal peers (no demoting bracket), each with a small 繁/简 tag */
   .form .ftag { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); margin-right: 0.2rem; vertical-align: 0.3em; }
   .form .fsep { color: var(--faint); margin: 0 0.4rem; }
   .strip { margin-top: 0.5rem; }
   .read { font-family: var(--mono); color: var(--muted); font-size: 0.9rem; }
-  .ff { font-size: 0.6rem; line-height: 1; color: var(--faint); border: 1px dashed var(--border-strong); border-radius: 4px; padding: 0.2rem 0.35rem; align-self: center; display: inline-flex; align-items: center; }
-  .eq { font-size: 0.6rem; line-height: 1; color: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 0.2rem 0.35rem; align-self: center; display: inline-flex; align-items: center; }
   .gloss { color: var(--text); font-size: 0.98rem; line-height: 1.4; }
 
   .note { color: var(--faint); font-size: 0.8rem; margin: 0.3rem 0 0; }
