@@ -189,6 +189,7 @@ export function cleanGloss(g: string): string {
   // form by the "written differently" bridge - so drop them from the definition prose itself.
   s = s.replace(/[;,]?\s*\(?\s*Mandarin equivalent\s*:[^)]*\)?/gi, '') // "(Mandarin equivalent: 沒有…)"
   s = s.replace(/\s*\((?:Cantonese|Mandarin)\)/gi, '') // bare variety tags
+  s = s.replace(/\(bound form\)\s*/gi, '') // grammatical jargon - the char being a bound morpheme is noise here
   s = s.replace(/\s*\bCL:[^;]*(?=;|$)/g, '') // classifier clauses
   s = s.replace(/\[[A-Za-zÀ-ÿüÜ0-9·,.\s]*\]/g, '') // [hang2 kong1 gang3], [fa3] - before pipes
   s = s.replace(/([^\s;,，|[\]]+)\|([^\s;,，|[\]]+)/g, '$1') // 處|处 -> 處
@@ -223,7 +224,7 @@ export function isMinorGloss(g: string): boolean {
   const s = cleanGloss(g).toLowerCase()
   if (!s) return true
   return (
-    /^(surname\b|old variant of|variant of|used in|see\b|abbr\b|\(bound form\))/.test(s) ||
+    /^(surname\b|old variant of|variant of|used in|see\b|abbr\b)/.test(s) ||
     s.includes('radical in chinese characters') ||
     s.includes('kangxi radical')
   )

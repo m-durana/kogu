@@ -209,6 +209,11 @@ describe('cleanGloss - strip CC-CEDICT markup', () => {
   it('bracket removed before pipe collapse (no leftover tail)', () => {
     expect(cleanGloss('used in 自個兒|自个儿[zi4 ge3 r5]')).toBe('used in 自個兒')
   })
+  it('strips "(bound form)" grammatical jargon', () => {
+    expect(cleanGloss('(bound form) row; line; (bound form) trade')).toBe('row; line; trade')
+    // a real sense starting with (bound form) is no longer treated as minor
+    expect(isMinorGloss('(bound form) row; line')).toBe(false)
+  })
   it('strips CC-Canto (Cantonese) tag and Mandarin-equivalent note', () => {
     // the 粵語 row label + the "written differently" bridge now carry this info structurally
     expect(cleanGloss('to not have (Cantonese) (Mandarin equivalent: 沒有|没有[mei2 you3])')).toBe('to not have')
