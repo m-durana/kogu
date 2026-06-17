@@ -295,9 +295,10 @@ fn char_compounds(
     exclude_id: i64,
 ) -> rusqlite::Result<Vec<LinkLite>> {
     let mut cs = conn.prepare(
+        // sorted by USAGE: most-frequent words first (NULL freq last), then shorter, then id.
         "SELECT l.id FROM form_char fc JOIN lexeme l ON l.id = fc.lexeme_id \
          WHERE fc.cp = ?1 AND l.id <> ?2 AND l.variety = ?3 GROUP BY l.id \
-         ORDER BY MIN(fc.flen) ASC, l.freq IS NULL, l.freq DESC, l.id ASC LIMIT 14",
+         ORDER BY l.freq IS NULL, l.freq DESC, MIN(fc.flen) ASC, l.id ASC LIMIT 14",
     )?;
     let mut out = Vec::new();
     for v in ["zh", "yue", "ja"] {

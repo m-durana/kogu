@@ -244,6 +244,10 @@
     const on = headChar.readings.filter((r) => r.kind === 'onyomi' && isKana(r.value)).map((r) => r.value)
     const kun = headChar.readings.filter((r) => r.kind === 'kunyomi' && isKana(r.value)).map((r) => r.value)
     if (!on.length && !kun.length) return null
+    // Kanjidic lists readings for MANY Chinese-only kanji (媽 → はは) that aren't actually used in
+    // Japanese. A reliable "really used in Japanese" signal is: the kanji appears in at least one
+    // Japanese word. If it doesn't (媽 → 0 ja words), don't fabricate a Japanese definition row.
+    if (!(entry?.compounds ?? []).some((l) => l.variety === 'ja')) return null
     const gloss = headChar.gloss_ja || headChar.gloss_en || ''
     if (!gloss) return null
     // the Japanese form is the shinjitai if one exists, else the orthodox (traditional) glyph - NOT
@@ -262,7 +266,9 @@
       formScript: '',
       altScript: '',
       reading: [on.join(' '), kun.join(' ')].filter(Boolean).join('    '),
-      glosses: [gloss],
+      // Kanjidic packs all senses into one ';'-joined string; split so it enumerates (1. ocean 2. sea
+      // …) like every other definition instead of rendering as one semicolon blob.
+      glosses: gloss.split(';').map((s) => s.trim()).filter(Boolean),
       relation: 'self',
       kind: 'form',
       synthetic: true,
@@ -696,15 +702,16 @@
                 <!-- the language writes the same character with a different glyph (Japan: 电 → 電) -->
                 <span class="dform" lang={langTag(r.variety)} style="font-family:{hanFont(r.variety)}">{r.form}</span>
               {/if}
-              {#if r.variety === 'ja' && jaReadItems.length}
-                <!-- the kanji's full on/kun readings (kana + romaji) live right on the 日 row now — no
-                     separate "readings" section. Clamped to ONE line; "+" reveals the rest when it wraps. -->
+              {#if r.variety === 'ja' && r.synthetic && jaReadItems.length}
+                <!-- a SYNTHETIC ja row (kanji used only in compounds) shows the character's full on/kun
+                     (kana + romaji), clamped to one line with a "+". A REAL ja word-row shows its OWN
+                     reading instead (so 日's ひ and にち rows don't both show the whole list). -->
                 <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe>{#each jaReadItems as it, i}{#if i}<span class="rsep">·</span>{/if}{it.main}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{jaReadOpen ? '−' : '+'}</button>{/if}
               {:else if r.reading}
                 <span class="dread">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>
               {/if}
               {#if r.variety === 'zh' && headJyut && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread">{headJyut}</span>{/if}
-              {#if isBoundForm(r.glosses)}<button class="btag" onclick={() => openBound(r)} title="bound form — only used in compounds">bound</button>{/if}
+              {#if isBoundForm(r.glosses) || r.synthetic}<button class="btag" onclick={() => openBound(r)} title="bound form — only used in compounds">bound</button>{/if}
             </div>
             {#if ss.length}
               <ol class="senses" class:clamp={!expanded.has(r.id) && overflow.has(r.id)} use:clampProbe={{ id: r.id, rem: 2.9 }}>
