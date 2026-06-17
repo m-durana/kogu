@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -288,6 +288,37 @@ describe('isMinorGloss / meaningfulGlossCount', () => {
   it('meaningfulGlossCount ignores minor glosses', () => {
     expect(meaningfulGlossCount(['surname Mu', 'tree; wood'])).toBe(1)
     expect(meaningfulGlossCount(['surname Shui'])).toBe(0)
+  })
+})
+
+describe('glossParts - tappable cross-reference target', () => {
+  it('splits "variant of X" so the glyph is a link', () => {
+    expect(glossParts('variant of 著')).toEqual([
+      { v: 'variant of ' },
+      { v: '著', link: true },
+      { v: '' },
+    ])
+  })
+  it('handles "old variant of", "used in", "see", "see also"', () => {
+    expect(glossParts('old variant of 群')[1]).toEqual({ v: '群', link: true })
+    expect(glossParts('used in 乜斜')[1]).toEqual({ v: '乜斜', link: true })
+    expect(glossParts('see 你')[1]).toEqual({ v: '你', link: true })
+    expect(glossParts('see also 妳')[1]).toEqual({ v: '妳', link: true })
+  })
+  it('keeps trailing prose after the glyph as a separate text part', () => {
+    expect(glossParts('variant of 着 (to wear)')).toEqual([
+      { v: 'variant of ' },
+      { v: '着', link: true },
+      { v: ' (to wear)' },
+    ])
+  })
+  it('returns a single plain part for an ordinary gloss (no link)', () => {
+    expect(glossParts('to study; to learn')).toEqual([{ v: 'to study; to learn' }])
+    // "variant" without a following Han glyph is not a cross-reference
+    expect(glossParts('a variant spelling')).toEqual([{ v: 'a variant spelling' }])
+  })
+  it('does not match a target that is not a Han glyph', () => {
+    expect(glossParts('see above')).toEqual([{ v: 'see above' }])
   })
 })
 

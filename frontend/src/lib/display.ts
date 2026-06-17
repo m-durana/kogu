@@ -235,6 +235,16 @@ export function meaningfulGlossCount(glosses: string[]): number {
   return glosses.filter((g) => !isMinorGloss(g)).length
 }
 
+/** Split a cross-reference gloss so its target glyph is tappable: "variant of 著" → the 著 becomes a
+ * link that pivots to the real entry, so a dead-end glyph still gets you to the meaning. Matches the
+ * leading "variant of / used in / see / see also" cue followed by a Han run; everything else is one
+ * plain text part. (CJK range, not \p{Han}: the build-time regex parser rejects script-name escapes.) */
+export type GlossPart = { v: string; link?: boolean }
+export function glossParts(g: string): GlossPart[] {
+  const m = g.match(/^((?:old )?variant of|used in|see also|see)\s+([㐀-鿿豈-﫿]+)(.*)$/)
+  return m ? [{ v: m[1] + ' ' }, { v: m[2], link: true }, { v: m[3] }] : [{ v: g }]
+}
+
 export type FuriToken = { t: 'text'; v: string } | { t: 'ruby'; base: string; rt: string }
 
 /** Turn inline readings into real furigana tokens: 甘(あま)し -> ruby[甘|あま] + "し".

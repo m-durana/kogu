@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CharInfo, Entry, Hit, ReadingKV, Variety } from './types'
-  import { primaryForm, varietyLabel, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, splitRecon, formTag } from './display'
+  import { primaryForm, varietyLabel, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, splitRecon, formTag, glossParts } from './display'
   import ScriptForms from './ScriptForms.svelte'
   import { AlertTriangle } from '@lucide/svelte'
   import { readingRomaji } from './romaji'
@@ -299,6 +299,7 @@
     return [...all.filter((g) => !isMinorGloss(g)), ...all.filter((g) => isMinorGloss(g))]
   }
 
+
   function toggleSenses(id: number) {
     const n = new Set(expanded)
     if (n.has(id)) n.delete(id)
@@ -451,7 +452,7 @@
             </div>
             {#if ss.length}
               <ol class="senses" class:clamp={!expanded.has(r.id) && overflow.has(r.id)} use:clampProbe={{ id: r.id, rem: 2.9 }}>
-                {#each ss as g}<li><span class="sg">{g}</span></li>{/each}
+                {#each ss as g}<li><span class="sg">{#each glossParts(g) as p}{#if p.link}<button class="xref" onclick={() => onsearch(p.v)}>{p.v}</button>{:else}{p.v}{/if}{/each}</span></li>{/each}
               </ol>
               {#if overflow.has(r.id)}
                 <button class="more" onclick={() => toggleSenses(r.id)}>{expanded.has(r.id) ? 'show less' : 'show more'}</button>
@@ -593,6 +594,9 @@
   .senses li { position: relative; padding-left: 1.5rem; font-size: 1rem; line-height: 1.45; color: var(--text); counter-increment: s; }
   .senses li::before { content: counter(s); position: absolute; left: 0; top: 0.05rem; font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
   .more { background: none; border: none; padding: 0.3rem 0; margin-top: 0.1rem; font-family: var(--mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  /* tappable cross-reference target inside a gloss ("variant of 著" → jump to 著) */
+  .xref { font-family: var(--han); color: var(--text); background: none; border: none; padding: 0; font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+  .xref:hover { color: #fff; background: none; }
   .more:hover { color: var(--text); background: none; }
 
   /* Block B - the bridge: the same meaning written differently elsewhere. Tappable rows. */
