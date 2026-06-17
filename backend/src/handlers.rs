@@ -696,15 +696,41 @@ fn component_gloss(conn: &rusqlite::Connection, ch: char) -> Option<String> {
     .ok()
     .flatten()
 }
-/// Distinct Han components of a character (one level of IDS), each with its meaning — the "what the
-/// parts are" layer of the structure section. Order-preserving, deduplicated.
+/// Distinct Han components of a character with their meanings — the "what the parts are" layer of the
+/// structure section. Prefers the structured phono-semantic roles (char_component: 媽 = 女 semantic +
+/// 馬 phonetic) when present; otherwise falls back to the flat one-level IDS leaves (no role).
+/// Order-preserving, deduplicated.
 fn char_components(conn: &rusqlite::Connection, ch: char, ids: Option<&str>) -> Vec<Component> {
+    // structured roles first (Wiktionary Han-compound)
+    if let Ok(mut s) = conn.prepare(
+        "SELECT component, role, gloss FROM char_component WHERE cp=?1 ORDER BY ord",
+    ) {
+        let rows: Vec<(String, Option<String>, Option<String>)> = s
+            .query_map([ch as i64], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .map(|it| it.filter_map(Result::ok).collect())
+            .unwrap_or_default();
+        if !rows.is_empty() {
+            let mut seen = std::collections::HashSet::new();
+            let mut out = Vec::new();
+            for (comp, role, gloss) in rows {
+                if let Some(c) = comp.chars().next() {
+                    if seen.insert(c) {
+                        // fall back to the parent-character gloss when the template omitted one
+                        let gloss = gloss.or_else(|| component_gloss(conn, c));
+                        out.push(Component { ch: comp, gloss, role });
+                    }
+                }
+            }
+            return out;
+        }
+    }
+    // fallback: flat IDS leaves, no role information
     let leaves = ids.map(|s| han_leaves(s, ch)).unwrap_or_default();
     let mut seen = std::collections::HashSet::new();
     let mut out = Vec::new();
     for c in leaves {
         if seen.insert(c) {
-            out.push(Component { ch: c.to_string(), gloss: component_gloss(conn, c) });
+            out.push(Component { ch: c.to_string(), gloss: component_gloss(conn, c), role: None });
         }
     }
     out

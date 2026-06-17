@@ -506,22 +506,23 @@ async fn char_components_have_meanings() {
 }
 #[tokio::test]
 async fn char_components_radical_variant_parent_gloss() {
-    // 倭 = 亻 + 委; 亻 must gloss via its parent 人 ("man; people…"), not the bare "radical number 9"
+    // 倭 = 人(semantic) + 委(phonetic). With phono-semantic role data we now surface the real,
+    // lookupable component 人 ("person") glossed correctly — not the bound radical 亻 nor "radical no.".
     let hit = entry_of(&search("倭").await, "zh", "倭");
     let e = get(&format!("/entry/{}", hit["lexeme_id"].as_i64().unwrap())).await.1;
     let comps = components(&e, 0);
     assert!(
-        comps.iter().any(|(c, g)| c == "亻" && (g.contains("people") || g.contains("man")) && !g.contains("radical")),
-        "亻 → person/people, not 'radical number 9': {comps:?}"
+        comps.iter().any(|(c, g)| c == "人" && (g.contains("person") || g.contains("people") || g.contains("man")) && !g.contains("radical")),
+        "倭 → 人 person, not 'radical number 9': {comps:?}"
     );
 }
 #[tokio::test]
 async fn char_components_water_radical_form() {
-    // 江 = 氵 + 工; 氵 glossed as water (parent 水)
+    // 江 = 水(semantic) + 工(phonetic); the meaning component is water
     let hit = entry_of(&search("江").await, "zh", "江");
     let e = get(&format!("/entry/{}", hit["lexeme_id"].as_i64().unwrap())).await.1;
     let comps = components(&e, 0);
-    assert!(comps.iter().any(|(c, g)| c == "氵" && g.contains("water")), "氵 → water: {comps:?}");
+    assert!(comps.iter().any(|(c, g)| c == "水" && g.contains("water")), "江 → 水 water: {comps:?}");
 }
 #[tokio::test]
 async fn char_components_repeated_base_meaning() {
@@ -1018,4 +1019,57 @@ async fn used_count_present_and_nonnegative() {
     let n = e["characters"][0]["used_count"].as_i64().expect("used_count present");
     assert!(n >= 0, "used_count is non-negative");
     assert!(n > 50, "山 is common");
+}
+
+// ── #103: phono-semantic component roles (媽 = 女 semantic + 馬 phonetic) ──
+fn comp_role<'a>(e: &'a Value, ch: &str) -> Option<&'a str> {
+    e["characters"][0]["components"]
+        .as_array()?
+        .iter()
+        .find(|c| c["ch"] == ch)
+        .and_then(|c| c["role"].as_str())
+}
+
+#[tokio::test]
+async fn ma_has_semantic_and_phonetic_components() {
+    let e = top_entry("媽").await;
+    assert_eq!(comp_role(&e, "女"), Some("semantic"), "女 carries the meaning");
+    assert_eq!(comp_role(&e, "馬"), Some("phonetic"), "馬 carries the sound");
+}
+
+#[tokio::test]
+async fn jiang_water_is_semantic() {
+    let e = top_entry("江").await;
+    assert_eq!(comp_role(&e, "水"), Some("semantic"));
+    assert_eq!(comp_role(&e, "工"), Some("phonetic"));
+}
+
+#[tokio::test]
+async fn ai_heart_is_semantic() {
+    let e = top_entry("愛").await;
+    assert_eq!(comp_role(&e, "心"), Some("semantic"));
+    assert_eq!(comp_role(&e, "旡"), Some("phonetic"));
+}
+
+#[tokio::test]
+async fn non_phonosemantic_char_falls_back_with_null_roles() {
+    // 好 (ideogrammic 女+子) has no Han-compound role data → IDS-leaf fallback, components present,
+    // every role null. (U+597D = 22909)
+    let (_, e) = get("/entry/-22909").await;
+    let comps = e["characters"][0]["components"].as_array().unwrap();
+    assert!(!comps.is_empty(), "好 still lists components via IDS fallback");
+    assert!(comps.iter().all(|c| c["role"].is_null()), "fallback components have no role");
+}
+
+#[tokio::test]
+async fn component_roles_are_valid_values() {
+    for q in ["媽", "江", "清", "錢", "愛"] {
+        let e = top_entry(q).await;
+        for c in e["characters"][0]["components"].as_array().unwrap() {
+            match c["role"].as_str() {
+                None | Some("semantic") | Some("phonetic") | Some("form") | Some("iconic") => {}
+                other => panic!("{q}: unexpected role {other:?}"),
+            }
+        }
+    }
 }

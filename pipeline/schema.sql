@@ -61,6 +61,18 @@ CREATE TABLE char_reading (
 ) WITHOUT ROWID;
 CREATE INDEX idx_char_reading_value ON char_reading(kind, value);
 
+-- Phono-semantic composition: which component carries the MEANING vs the SOUND (媽 = 女 semantic +
+-- 馬 phonetic). From Wiktionary's structured `Han compound` template (extract_components.py); used to
+-- badge the structure section. Distinct from the IDS decomposition (which has no role information).
+CREATE TABLE char_component (
+    cp        INTEGER NOT NULL REFERENCES character(cp),
+    ord       INTEGER NOT NULL,            -- order within the character (left→right / top→bottom)
+    component TEXT NOT NULL,               -- the component glyph
+    role      TEXT,                        -- 'semantic' | 'phonetic' | 'form' | 'iconic' | NULL
+    gloss     TEXT,                        -- optional component meaning from the template
+    PRIMARY KEY (cp, ord)
+) WITHOUT ROWID;
+
 -- The variant graph. Directed edge: child glyph -> orthodox parent.
 -- type ∈ ('simplification','shinjitai','z-variant','semantic-variant','region-standard').
 -- identity-class types (simplification, shinjitai, z-variant) auto-expand at query time with a

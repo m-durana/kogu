@@ -312,6 +312,13 @@
   // component → meaning, so the structure section explains the parts (女 "woman", 木 "tree")
   const compGloss = $derived(new Map((headChar?.components ?? []).map((c) => [c.ch, c.gloss])))
   const meaningOf = (ch: string) => firstSense(compGloss.get(ch) ?? '')
+  // phono-semantic roles: when the backend knows which component carries the MEANING vs the SOUND
+  // (媽 = 女 semantic + 馬 phonetic) we render the component list with role badges instead of the flat
+  // "made of" parts. Only when at least one role is known.
+  const roleParts = $derived(single && headChar ? headChar.components : [])
+  const hasRoles = $derived(roleParts.some((c) => c.role === 'semantic' || c.role === 'phonetic'))
+  const roleBadge = (role: string | null) =>
+    role === 'semantic' ? 'meaning' : role === 'phonetic' ? 'sound' : ''
 
   // Block B - the bridge: how the same meaning is written DIFFERENTLY in another language (a different
   // glyph or the cross-script form). Everything that isn't a same-glyph definition. Only meaningful
@@ -611,8 +618,10 @@
   let jaReadOver = $state(false)
   function readProbe(node: HTMLElement) {
     const measure = () => {
-      const line = parseFloat(getComputedStyle(node).lineHeight) || 22
-      jaReadOver = node.scrollHeight > line * 1.6
+      // only meaningful while clamped (one line); when expanded keep the toggle visible so it can
+      // collapse again. Horizontal overflow = the readings would be clipped → show "+".
+      if (!node.classList.contains('clamp')) return
+      jaReadOver = node.scrollWidth > node.clientWidth + 2
     }
     measure()
     requestAnimationFrame(measure)
@@ -746,7 +755,14 @@
           {#if headChar.script_forms.branches.length > 1}<div class="stripcap">same character across scripts — tap a form</div>{/if}
         </div>
       {/if}
-      {#if decomp}
+      {#if hasRoles}
+        <!-- phono-semantic: which part carries the meaning vs the sound (媽 = 女 meaning + 馬 sound) -->
+        <p class="comp">
+          {#if comp?.idc}<IdcBox idc={comp.idc} />{/if}
+          <span class="dim">Made of</span>
+          {#each roleParts as c, i}{#if i}<span class="plus">+</span>{/if}<button class="part" onclick={() => onsearch(c.ch)} title="look up {c.ch}">{c.ch}</button>{#if meaningOf(c.ch)}<span class="cmean">{meaningOf(c.ch)}</span>{/if}{#if roleBadge(c.role)}<span class="role role-{c.role}">{roleBadge(c.role)}</span>{/if}{/each}
+        </p>
+      {:else if decomp}
         <p class="comp">
           {#if comp?.idc}<IdcBox idc={comp.idc} />{/if}
           <span class="dim">Made of {numWord(decomp.count)} ×</span>
@@ -976,9 +992,12 @@
 
   /* romaji gloss under each Japanese reading (kana is opaque to Chinese readers) */
   .rsub { color: var(--faint); margin-left: 0.2rem; font-size: 0.82em; }
-  /* 日 readings sit on their own line so a long on/kun list wraps; clamp to one line + "+" reveals */
-  .dreads { flex: 1 1 100%; line-height: 1.5; }
-  .dreads.clamp { max-height: 1.6em; overflow: hidden; }
+  /* 日 readings stay inline with the 日 label (never evict it to its own line); when the on/kun list
+     is long they clip to one line and a "+" reveals the rest (expanded → wraps). */
+  /* flex-basis 0 so the readings never trigger a wrap of the header (which would push the 日 label
+     to its own line); it grows into the space after the label and clips to one line when long. */
+  .dreads { flex: 1 1 0; min-width: 0; line-height: 1.5; }
+  .dreads.clamp { white-space: nowrap; overflow: hidden; }
   /* radical line (#16) + usage badge (#17) + script-strip caption (#7) */
   .radline { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 0.55rem; font-size: 0.9rem; }
   .rtag { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 0.06rem 0.46rem; }
@@ -1004,6 +1023,10 @@
   .cmean { color: var(--muted); font-size: 0.9rem; margin-left: -0.05rem; }
   .cmean::before { content: '('; }
   .cmean::after { content: ')'; }
+  /* phono-semantic role badge: meaning (filled) vs sound (outlined) — monochrome */
+  .role { font-family: var(--mono); font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.06em; padding: 0.05rem 0.38rem; border-radius: 999px; line-height: 1.5; align-self: center; }
+  .role-semantic { color: var(--bg); background: var(--muted); }
+  .role-phonetic { color: var(--muted); background: none; border: 1px solid var(--border-strong); }
 
   /* words: collapsible (toggle header like origin), grouped by language with breathing room */
   .words { margin-top: 1.6rem; }

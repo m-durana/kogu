@@ -124,6 +124,9 @@ pub struct CharInfo {
 pub struct Component {
     pub ch: String,
     pub gloss: Option<String>,
+    /// 'semantic' (carries the meaning) | 'phonetic' (carries the sound) | 'form' | 'iconic' | None.
+    /// From Wiktionary's structured Han-compound data — 媽 = 女 (semantic) + 馬 (phonetic).
+    pub role: Option<String>,
 }
 
 #[derive(Serialize)]
