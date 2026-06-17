@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CharInfo, Entry, Hit, ReadingKV, Variety } from './types'
-  import { primaryForm, varietyLabel, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, splitRecon, formTag, glossParts, isBoundForm } from './display'
+  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, describeIds, numWord, etymologyTokens } from './display'
   import ScriptForms from './ScriptForms.svelte'
   import { AlertTriangle } from '@lucide/svelte'
   import { readingRomaji } from './romaji'
@@ -22,7 +22,10 @@
   } = $props()
 
   const VORDER = ['zh', 'yue', 'ja']
-  const sectionName: Record<string, string> = { zh: '中文', yue: '粵語', ja: '日本語' }
+  // English language names — used only by the false-friend band ("written the same in Chinese and
+  // Japanese…"), where CJK glyphs would read as the words themselves rather than as labels. The
+  // per-language meaning rows use the short 中/粵/日 tags (varietyLabel) instead.
+  const langName: Record<string, string> = { zh: 'Chinese', yue: 'Cantonese', ja: 'Japanese' }
 
   function readingFor(variety: string, readings: ReadingKV[]): string {
     const order =
@@ -268,6 +271,25 @@
   )
   const isGlyphSearch = $derived(defRows.length > 0)
 
+  // Cantonese shares the Han script: a single character written 中 is almost always written and
+  // understood the same in 粵, differing only in pronunciation. So when there's no SEPARATE Cantonese
+  // row (which would signal a Cantonese-specific word/meaning, e.g. 係 hai6 / 乜), we surface the
+  // character's jyutping right on the Chinese row — 中 ěr · 粵 ji5 — instead of burying it below.
+  const headJyut = $derived.by(() =>
+    single && headChar
+      ? headChar.readings.filter((r) => r.kind === 'jyutping').map((r) => r.value).join('  ')
+      : '',
+  )
+  const hasYueDef = $derived(defRows.some((r) => r.variety === 'yue'))
+  // single character's composition (what parts make it up, with structure kept): 森 = three 木
+  const comp = $derived(single && headChar ? describeIds(headChar.ids, head) : null)
+  // recursive "N copies of one base" decomposition from the backend (森 → 木 ×3), preferred over the
+  // shallow flat parts when present
+  const decomp = $derived(single && headChar ? headChar.decomp : null)
+  // component → meaning, so the structure section explains the parts (女 "woman", 木 "tree")
+  const compGloss = $derived(new Map((headChar?.components ?? []).map((c) => [c.ch, c.gloss])))
+  const meaningOf = (ch: string) => firstSense(compGloss.get(ch) ?? '')
+
   // Block B - the bridge: how the same meaning is written DIFFERENTLY in another language (a different
   // glyph or the cross-script form). Everything that isn't a same-glyph definition. Only meaningful
   // once there's a glyph definition to bridge FROM.
@@ -286,6 +308,28 @@
 
   // English / pinyin search (nothing matches the typed glyph): fall back to a plain results list.
   const listRows = $derived(isGlyphSearch ? [] : allRows)
+
+  // "everyday word": for a single character, the natural multi-character word another language
+  // actually writes for this meaning (耳 → 中 耳朵; 朵 → 中 花朵). A Japanese learner sees 耳's bare
+  // Chinese gloss but wouldn't know 耳朵 is how it's really said. Backend-derived (relation
+  // 'everyday-word'); shown as its own labelled block so it reads as "how you'd actually say it".
+  const everydayRows = $derived<Row[]>(
+    (entry?.translations ?? [])
+      .filter((l) => l.relation === 'everyday-word')
+      .map((l) => ({
+        id: l.lexeme_id,
+        variety: l.variety,
+        form: l.headword,
+        alt: null,
+        formScript: '',
+        altScript: '',
+        reading: l.reading ?? '',
+        glosses: l.glosses,
+        relation: 'everyday-word',
+        kind: 'equiv' as const,
+      }))
+      .sort((a, b) => VORDER.indexOf(a.variety) - VORDER.indexOf(b.variety)),
+  )
 
   // numbered senses for a definition row - the full hit glosses (every sense), cleaned. Identical
   // treatment for every language (no POS on one and not another) so the languages stay co-equal.
@@ -313,10 +357,13 @@
   // ResizeObserver on the clamped node won't fire then (its box is pinned to max-height), so also hook
   // document.fonts.ready and an rAF. Threshold tracks the CSS max-height (2.9rem) closely so a block
   // that's visibly clipped always gets a toggle (no dead zone).
-  function clampProbe(node: HTMLElement, opts: { id: number; rem: number }) {
-    const { id, rem } = opts
+  // `slack` lets a block run ~1 line past the clamp before we bother hiding anything: clipping just
+  // half a second line behind a "show more" is more annoying than the extra line. So we only clamp +
+  // fade when content exceeds the clamp by more than slack; up to slack over, it renders in full.
+  function clampProbe(node: HTMLElement, opts: { id: number; rem: number; slack?: number }) {
+    const { id, rem, slack = 1.5 } = opts
     const measure = () => {
-      const limit = parseFloat(getComputedStyle(document.documentElement).fontSize) * rem
+      const limit = parseFloat(getComputedStyle(document.documentElement).fontSize) * (rem + slack)
       const over = node.scrollHeight > limit + 1
       if (over === overflow.has(id)) return
       const n = new Set(overflow)
@@ -335,8 +382,9 @@
   // false friends are SAME-glyph words whose meaning diverges (手紙) - they sit co-equally in block A,
   // flagged by a single note. (A different-glyph bridge row is never a false friend - it's just the
   // other language's word.)
-  // distinct languages among the same-glyph definition rows
-  const defLangs = $derived([...new Set(defRows.map((r) => sectionName[r.variety]))])
+  // distinct languages among the same-glyph definition rows (English names: this drives the
+  // false-friend sentence below, where 中文/日本語 glyphs would read as words, not labels)
+  const defLangs = $derived([...new Set(defRows.map((r) => langName[r.variety]))])
   // flag a false friend only in the clean case: exactly TWO same-glyph rows in TWO languages, with a
   // false-friend relation and NO cognate (shared) meaning. Multi-reading homographs (行 háng/héng/xíng)
   // or words with any shared sense (京都 = Kyoto in both) are not flagged.
@@ -410,6 +458,9 @@
   let showOrigin = $state(false)
   let showWords = $state(false)
   const wordCount = $derived(wordGroups.reduce((n, g) => n + g.items.length, 0))
+  // origin split into delineated segments (drops bare "Etymology N" headers with no body, so a
+  // header-only etymology renders nothing rather than an empty toggle)
+  const etySegs = $derived(entry?.etymology ? etymologyTokens(entry.etymology) : [])
 
   // Bound form: a morpheme that doesn't stand alone as a word — it only carries meaning inside
   // compounds. CC-CEDICT flags these; instead of leaking the jargon into the prose we show a small
@@ -452,7 +503,7 @@
           {@const ss = senseList(r)}
           <div class="dl">
             <div class="dlh">
-              <span class="dvar">{sectionName[r.variety]}</span>
+              <span class="dvar">{varietyLabel(r.variety)}</span>
               {#if r.variety === 'zh'}
                 {@const zp = zhPair(r)}
                 {#if zp.same}<span class="dform"><span class="ftag">TC/SC</span>{zp.trad}</span>{:else}<span class="dform"><span class="ftag">TC</span>{zp.trad}<span class="fsep">·</span><span class="ftag">SC</span>{zp.simp}</span>{/if}
@@ -463,6 +514,7 @@
                 <span class="dform">{r.form}</span>
               {/if}
               {#if r.reading}<span class="dread">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>{/if}
+              {#if r.variety === 'zh' && headJyut && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread">{headJyut}</span>{/if}
               {#if isBoundForm(r.glosses)}<button class="btag" onclick={() => (boundOpen = r)} title="bound form — only used in compounds">bound</button>{/if}
             </div>
             {#if ss.length}
@@ -480,6 +532,16 @@
         <p class="note"><AlertTriangle size={14} /> {head} is written the same in {falseFriendLangs} but means different things.</p>
       {/if}
     </section>
+
+    {#if everydayRows.length}
+      <!-- the natural everyday word another language writes for this character's meaning (耳 → 耳朵) -->
+      <section class="bridge">
+        <h3>usually written</h3>
+        <ul class="langs">
+          {#each everydayRows as r (r.id)}{@render rowItem(r)}{/each}
+        </ul>
+      </section>
+    {/if}
 
     {#if bridgeRows.length}
       <!-- Block B - the bridge: the same meaning, written differently elsewhere. Tappable pivots. -->
@@ -521,10 +583,21 @@
       {#if headChar.script_forms}
         <div class="strip"><ScriptForms forms={headChar.script_forms} anchor={head} {onsearch} /></div>
       {/if}
-      <div class="cln">
-        {#if cleanIds(headChar.ids)}<span class="dim">parts</span> {#each cleanIds(headChar.ids).split(/\s+/).filter(Boolean) as p}<button class="part" onclick={() => onsearch(p)} title="look up {p}">{p}</button>{/each}{/if}
-        {#if headChar.strokes}<span class="dim">{headChar.strokes} strokes</span>{/if}
-      </div>
+      {#if decomp}
+        <p class="comp">
+          <span class="dim">{numWord(decomp.count)} ×</span>
+          <button class="part" onclick={() => onsearch(decomp.base)} title="look up {decomp.base}">{decomp.base}</button>
+          {#if meaningOf(decomp.base)}<span class="cmean">{meaningOf(decomp.base)}</span>{/if}
+          {#if comp?.arrangement}<span class="arr">{comp.arrangement}</span>{/if}
+        </p>
+      {:else if comp}
+        <p class="comp">
+          <span class="dim">made of</span>
+          {#each comp.parts as p, i}{#if i}<span class="plus">+</span>{/if}<button class="part" onclick={() => onsearch(p.component)} title="look up {p.component}">{p.component}</button>{#if p.count > 1}<span class="dim">×{p.count}</span>{/if}{#if meaningOf(p.component)}<span class="cmean">{meaningOf(p.component)}</span>{/if}{/each}
+          {#if comp.arrangement}<span class="arr">{comp.arrangement}</span>{/if}
+        </p>
+      {/if}
+      {#if headChar.strokes}<div class="cln"><span class="dim">{headChar.strokes} strokes</span></div>{/if}
     </section>
   {:else if entry && entry.characters.length}
     <!-- jukugo: break the word into its component characters. Lean: which languages it lives in + one
@@ -532,13 +605,13 @@
     <section class="chars">
       <h3>characters</h3>
       {#each entry.characters as c}
-        <div class="char">
-          <button class="cg" onclick={() => onsearch(c.ch)} title="look up {c.ch}">{c.ch}</button>
-          <div class="cmeta">
-            <div class="clangs">{#each charLangs(c) as l}<span class="clang">{l}</span>{/each}</div>
-            {#if firstSense(c.gloss_en)}<div class="cgl">{firstSense(c.gloss_en)}</div>{/if}
-          </div>
-        </div>
+        <button class="char" onclick={() => onsearch(c.ch)} title="look up {c.ch}">
+          <span class="cg">{c.ch}</span>
+          <span class="cmeta">
+            <span class="clangs">{#each charLangs(c) as l}<span class="clang">{l}</span>{/each}</span>
+            {#if firstSense(c.gloss_en)}<span class="cgl">{firstSense(c.gloss_en)}</span>{/if}
+          </span>
+        </button>
       {/each}
     </section>
   {:else if enriching}
@@ -552,15 +625,35 @@
     </section>
   {/if}
 
+  {#if etySegs.length}
+    <section class="origin">
+      <button class="oh" aria-expanded={showOrigin} onclick={() => (showOrigin = !showOrigin)}>
+        origin <span class="chev">{showOrigin ? '−' : '+'}</span>
+      </button>
+      {#if showOrigin}
+        <!-- multiple merged statements are shown as separate, delineated paragraphs (with their
+             "Etymology N" label when the source numbers them) so it's clear which is which -->
+        <div class="etylist" class:multi={etySegs.length > 1}>
+          {#each etySegs as seg, i}
+            <div class="etyseg">
+              {#if seg.heading}<div class="etyhead">{seg.heading}</div>{:else if etySegs.length > 1}<div class="etyhead">{i + 1}</div>{/if}
+              <p class="ety">{#each seg.tokens as s}{#if s.t === 'ruby'}<ruby><button class="kanji" onclick={() => onsearch(s.base)}>{s.base}</button><rt>{s.rt}</rt></ruby>{:else if s.t === 'recon'}<span class="recon" title={s.title}>{s.v}</span>{:else if s.t === 'abbr'}<abbr class="term" title={s.title}>{s.v}</abbr>{:else if s.t === 'han'}<button class="kanji" onclick={() => onsearch(s.v)}>{s.v}</button>{:else}{s.v}{/if}{/each}</p>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </section>
+  {/if}
+
   {#if entry && wordGroups.length}
     <section class="words">
       <button class="oh" aria-expanded={showWords} onclick={() => (showWords = !showWords)}>
-        words <span class="count">{wordCount}</span> <span class="chev">{showWords ? '−' : '+'}</span>
+        used in <span class="count">{wordCount}</span> <span class="chev">{showWords ? '−' : '+'}</span>
       </button>
       {#if showWords}
         {#each wordGroups as wg (wg.variety)}
           <div class="wgroup">
-            <div class="wglabel">{sectionName[wg.variety]}</div>
+            <div class="wglabel">{varietyLabel(wg.variety)}</div>
             <div class="chips">
               {#each wg.items as l (l.lexeme_id)}
                 <button class="chip" onclick={() => onsearch(l.headword)} title={glossLine(l.glosses, 1)}>{l.headword}</button>
@@ -588,19 +681,6 @@
       </div>
     </div>
   {/if}
-
-  {#if entry && entry.etymology}
-    <section class="origin">
-      <button class="oh" aria-expanded={showOrigin} onclick={() => (showOrigin = !showOrigin)}>
-        origin <span class="chev">{showOrigin ? '−' : '+'}</span>
-      </button>
-      {#if showOrigin}
-        <p class="ety">
-          {#each furiganaTokens(entry.etymology) as tok}{#if tok.t === 'ruby'}<ruby><button class="kanji" onclick={() => onsearch(tok.base)}>{tok.base}</button><rt>{tok.rt}</rt></ruby>{:else}{#each splitRecon(tok.v) as s}{#if s.t === 'recon'}<span class="recon">{s.v}</span>{:else}{s.v}{/if}{/each}{/if}{/each}
-        </p>
-      {/if}
-    </section>
-  {/if}
 </article>
 
 <style>
@@ -616,13 +696,15 @@
   .dlh { display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap; }
   /* the language leads (it's the heading of the definition); the reading is secondary */
   .dvar { font-family: var(--han); font-size: 1.1rem; color: var(--text); font-weight: 500; letter-spacing: 0.02em; }
+  /* Cantonese tag appended to the Chinese row (中 ěr · 粵 ji5) when the glyph is shared */
+  .dcanto { margin-left: 0.5rem; color: var(--muted); font-weight: 400; }
   .dform { font-family: var(--han); font-size: 1.15rem; }
   .dform .ftag { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); margin-right: 0.18rem; vertical-align: 0.35em; }
   .dform .fsep { color: var(--faint); margin: 0 0.35rem; }
   .dread { font-family: var(--mono); font-size: 0.9rem; color: var(--muted); }
   .senses { margin: 0.5rem 0 0; padding: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 0.35rem; }
   /* collapsed: clip to ~2 lines and fade the cut, so a long definition doesn't wall off the page */
-  .senses.clamp { max-height: 2.9rem; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent); mask-image: linear-gradient(to bottom, #000 60%, transparent); }
+  .senses.clamp { max-height: 2.9rem; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 74%, transparent); mask-image: linear-gradient(to bottom, #000 74%, transparent); }
   .senses li { position: relative; padding-left: 1.5rem; font-size: 1rem; line-height: 1.45; color: var(--text); counter-increment: s; }
   .senses li::before { content: counter(s); position: absolute; left: 0; top: 0.05rem; font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
   .more { background: none; border: none; padding: 0.3rem 0; margin-top: 0.1rem; font-family: var(--mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
@@ -671,26 +753,34 @@
   h3 { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 1.9rem 0 0.8rem; }
   .dim { color: var(--faint); }
 
-  /* jukugo component characters - lean: tappable glyph, language tags, one meaning */
-  .char { display: flex; gap: 0.9rem; align-items: center; padding: 0.7rem 0; border-top: 1px solid var(--border); }
-  .cg { font-family: var(--han); font-size: 2.4rem; line-height: 1; padding: 0 0.3rem; background: none; border: none; }
-  .cg:hover { background: var(--surface); }
-  .cmeta { flex: 1; min-width: 0; }
+  /* jukugo component characters - the WHOLE row is tappable (glyph + tags + meaning) */
+  .char { display: flex; gap: 0.9rem; align-items: center; width: 100%; text-align: left; padding: 0.7rem 0.3rem; background: none; border: none; border-top: 1px solid var(--border); }
+  .char:hover { background: var(--surface); }
+  .cg { font-family: var(--han); font-size: 2.4rem; line-height: 1; padding: 0 0.3rem; flex: none; }
+  .cmeta { display: flex; flex-direction: column; flex: 1; min-width: 0; }
   .clangs { display: flex; gap: 0.3rem; margin-bottom: 0.25rem; }
   .clang { font-family: var(--han); font-size: 0.8rem; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0.05rem 0.32rem; }
   .cgl { font-size: 0.95rem; color: var(--text); }
 
   /* readings line - 中/粵/日 grouped, on/kun shown as kana + romaji; collapses to ~3 lines */
   .rds { display: flex; flex-direction: column; gap: 0.4rem; }
-  .rds.clamp { max-height: 4.4rem; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 65%, transparent); mask-image: linear-gradient(to bottom, #000 65%, transparent); }
+  .rds.clamp { max-height: 4.4rem; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent); mask-image: linear-gradient(to bottom, #000 78%, transparent); }
   .rgrp { display: flex; gap: 0.7rem; align-items: baseline; font-family: var(--mono); font-size: 0.95rem; }
   .rvh { font-family: var(--han); color: var(--muted); font-size: 1rem; flex: none; min-width: 1.2em; }
   .rtext { color: var(--text); }
   .rsub { color: var(--muted); margin-left: 0.25rem; font-size: 0.86em; }
-  /* structure block - decomposition (tappable parts) + a quiet stroke count */
+  /* structure block - composition (what parts make it up, e.g. 森 = three 木) + a quiet stroke count */
   .cln { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 0.5rem; font-size: 0.8rem; }
-  .part { font-family: var(--han); color: var(--muted); background: none; border: none; padding: 0 0.15rem; font-size: 1.05rem; line-height: 1; }
-  .part:hover { color: var(--text); background: none; }
+  .comp { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0.6rem 0 0; }
+  .part { font-family: var(--han); color: var(--text); background: none; border: none; padding: 0 0.1rem; font-size: 1.6rem; line-height: 1; }
+  .part:hover { color: #fff; background: none; }
+  .comp .dim { font-size: 0.82rem; }
+  .plus { color: var(--faint); font-family: var(--mono); }
+  /* a component's meaning, e.g. 木 (tree) — the "explain the parts" layer */
+  .cmean { color: var(--muted); font-size: 0.82rem; margin-left: -0.1rem; }
+  .cmean::before { content: '('; }
+  .cmean::after { content: ')'; }
+  .arr { color: var(--muted); font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; margin-left: 0.3rem; }
 
   /* words: collapsible (toggle header like origin), grouped by language with breathing room */
   .words { margin-top: 1.6rem; }
@@ -706,13 +796,21 @@
   .oh { display: inline-flex; align-items: center; gap: 0.4rem; background: none; border: none; padding: 0.2rem 0; font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
   .oh:hover { color: var(--text); background: none; }
   .oh .chev { font-family: var(--mono); }
-  .ety { font-size: 0.95rem; color: var(--muted); line-height: 1.9; margin: 0.5rem 0 0; }
+  .etylist { margin-top: 0.5rem; }
+  /* when several statements are merged, give each its own delineated block */
+  .etylist.multi .etyseg { padding-left: 0.9rem; border-left: 1px solid var(--border); margin-top: 0.9rem; }
+  .etylist.multi .etyseg:first-child { margin-top: 0; }
+  .etyhead { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); margin-bottom: 0.2rem; }
+  .ety { font-size: 0.95rem; color: var(--muted); line-height: 1.9; margin: 0; }
   .ety ruby { font-family: var(--han); }
   .ety rt { font-size: 0.55em; color: var(--faint); font-family: var(--han); }
-  .ety .kanji { background: none; border: none; padding: 0; font: inherit; color: var(--text); }
+  .ety .kanji { background: none; border: none; padding: 0; font: inherit; color: var(--text); font-family: var(--han); }
   .ety .kanji:hover { text-decoration: underline; }
+  /* jargon term with a plain-English tooltip (tap/hover) */
+  .ety .term { color: var(--text); text-decoration: underline dotted; text-underline-offset: 2px; cursor: help; }
   /* phonological reconstructions de-emphasised so the narrative reads first */
   .ety .recon { font-size: 0.78em; color: var(--faint); font-family: var(--mono); }
+  .ety .recon[title] { cursor: help; }
 
   /* loading skeleton - reserves the lower sections' space so they don't pop in */
   .skel { margin-top: 1.4rem; }

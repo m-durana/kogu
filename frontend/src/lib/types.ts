@@ -60,6 +60,10 @@ export interface CharInfo {
   readings: ReadingKV[]
   variants: VariantEdge[]
   script_forms: ScriptForms | null
+  /** set when the char is N copies of one base glyph (森 → {base:'木', count:3}); else null */
+  decomp: { base: string; count: number } | null
+  /** distinct components with meanings (好 → 女 "woman", 子 "child"); radical forms glossed via parent */
+  components: { ch: string; gloss: string | null }[]
 }
 export interface Sense {
   pos: string | null

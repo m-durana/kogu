@@ -154,6 +154,50 @@ fn build_entry(
         }
     }
 
+    // "everyday word": for a single character, the natural MULTI-character word a Chinese / Cantonese
+    // speaker would actually write for this character's primary meaning (耳 → 耳朵, 朵 → 花朵). A
+    // Japanese learner sees 耳's bare Chinese gloss but wouldn't know 耳朵 is how it's really said.
+    // Derived, not curated: the candidate must (a) share the character's primary-sense concept, (b)
+    // CONTAIN the character (form_char) — which kills loose synonyms — and (c) be MORE frequent than
+    // the bare character in that same language, so we never suggest a compound when the character is
+    // itself the everyday word (山, 人) and never surface a mere near-synonym (mountain→小山 "hill").
+    if headword.chars().count() == 1 {
+        if let Some(cp) = headword.chars().next().map(|c| c as i64) {
+            let mut ew = conn.prepare(
+                "SELECT m.id, m.variety, m.freq, \
+                        (SELECT b.freq FROM lexeme b WHERE b.headword=?3 AND b.variety=m.variety) AS bare \
+                 FROM sense_concept sc1 \
+                 JOIN sense s1 ON s1.id=sc1.sense_id AND s1.lexeme_id=?1 AND s1.sense_order=0 \
+                 JOIN concept co ON co.id=sc1.concept_id AND co.member_count<=18 \
+                 JOIN sense_concept sc2 ON sc2.concept_id=sc1.concept_id \
+                 JOIN sense s2 ON s2.id=sc2.sense_id AND s2.sense_order=0 \
+                 JOIN lexeme m ON m.id=s2.lexeme_id AND m.variety IN ('zh','yue') AND m.freq IS NOT NULL \
+                 JOIN form_char fc ON fc.lexeme_id=m.id AND fc.cp=?2 AND fc.flen>=2 \
+                 GROUP BY m.id ORDER BY m.variety, m.freq DESC",
+            )?;
+            let rows: Vec<(i64, String, f64, Option<f64>)> = ew
+                .query_map(rusqlite::params![id, cp, headword], |r| {
+                    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+                })?
+                .collect::<Result<_, _>>()?;
+            let mut taken: std::collections::HashSet<String> = std::collections::HashSet::new();
+            for (other, var, freq, bare) in rows {
+                // strictly more frequent than the bare character in that language; one per variety
+                let beats_bare = matches!(bare, Some(b) if freq > b);
+                if !beats_bare || taken.contains(&var) {
+                    continue;
+                }
+                taken.insert(var);
+                if !seen.insert(other) {
+                    continue;
+                }
+                if let Some(l) = link_lite(conn, other, "everyday-word", None)? {
+                    translations.push(l);
+                }
+            }
+        }
+    }
+
     // prefer tight (specific) concepts; skip hopelessly generic ones to cut polysemy noise
     let mut s = conn.prepare(
         "SELECT s2.lexeme_id, co.label_en, MIN(co.member_count) AS spec \
@@ -460,6 +504,121 @@ fn build_why(conn: &rusqlite::Connection, id: i64) -> rusqlite::Result<Option<Wh
     Ok(Some(WhyResponse { lexeme_id: id, headword, characters }))
 }
 
+fn is_han_component(c: char) -> bool {
+    matches!(c as u32, 0x3400..=0x9FFF | 0xF900..=0xFAFF) || c == '々'
+}
+fn ids_of(conn: &rusqlite::Connection, ch: char) -> Option<String> {
+    conn.query_row("SELECT ids FROM character WHERE cp=?1", [ch as i64], |r| {
+        r.get::<_, Option<String>>(0)
+    })
+    .ok()
+    .flatten()
+}
+/// Han leaf components of an IDS string — drop bracketed source tags ([GTV]), IDC operators and
+/// strokes, and the character itself (guards self-referential ids like "木").
+fn han_leaves(ids: &str, self_ch: char) -> Vec<char> {
+    let mut out = Vec::new();
+    let mut in_tag = false;
+    for c in ids.chars() {
+        match c {
+            '[' => in_tag = true,
+            ']' => in_tag = false,
+            _ if in_tag => {}
+            _ if is_han_component(c) && c != self_ch => out.push(c),
+            _ => {}
+        }
+    }
+    out
+}
+/// A "doubled" character: its IDS is 2+ copies of a single component (林=木木, 沝=水水, 昍=日日).
+fn is_pure_repeat(conn: &rusqlite::Connection, ch: char) -> bool {
+    match ids_of(conn, ch) {
+        Some(ids) => {
+            let leaves = han_leaves(&ids, ch);
+            leaves.len() >= 2 && leaves.iter().all(|&c| c == leaves[0])
+        }
+        None => false,
+    }
+}
+/// Flatten a character into its multiset of atoms. Only "pure-repeat" components are expanded
+/// (林 → 木 木); every other component is kept whole, so 水 stays 水 instead of exploding into its
+/// stroke IDS. 森 (⿱木林) → [木, 木, 木]; 淼 (⿱水沝) → [水, 水, 水]; 好 (⿰女子) → [女, 子].
+fn atomize(conn: &rusqlite::Connection, ch: char, depth: u8, out: &mut Vec<char>) {
+    if depth > 6 {
+        out.push(ch);
+        return;
+    }
+    let leaves = ids_of(conn, ch).map(|ids| han_leaves(&ids, ch)).unwrap_or_default();
+    if leaves.is_empty() {
+        out.push(ch);
+        return;
+    }
+    for l in leaves {
+        if is_pure_repeat(conn, l) {
+            atomize(conn, l, depth + 1, out);
+        } else {
+            out.push(l);
+        }
+    }
+}
+/// Radical-variant forms → the parent character whose meaning they carry, so 亻/氵/扌… are glossed
+/// as person/water/hand instead of "radical number N" (or, for 亻, nothing at all).
+fn radical_parent(c: char) -> char {
+    match c {
+        '亻' => '人',
+        '氵' => '水',
+        '扌' => '手',
+        '艹' => '艸',
+        '灬' => '火',
+        '忄' | '㣺' => '心',
+        '訁' => '言',
+        '糹' | '纟' => '糸',
+        '釒' | '钅' => '金',
+        '刂' => '刀',
+        '辶' => '辵',
+        '礻' => '示',
+        '衤' => '衣',
+        '罒' => '网',
+        '冫' => '冰',
+        '飠' | '饣' => '食',
+        '⺹' => '老',
+        _ => c,
+    }
+}
+/// First meaningful English sense of a component, glossing radical-variant forms via their parent.
+fn component_gloss(conn: &rusqlite::Connection, ch: char) -> Option<String> {
+    let target = radical_parent(ch) as i64;
+    conn.query_row("SELECT gloss_en FROM character WHERE cp=?1", [target], |r| {
+        r.get::<_, Option<String>>(0)
+    })
+    .ok()
+    .flatten()
+}
+/// Distinct Han components of a character (one level of IDS), each with its meaning — the "what the
+/// parts are" layer of the structure section. Order-preserving, deduplicated.
+fn char_components(conn: &rusqlite::Connection, ch: char, ids: Option<&str>) -> Vec<Component> {
+    let leaves = ids.map(|s| han_leaves(s, ch)).unwrap_or_default();
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    for c in leaves {
+        if seen.insert(c) {
+            out.push(Component { ch: c.to_string(), gloss: component_gloss(conn, c) });
+        }
+    }
+    out
+}
+
+/// When a character reduces to N≥2 copies of ONE base glyph, name it (森 → 木 ×3). Else None.
+fn uniform_decomp(conn: &rusqlite::Connection, ch: char) -> Option<CharDecomp> {
+    let mut atoms = Vec::new();
+    atomize(conn, ch, 0, &mut atoms);
+    if atoms.len() >= 2 && atoms.iter().all(|&c| c == atoms[0]) && atoms[0] != ch {
+        Some(CharDecomp { base: atoms[0].to_string(), count: atoms.len() as i64 })
+    } else {
+        None
+    }
+}
+
 fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<CharInfo>> {
     let cp = ch as i64;
     let row = conn.query_row(
@@ -507,6 +666,8 @@ fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<C
         .collect::<Result<_, _>>()?;
 
     let script_forms = build_script_forms(conn, cp, ch, is_orthodox)?;
+    let decomp = uniform_decomp(conn, ch);
+    let components = char_components(conn, ch, ids.as_deref());
 
     Ok(Some(CharInfo {
         ch: ch.to_string(),
@@ -519,6 +680,8 @@ fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<C
         readings,
         variants,
         script_forms,
+        decomp,
+        components,
     }))
 }
 

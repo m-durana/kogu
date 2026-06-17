@@ -185,11 +185,13 @@ CREATE TABLE etymology (
 -- ============================================================================
 
 -- External-content FTS over sense glosses. Rebuilt by build.py after sense load.
+-- porter stemming so a query for "ears"/"loved"/"cats" still matches a gloss "ear"/"love"/"cat"
+-- (the single biggest English-search defect was inflected queries matching nothing).
 CREATE VIRTUAL TABLE gloss_fts USING fts5(
     gloss_en,
     content='sense',
     content_rowid='id',
-    tokenize='unicode61'
+    tokenize='porter unicode61'
 );
 
 -- ============================================================================

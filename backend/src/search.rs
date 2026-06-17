@@ -36,6 +36,33 @@ fn is_kana(ch: char) -> bool {
     let c = ch as u32;
     (0x3040..=0x30FF).contains(&c) || (0xFF66..=0xFF9D).contains(&c)
 }
+/// Fold hiragana → katakana (U+3041..3096 +0x60). Native words store kana as hiragana, loanwords as
+/// katakana, so folding both query and stored side lets てれび find the katakana-stored テレビ.
+fn to_katakana(s: &str) -> String {
+    s.chars()
+        .map(|c| {
+            let u = c as u32;
+            if (0x3041..=0x3096).contains(&u) {
+                char::from_u32(u + 0x60).unwrap_or(c)
+            } else {
+                c
+            }
+        })
+        .collect()
+}
+/// Fold katakana → hiragana (U+30A1..30F6 -0x60).
+fn to_hiragana(s: &str) -> String {
+    s.chars()
+        .map(|c| {
+            let u = c as u32;
+            if (0x30A1..=0x30F6).contains(&u) {
+                char::from_u32(u - 0x60).unwrap_or(c)
+            } else {
+                c
+            }
+        })
+        .collect()
+}
 
 pub fn classify(q: &str) -> Kind {
     let q = q.trim();
@@ -153,28 +180,85 @@ fn contains_word(hay: &str, needle: &str) -> bool {
     false
 }
 
+/// Light English stemmer for RANKING alignment only (FTS porter handles retrieval): strip a common
+/// inflectional suffix so "ears"→"ear", "studies"→"study", "loved"→"lov", "running"→"runn". It does
+/// NOT need to be linguistically perfect — `stem_close` absorbs porter's silent-e (lov ≈ love).
+fn stem_word(w: &str) -> String {
+    for (suf, rep) in [
+        ("ies", "y"),
+        ("ied", "y"),
+        ("ying", ""),
+        ("ing", ""),
+        ("edly", ""),
+        ("ed", ""),
+        ("es", ""),
+        ("s", ""),
+    ] {
+        if let Some(stem) = w.strip_suffix(suf) {
+            if stem.len() >= 3 {
+                return format!("{stem}{rep}");
+            }
+        }
+    }
+    w.to_string()
+}
+fn stem_phrase(s: &str) -> String {
+    s.split(' ').map(stem_word).collect::<Vec<_>>().join(" ")
+}
+/// Equal modulo a trailing silent-e the crude stemmer can't recover (loved→lov ≈ love→love).
+fn stem_close(a: &str, b: &str) -> bool {
+    if a == b {
+        return true;
+    }
+    let (short, long) = if a.len() <= b.len() { (a, b) } else { (b, a) };
+    short.len() >= 3 && long.starts_with(short) && long.len() - short.len() <= 1
+}
+
 /// How well an English gloss matches the query term: 1.0 = a gloss segment *is* the term,
-/// 0.85 = a segment starts with it, 0.5 = it appears as a whole word, 0.2 = incidental.
+/// 0.85 = a segment starts with it, 0.5 = it appears as a whole word, 0.2 = incidental. Segments
+/// split on both ';' and '|' (CC-CEDICT pipes); compared on stems so inflected queries align.
 fn gloss_match_quality(gloss: &str, ql: &str) -> f64 {
+    let qd = stem_phrase(ql);
     let mut best = 0.2_f64;
-    for seg in gloss.split(';') {
+    for seg in gloss.split([';', '|']) {
         let s = clean_segment(seg);
-        if s == ql {
+        let sd = stem_phrase(&s);
+        if s == ql || sd == qd || stem_close(&sd, &qd) {
             return 1.0;
         }
-        if s.starts_with(ql) && s[ql.len()..].starts_with(' ') {
+        if sd.starts_with(&qd) && sd[qd.len()..].starts_with(' ') {
             best = best.max(0.85);
-        } else if contains_word(&s, ql) {
+        } else if contains_word(&sd, &qd) {
             best = best.max(0.5);
         }
     }
     best
 }
 
+/// Map gloss-match quality to a retrieval weight with a DECISIVE exact-sense bonus: when the query
+/// term IS a full sense of an entry, that must beat a fringe entry that merely mentions it — even one
+/// with far higher frequency. So "ear" → 耳 (a sense "ear"), not 稲穂 ("ear of rice"). The old linear
+/// 0.45+0.55·quality let frequency swamp the meaning signal; these tiers don't.
+fn english_weight(quality: f64) -> f64 {
+    if quality >= 1.0 {
+        0.9 // a sense exactly equals the query
+    } else if quality >= 0.85 {
+        0.6 // a sense starts with the query
+    } else if quality >= 0.5 {
+        0.45 // appears as a whole word
+    } else {
+        0.3 // incidental co-occurrence
+    }
+}
+
 const W_EXACT: f64 = 1.0;
 const W_VARIANT: f64 = 0.85;
 const W_READING: f64 = 0.72;
-const W_ENGLISH: f64 = 0.5;
+const W_READING_PREFIX: f64 = 0.55; // as-you-type prefix (たべ→たべる); below an exact reading
+// frequency is a gentle ADDITIVE tiebreak, never a multiplier: the old `weight * (1 + freq)` let a
+// frequent fringe word (freq→2× boost) outrank an exact match. Additive + small keeps the match tier
+// dominant (an exact reading always beats a prefix; an exact sense always beats an incidental one).
+const FREQ_BONUS: f64 = 0.15;
 
 pub fn search(
     state: &AppState,
@@ -212,11 +296,45 @@ pub fn search(
 
     match kind {
         Kind::Kana => {
-            let mut stmt = conn
-                .prepare("SELECT lexeme_id FROM lexeme_reading WHERE kind='kana' AND value = ?1")?;
-            let ids: Vec<i64> = stmt.query_map([q], |r| r.get(0))?.collect::<Result<_, _>>()?;
-            for id in ids {
-                bump(&mut cand, id, "reading", W_READING);
+            // fold the query to BOTH kana scripts so a hiragana query matches katakana-stored
+            // loanwords (てれび→テレビ) and vice-versa, regardless of how the reading was stored.
+            let hira = to_hiragana(q);
+            let kata = to_katakana(q);
+            {
+                let mut stmt = conn.prepare(
+                    "SELECT lexeme_id FROM lexeme_reading WHERE kind='kana' AND value IN (?1, ?2)",
+                )?;
+                let ids: Vec<i64> =
+                    stmt.query_map([&hira, &kata], |r| r.get(0))?.collect::<Result<_, _>>()?;
+                for id in ids {
+                    bump(&mut cand, id, "reading", W_READING);
+                }
+            }
+            // prefix (as-you-type): typing たべ should already surface たべる, がっこ→がっこう. Needs
+            // ≥2 kana so a single mora doesn't match half the dictionary. Scored below an exact reading.
+            if hira.chars().count() >= 2 {
+                let hp = format!("{hira}%");
+                let kp = format!("{kata}%");
+                let mut stmt = conn.prepare(
+                    "SELECT lexeme_id FROM lexeme_reading \
+                     WHERE kind='kana' AND (value LIKE ?1 OR value LIKE ?2) LIMIT 200",
+                )?;
+                let ids: Vec<i64> =
+                    stmt.query_map([&hp, &kp], |r| r.get(0))?.collect::<Result<_, _>>()?;
+                for id in ids {
+                    bump(&mut cand, id, "reading", W_READING_PREFIX);
+                }
+            }
+            // surface prefix for mixed kanji+kana words: 食べ → 食べる, 高 not reached here (Han-only).
+            if q.chars().count() >= 2 {
+                let sp = format!("{q}%");
+                let mut stmt =
+                    conn.prepare("SELECT lexeme_id FROM surface_form WHERE form LIKE ?1 LIMIT 200")?;
+                let ids: Vec<i64> =
+                    stmt.query_map([&sp], |r| r.get(0))?.collect::<Result<_, _>>()?;
+                for id in ids {
+                    bump(&mut cand, id, "reading", W_READING_PREFIX);
+                }
             }
         }
         Kind::Latin => {
@@ -252,17 +370,25 @@ pub fn search(
             if let Some(fq) = fts_query(q) {
                 let ql = q.trim().to_lowercase();
                 let mut stmt = conn.prepare(
-                    "SELECT s.lexeme_id, s.gloss_en, bm25(gloss_fts) AS r \
+                    "SELECT s.lexeme_id, s.gloss_en, s.sense_order, bm25(gloss_fts) AS r \
                      FROM gloss_fts JOIN sense s ON s.id = gloss_fts.rowid \
                      WHERE gloss_fts MATCH ?1 ORDER BY r LIMIT 400",
                 )?;
                 let rows = stmt.query_map([&fq], |r| {
-                    Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
+                    Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, i64>(2)?))
                 })?;
                 for row in rows {
-                    let (id, gloss) = row?;
+                    let (id, gloss, sense_order) = row?;
                     let quality = gloss_match_quality(&gloss, &ql);
-                    bump(&mut cand, id, "english", W_ENGLISH * (0.45 + 0.55 * quality));
+                    let mut w = english_weight(quality);
+                    // the query IS this word's PRIMARY meaning (exact match on sense 0) — a stronger
+                    // signal than an exact match on a word's minor sense, and big enough to beat the
+                    // (unreliable) frequency tiebreak: 山 leads "mountain", not 深山 ("deep mountains"),
+                    // whose bare "mountain" sense is secondary.
+                    if quality >= 1.0 && sense_order == 0 {
+                        w += FREQ_BONUS;
+                    }
+                    bump(&mut cand, id, "english", w);
                 }
             }
         }
@@ -383,10 +509,10 @@ fn build_hit(
     let glosses: Vec<String> =
         gstmt.query_map([id], |r| r.get(0))?.collect::<Result<_, _>>()?;
 
-    // freq factor: ranked words score in [0.15,1]; unranked get a low baseline so any frequency
-    // signal beats none (a common word always outranks an unknown one).
+    // freq factor: ranked words in [0,1]; unranked get a low baseline so any frequency signal beats
+    // none (a common word outranks an unknown one), but only as a tiebreak within a match tier.
     let freq_factor = freq.unwrap_or(0.1);
-    let mut score = weight * (1.0 + freq_factor);
+    let mut score = weight + FREQ_BONUS * freq_factor;
     // gentle script preference (not length-based ranking)
     if let Some(ps) = pref_script {
         if forms.iter().any(|f| f.script == ps) {

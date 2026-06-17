@@ -124,6 +124,48 @@ async fn english_ranked_by_relevance() {
     }
 }
 
+// 4c. An exact one-word sense outranks a fringe entry that merely mentions the word, even when the
+//     fringe entry is far more frequent: "ear" → 耳, not 稲穂 ("ear of rice"). Was the headline bug.
+#[tokio::test]
+async fn english_exact_sense_beats_frequent_fringe() {
+    let v = search("ear").await;
+    let hw = headwords(&v);
+    assert_eq!(hw.first().map(String::as_str), Some("耳"), "ear should lead with 耳, got {hw:?}");
+    let pos = |w: &str| hw.iter().position(|h| h == w);
+    if let (Some(e), Some(r)) = (pos("耳"), pos("稲穂")) {
+        assert!(e < r, "耳 (#{e}) must outrank 稲穂 ear-of-rice (#{r})");
+    }
+}
+// 4d. Plural query still finds the singular gloss (porter stemming) — used to return nothing.
+#[tokio::test]
+async fn english_plural_query_stems() {
+    let hw = headwords(&search("ears").await);
+    assert!(hw.contains(&"耳".to_string()), "ears should still find 耳, got {hw:?}");
+}
+#[tokio::test]
+async fn english_plural_cats_stems() {
+    let hw = headwords(&search("cats").await);
+    assert!(hw.contains(&"猫".to_string()), "cats should find 猫, got {hw:?}");
+}
+#[tokio::test]
+async fn english_plural_mountains_stems_and_ranks() {
+    // porter stems mountains→mountain; 山 must surface near the top (it was absent before). It sits
+    // just behind 岳 ("high mountain") only because the frequency data is saturated — a separate
+    // freq-backfill concern; both are genuine mountain words, so top-3 is the honest bar here.
+    let hw = headwords(&search("mountains").await);
+    let rank = hw.iter().position(|h| h == "山");
+    assert!(matches!(rank, Some(r) if r < 3), "山 should rank in the top 3 for mountains, got {hw:?}");
+}
+// 4e. Past-tense query finds the base gloss too (porter): "loved" → a love word.
+#[tokio::test]
+async fn english_past_tense_query_stems() {
+    let hw = headwords(&search("loved").await);
+    assert!(
+        hw.iter().any(|h| ["愛", "愛する", "恋", "恋する", "愛す"].contains(&h.as_str())),
+        "loved should find a love word, got {hw:?}"
+    );
+}
+
 // 5. toneless pinyin keeps many candidates instead of bailing.
 #[tokio::test]
 async fn toneless_pinyin_multi() {
@@ -322,6 +364,179 @@ async fn why_orthographic_and_phonological() {
     let kinds: Vec<String> =
         c["readings"].as_array().unwrap().iter().map(|r| r["kind"].as_str().unwrap().into()).collect();
     assert!(kinds.iter().any(|k| k == "pinyin") && kinds.iter().any(|k| k == "jyutping") && kinds.iter().any(|k| k == "onyomi"));
+}
+
+// Structure: a character built from repetitions of one base is named (森 = three 木, resolved
+// recursively through the doubled 林); a mixed-component character (好 = 女 + 子) is not.
+#[tokio::test]
+async fn char_decomposition_repeats() {
+    for (word, base, count) in [("森", "木", 3), ("林", "木", 2)] {
+        let hit = entry_of(&search(word).await, "zh", word);
+        let id = hit["lexeme_id"].as_i64().unwrap();
+        let e = get(&format!("/entry/{id}")).await.1;
+        let c = &e["characters"][0];
+        assert_eq!(c["decomp"]["base"].as_str(), Some(base), "{word} base");
+        assert_eq!(c["decomp"]["count"].as_i64(), Some(count), "{word} count");
+    }
+    let hit = entry_of(&search("好").await, "zh", "好");
+    let id = hit["lexeme_id"].as_i64().unwrap();
+    let e = get(&format!("/entry/{id}")).await.1;
+    assert!(e["characters"][0]["decomp"].is_null(), "好 (女+子) has no uniform decomposition");
+}
+
+// Kana search: as-you-type prefix, hiragana/katakana folding, and mixed kanji+kana prefix — the
+// cases that previously returned an empty screen until the exact dictionary form was fully typed.
+#[tokio::test]
+async fn kana_reading_prefix() {
+    // typing たべ should already surface たべる (food verbs), not nothing
+    let hw = headwords(&search("たべ").await);
+    assert!(hw.contains(&"食べる".to_string()), "たべ prefix should find 食べる, got {hw:?}");
+}
+#[tokio::test]
+async fn kana_reading_prefix_gakko() {
+    let hw = headwords(&search("がっこ").await);
+    assert!(hw.contains(&"学校".to_string()), "がっこ prefix should find 学校, got {hw:?}");
+}
+#[tokio::test]
+async fn kana_hiragana_to_katakana_fold() {
+    // hiragana query for a katakana-stored loanword
+    let hw = headwords(&search("てれび").await);
+    assert!(hw.contains(&"テレビ".to_string()), "てれび should fold to テレビ, got {hw:?}");
+}
+#[tokio::test]
+async fn kana_mixed_kanji_kana_prefix() {
+    // 食べ (kanji + okurigana) is a prefix of 食べる / 食べ物
+    let hw = headwords(&search("食べ").await);
+    assert!(hw.contains(&"食べる".to_string()), "食べ prefix should find 食べる, got {hw:?}");
+}
+#[tokio::test]
+async fn kana_exact_reading_still_works_and_leads() {
+    // regression: the exact reading must still match and outrank prefix-only hits
+    let v = search("たべる").await;
+    let hw = headwords(&v);
+    assert!(hw.contains(&"食べる".to_string()), "exact たべる should find 食べる");
+    assert_eq!(hw.first().map(String::as_str), Some("食べる"), "exact reading should lead, got {hw:?}");
+}
+#[tokio::test]
+async fn kana_full_written_form_still_works() {
+    // regression: the fully-typed written form still resolves via surface_form exact
+    let hw = headwords(&search("食べる").await);
+    assert!(hw.contains(&"食べる".to_string()), "食べる exact form should resolve");
+}
+
+// Everyday-word: a single character that is a Japanese word points to the natural multi-character
+// word Chinese actually writes for the same meaning (耳 → 耳朵). Derived, contained, freq-gated.
+fn everyday_words(entry: &Value) -> Vec<String> {
+    entry["translations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|l| l["relation"] == "everyday-word")
+        .map(|l| l["headword"].as_str().unwrap().to_string())
+        .collect()
+}
+#[tokio::test]
+async fn everyday_word_ear() {
+    let hit = entry_of(&search("耳").await, "ja", "耳");
+    let e = get(&format!("/entry/{}", hit["lexeme_id"].as_i64().unwrap())).await.1;
+    assert!(everyday_words(&e).contains(&"耳朵".to_string()), "耳 should point to everyday 耳朵");
+}
+#[tokio::test]
+async fn everyday_word_duo_flower() {
+    // the 朵 "no equivalent" report: 朵 isn't Japanese, but Chinese writes the concept as 花朵
+    let hit = entry_of(&search("朵").await, "zh", "朵");
+    let e = get(&format!("/entry/{}", hit["lexeme_id"].as_i64().unwrap())).await.1;
+    assert!(everyday_words(&e).contains(&"花朵".to_string()), "朵 should point to everyday 花朵");
+}
+#[tokio::test]
+async fn everyday_word_relation_is_multichar_zh_with_reading() {
+    let hit = entry_of(&search("耳").await, "ja", "耳");
+    let e = get(&format!("/entry/{}", hit["lexeme_id"].as_i64().unwrap())).await.1;
+    let ew = e["translations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|l| l["relation"] == "everyday-word")
+        .expect("an everyday-word link");
+    assert_eq!(ew["variety"], "zh");
+    assert!(ew["headword"].as_str().unwrap().chars().count() >= 2, "everyday word is multi-character");
+    assert!(ew["reading"].is_string(), "everyday word carries a reading");
+}
+#[tokio::test]
+async fn everyday_word_none_when_char_is_the_word() {
+    // 山 / 人 ARE the everyday words; no compound should be suggested
+    for ch in ["山", "人"] {
+        let hits = search(ch).await;
+        let top = hits["results"].as_array().unwrap()[0]["lexeme_id"].as_i64().unwrap();
+        let e = get(&format!("/entry/{top}")).await.1;
+        assert!(everyday_words(&e).is_empty(), "{ch} should NOT get an everyday-word, got {:?}", everyday_words(&e));
+    }
+}
+#[tokio::test]
+async fn everyday_word_absent_for_multichar_entry() {
+    let hit = entry_of(&search("学校").await, "ja", "学校");
+    let e = get(&format!("/entry/{}", hit["lexeme_id"].as_i64().unwrap())).await.1;
+    assert!(everyday_words(&e).is_empty(), "multi-char words get no everyday-word pointer");
+}
+
+// Structure: components carry their MEANINGS (好 → 女 "woman" + 子 "child"), and radical-variant
+// forms are glossed via their parent (a 亻-bearing char shows "person", not "radical number 9").
+fn components(entry: &Value, ch_field: usize) -> Vec<(String, String)> {
+    entry["characters"][ch_field]["components"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| {
+            (
+                c["ch"].as_str().unwrap().to_string(),
+                c["gloss"].as_str().unwrap_or("").to_lowercase(),
+            )
+        })
+        .collect()
+}
+#[tokio::test]
+async fn char_components_have_meanings() {
+    let hit = entry_of(&search("好").await, "zh", "好");
+    let e = get(&format!("/entry/{}", hit["lexeme_id"].as_i64().unwrap())).await.1;
+    let comps = components(&e, 0);
+    let chs: Vec<&str> = comps.iter().map(|(c, _)| c.as_str()).collect();
+    assert_eq!(chs, vec!["女", "子"], "好 decomposes into 女 + 子");
+    assert!(comps.iter().any(|(c, g)| c == "女" && g.contains("woman")), "女 glossed as woman: {comps:?}");
+    assert!(comps.iter().any(|(c, g)| c == "子" && g.contains("child")), "子 glossed as child: {comps:?}");
+}
+#[tokio::test]
+async fn char_components_radical_variant_parent_gloss() {
+    // 倭 = 亻 + 委; 亻 must gloss via its parent 人 ("man; people…"), not the bare "radical number 9"
+    let hit = entry_of(&search("倭").await, "zh", "倭");
+    let e = get(&format!("/entry/{}", hit["lexeme_id"].as_i64().unwrap())).await.1;
+    let comps = components(&e, 0);
+    assert!(
+        comps.iter().any(|(c, g)| c == "亻" && (g.contains("people") || g.contains("man")) && !g.contains("radical")),
+        "亻 → person/people, not 'radical number 9': {comps:?}"
+    );
+}
+#[tokio::test]
+async fn char_components_water_radical_form() {
+    // 江 = 氵 + 工; 氵 glossed as water (parent 水)
+    let hit = entry_of(&search("江").await, "zh", "江");
+    let e = get(&format!("/entry/{}", hit["lexeme_id"].as_i64().unwrap())).await.1;
+    let comps = components(&e, 0);
+    assert!(comps.iter().any(|(c, g)| c == "氵" && g.contains("water")), "氵 → water: {comps:?}");
+}
+#[tokio::test]
+async fn char_components_repeated_base_meaning() {
+    // 森 → distinct component 木 carries "tree" (the decomp says ×3; the component gives the meaning)
+    let hit = entry_of(&search("森").await, "zh", "森");
+    let e = get(&format!("/entry/{}", hit["lexeme_id"].as_i64().unwrap())).await.1;
+    let comps = components(&e, 0);
+    assert!(comps.iter().any(|(c, g)| (c == "木" || c == "林") && g.contains("tree")), "森 part means tree: {comps:?}");
+}
+#[tokio::test]
+async fn char_components_empty_for_atomic() {
+    // 木 is atomic — no sub-components to explain
+    let hit = entry_of(&search("木").await, "zh", "木");
+    let e = get(&format!("/entry/{}", hit["lexeme_id"].as_i64().unwrap())).await.1;
+    assert!(e["characters"][0]["components"].as_array().unwrap().is_empty(), "木 is atomic");
 }
 
 // P7 (edge). /why for unknown id is 404.

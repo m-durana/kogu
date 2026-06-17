@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, isBoundForm } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -295,12 +295,11 @@ describe('isMinorGloss / meaningfulGlossCount', () => {
   })
 })
 
-describe('glossParts - tappable cross-reference target', () => {
+describe('linkifyHan / glossParts - every Han run becomes a tappable link', () => {
   it('splits "variant of X" so the glyph is a link', () => {
     expect(glossParts('variant of 著')).toEqual([
       { v: 'variant of ' },
       { v: '著', link: true },
-      { v: '' },
     ])
   })
   it('handles "old variant of", "used in", "see", "see also"', () => {
@@ -316,13 +315,90 @@ describe('glossParts - tappable cross-reference target', () => {
       { v: ' (to wear)' },
     ])
   })
-  it('returns a single plain part for an ordinary gloss (no link)', () => {
-    expect(glossParts('to study; to learn')).toEqual([{ v: 'to study; to learn' }])
-    // "variant" without a following Han glyph is not a cross-reference
-    expect(glossParts('a variant spelling')).toEqual([{ v: 'a variant spelling' }])
+  it('links a Han run anywhere in the gloss, not only after a cue word', () => {
+    expect(linkifyHan('ear; cf 耳朵 here')).toEqual([
+      { v: 'ear; cf ' },
+      { v: '耳朵', link: true },
+      { v: ' here' },
+    ])
   })
-  it('does not match a target that is not a Han glyph', () => {
+  it('returns a single plain part for an ordinary gloss (no Han)', () => {
+    expect(glossParts('to study; to learn')).toEqual([{ v: 'to study; to learn' }])
+    expect(glossParts('a variant spelling')).toEqual([{ v: 'a variant spelling' }])
     expect(glossParts('see above')).toEqual([{ v: 'see above' }])
+  })
+})
+
+describe('describeIds - composition with structure kept (森 = three 木)', () => {
+  it('detects a repeated component', () => {
+    expect(describeIds('⿱木⿰木木', '森')).toEqual({
+      parts: [{ component: '木', count: 3 }],
+      arrangement: 'stacked top to bottom',
+      repeated: { component: '木', count: 3 },
+    })
+  })
+  it('two-of-a-kind side by side (林 = two 木)', () => {
+    const d = describeIds('⿰木木', '林')!
+    expect(d.repeated).toEqual({ component: '木', count: 2 })
+    expect(d.arrangement).toBe('side by side')
+  })
+  it('distinct components, no repetition (好 = 女 + 子)', () => {
+    const d = describeIds('⿰女子', '好')!
+    expect(d.repeated).toBeNull()
+    expect(d.parts).toEqual([{ component: '女', count: 1 }, { component: '子', count: 1 }])
+    expect(d.arrangement).toBe('side by side')
+  })
+  it('strips source tags before parsing', () => {
+    expect(describeIds('⿰糸氏[GTV]', '紙')!.parts).toEqual([
+      { component: '糸', count: 1 },
+      { component: '氏', count: 1 },
+    ])
+  })
+  it('atomic char (ids is just itself or empty) → null', () => {
+    expect(describeIds('木', '木')).toBeNull()
+    expect(describeIds(null)).toBeNull()
+    expect(describeIds('')).toBeNull()
+  })
+  it('numWord names small counts', () => {
+    expect(numWord(2)).toBe('two')
+    expect(numWord(3)).toBe('three')
+    expect(numWord(12)).toBe('12')
+  })
+})
+
+describe('etymologyTokens - delineate merged statements + jargon tooltips + Han links', () => {
+  it('splits newline-separated statements into separate segments', () => {
+    const segs = etymologyTokens('First statement.\nSecond statement.')
+    expect(segs.length).toBe(2)
+    expect(segs[0].heading).toBeNull()
+  })
+  it('lifts "Etymology N" markers to headings and drops bare-header text', () => {
+    // a header-only etymology (呆: "; Etymology 1\n; Etymology 2") yields no renderable segments
+    expect(etymologyTokens('; Etymology 1\n; Etymology 2\n; Etymology 3')).toEqual([])
+  })
+  it('attaches an "Etymology N" heading to the statement that follows it', () => {
+    const segs = etymologyTokens('; Etymology 1\nA pictogram.')
+    expect(segs.length).toBe(1)
+    expect(segs[0].heading).toBe('Etymology 1')
+  })
+  it('strips a leading "; " definition-list leak', () => {
+    const segs = etymologyTokens(';"not have; not"')
+    expect(segs[0].tokens[0]).toEqual({ t: 'text', v: '"not have; not"' })
+  })
+  it('tags jargon with a plain-English tooltip', () => {
+    const toks = etymologyTokens('Phono-semantic compound: semantic part.')[0].tokens
+    const abbr = toks.find((t) => t.t === 'abbr')
+    expect(abbr).toBeTruthy()
+    expect((abbr as { v: string }).v).toBe('Phono-semantic compound')
+  })
+  it('keeps reconstructions faint and Han runs tappable', () => {
+    const toks = etymologyTokens('semantic 亻 (OC *maŋ) here')[0].tokens
+    expect(toks.some((t) => t.t === 'recon')).toBe(true)
+    expect(toks.some((t) => t.t === 'han' && t.v === '亻')).toBe(true)
+  })
+  it('makes a kanji with a reading into ruby, not a plain link', () => {
+    const toks = etymologyTokens('甘(あま)し')[0].tokens
+    expect(toks[0]).toEqual({ t: 'ruby', base: '甘', rt: 'あま' })
   })
 })
 

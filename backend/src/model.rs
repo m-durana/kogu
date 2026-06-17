@@ -81,6 +81,26 @@ pub struct CharInfo {
     /// the character's script family across reforms (繁→简·日), for the forms strip. None when the
     /// glyph has no living cross-script branches and isn't a kokuji (nothing to show).
     pub script_forms: Option<ScriptForms>,
+    /// when the character is built entirely from repetitions of ONE simpler glyph (森 = three 木,
+    /// 晶 = three 日, 淼 = three 水), resolved recursively through "doubled" intermediates (林, 昍, 沝).
+    /// None for mixed-component characters (好 = 女 + 子) — the frontend then shows the flat parts.
+    pub decomp: Option<CharDecomp>,
+    /// the character's distinct components WITH their meanings (森 → 木 "tree"; 好 → 女 "woman", 子
+    /// "child"), so the structure section explains the parts, not just lists them. Radical-variant
+    /// forms are glossed via their parent character (亻 → "person").
+    pub components: Vec<Component>,
+}
+
+#[derive(Serialize)]
+pub struct Component {
+    pub ch: String,
+    pub gloss: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct CharDecomp {
+    pub base: String,
+    pub count: i64,
 }
 
 #[derive(Serialize)]
