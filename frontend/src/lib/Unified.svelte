@@ -447,7 +447,7 @@
               {#if r.reading}<span class="dread">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>{/if}
             </div>
             {#if ss.length}
-              <ol class="senses" class:clamp={!expanded.has(r.id)} use:clampProbe={r.id}>
+              <ol class="senses" class:clamp={!expanded.has(r.id) && overflow.has(r.id)} use:clampProbe={r.id}>
                 {#each ss as g}<li><span class="sg">{g}</span></li>{/each}
               </ol>
               {#if overflow.has(r.id)}
