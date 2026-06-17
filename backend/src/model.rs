@@ -127,6 +127,9 @@ pub struct Component {
     /// 'semantic' (carries the meaning) | 'phonetic' (carries the sound) | 'form' | 'iconic' | None.
     /// From Wiktionary's structured Han-compound data — 媽 = 女 (semantic) + 馬 (phonetic).
     pub role: Option<String>,
+    /// for a phonetic component, the sound it lends — the component's own reading (馬 → "ma3"), so the
+    /// UI can show "(sound: mǎ)". None for non-phonetic components or when no reading is known.
+    pub sound: Option<String>,
 }
 
 #[derive(Serialize)]

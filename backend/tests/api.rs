@@ -1073,3 +1073,15 @@ async fn component_roles_are_valid_values() {
         }
     }
 }
+
+#[tokio::test]
+async fn phonetic_component_carries_its_sound() {
+    let e = top_entry("媽").await;
+    let comps = e["characters"][0]["components"].as_array().unwrap();
+    let ma = comps.iter().find(|c| c["ch"] == "馬").unwrap();
+    assert_eq!(ma["role"], "phonetic");
+    // 馬's reading (tone-marked pinyin mǎ) is the sound it lends
+    assert_eq!(ma["sound"].as_str(), Some("mǎ"), "馬 lends the mǎ sound, got {:?}", ma["sound"]);
+    let nu = comps.iter().find(|c| c["ch"] == "女").unwrap();
+    assert!(nu["sound"].is_null(), "semantic component carries no sound");
+}

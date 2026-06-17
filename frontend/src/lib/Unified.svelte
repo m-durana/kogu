@@ -311,7 +311,14 @@
   const decomp = $derived(single && headChar ? headChar.decomp : null)
   // component → meaning, so the structure section explains the parts (女 "woman", 木 "tree")
   const compGloss = $derived(new Map((headChar?.components ?? []).map((c) => [c.ch, c.gloss])))
-  const meaningOf = (ch: string) => firstSense(compGloss.get(ch) ?? '')
+  // at most the first two meanings, split on BOTH ';' and ',' (Unihan glosses like 天 "sky, heaven,
+  // day, sky god…" use commas, so a one-sense cap that splits only ';' would leak the whole list).
+  function briefMeaning(g: string | null): string {
+    const parts = cleanGloss(g ?? '').split(/[;,]/).map((s) => s.trim()).filter(Boolean)
+    const major = parts.filter((p) => !isMinorGloss(p))
+    return (major.length ? major : parts).slice(0, 2).join(', ')
+  }
+  const meaningOf = (ch: string) => briefMeaning(compGloss.get(ch) ?? '')
   // phono-semantic roles: when the backend knows which component carries the MEANING vs the SOUND
   // (媽 = 女 semantic + 馬 phonetic) we render the component list with role badges instead of the flat
   // "made of" parts. Only when at least one role is known.
@@ -361,10 +368,25 @@
       .sort((a, b) => VORDER.indexOf(a.variety) - VORDER.indexOf(b.variety)),
   )
 
+  // significant words in the looked-up entry's OWN meaning — to rank "related" by meaning closeness
+  const headGlossWords = $derived.by(() => {
+    const s = new Set<string>()
+    for (const sn of entry?.senses ?? [])
+      for (const w of cleanGloss(sn.gloss_en).toLowerCase().split(/[^a-z]+/)) if (w.length > 2) s.add(w)
+    return s
+  })
+  const glossOverlap = (glosses: string[]): number => {
+    let n = 0
+    for (const g of glosses)
+      for (const w of cleanGloss(g).toLowerCase().split(/[^a-z]+/)) if (w.length > 2 && headGlossWords.has(w)) n++
+    return n
+  }
+
   // Block C - "related": same-meaning words in another language linked only by a shared concept
   // (the fuzzy gloss-pivot tier, relation 'synonym'). Lower trust than the curated "written
   // differently" bridge, so shown under a clearly hedged heading and only for multi-character words
   // (single characters already get co-equal defs + everyday-word + the synthetic Japanese row).
+  // Ordered MEANING-FIRST: the closest-meaning words (most gloss overlap with this entry) lead.
   const relatedRows = $derived<Row[]>(
     !single
       ? (entry?.translations ?? [])
@@ -381,7 +403,11 @@
             relation: 'synonym',
             kind: 'equiv' as const,
           }))
-          .sort((a, b) => VORDER.indexOf(a.variety) - VORDER.indexOf(b.variety))
+          .sort(
+            (a, b) =>
+              glossOverlap(b.glosses) - glossOverlap(a.glosses) ||
+              VORDER.indexOf(a.variety) - VORDER.indexOf(b.variety),
+          )
           .slice(0, 12)
       : [],
   )
@@ -673,7 +699,7 @@
               {#if r.variety === 'ja' && jaReadItems.length}
                 <!-- the kanji's full on/kun readings (kana + romaji) live right on the 日 row now — no
                      separate "readings" section. Clamped to ONE line; "+" reveals the rest when it wraps. -->
-                <span class="dread dreads" class:clamp={!jaReadOpen} use:readProbe>{#each jaReadItems as it, i}{#if i}<span class="rsep">·</span>{/if}{it.main}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead}>{jaReadOpen ? '−' : '+'}</button>{/if}
+                <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe>{#each jaReadItems as it, i}{#if i}<span class="rsep">·</span>{/if}{it.main}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{jaReadOpen ? '−' : '+'}</button>{/if}
               {:else if r.reading}
                 <span class="dread">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>
               {/if}
@@ -716,16 +742,6 @@
       </section>
     {/if}
 
-    {#if relatedRows.length}
-      <!-- Block C - related: same-concept words in another language (looser than the bridge). For a
-           multi-char word like 客人 these are the Japanese お客様 / 来客 etc. that share the meaning. -->
-      <section class="bridge">
-        <h3>related</h3>
-        <ul class="langs">
-          {#each relatedRows as r (r.id)}{@render rowItem(r)}{/each}
-        </ul>
-      </section>
-    {/if}
   {:else if listRows.length}
     <!-- English / reading search: a plain results list -->
     <section class="bridge">
@@ -758,21 +774,19 @@
       {#if hasRoles}
         <!-- phono-semantic: which part carries the meaning vs the sound (媽 = 女 meaning + 馬 sound) -->
         <p class="comp">
-          {#if comp?.idc}<IdcBox idc={comp.idc} />{/if}
-          <span class="dim">Made of</span>
-          {#each roleParts as c, i}{#if i}<span class="plus">+</span>{/if}<button class="part" onclick={() => onsearch(c.ch)} title="look up {c.ch}">{c.ch}</button>{#if meaningOf(c.ch)}<span class="cmean">{meaningOf(c.ch)}</span>{/if}{#if roleBadge(c.role)}<span class="role role-{c.role}">{roleBadge(c.role)}</span>{/if}{/each}
+          {#if comp?.idc}<IdcBox idc={comp.idc} /><span class="dim idcsep">:</span>{/if}
+          {#each roleParts as c, i}{#if i}<span class="plus">+</span>{/if}<button class="part" onclick={() => onsearch(c.ch)} title="look up {c.ch}">{c.ch}</button>{#if c.role === 'phonetic' && c.sound}<span class="cmean">sound: {pinyinMarks(c.sound)}</span>{:else if meaningOf(c.ch)}<span class="cmean">{meaningOf(c.ch)}</span>{/if}{#if roleBadge(c.role) && !(c.role === 'phonetic' && c.sound)}<span class="role role-{c.role}">{roleBadge(c.role)}</span>{/if}{/each}
         </p>
       {:else if decomp}
         <p class="comp">
-          {#if comp?.idc}<IdcBox idc={comp.idc} />{/if}
-          <span class="dim">Made of {numWord(decomp.count)} ×</span>
+          {#if comp?.idc}<IdcBox idc={comp.idc} /><span class="dim idcsep">:</span>{/if}
+          <span class="dim">{numWord(decomp.count)} ×</span>
           <button class="part" onclick={() => onsearch(decomp.base)} title="look up {decomp.base}">{decomp.base}</button>
           {#if meaningOf(decomp.base)}<span class="cmean">{meaningOf(decomp.base)}</span>{/if}
         </p>
       {:else if comp}
         <p class="comp">
-          {#if comp.idc}<IdcBox idc={comp.idc} />{/if}
-          <span class="dim">Made of</span>
+          {#if comp.idc}<IdcBox idc={comp.idc} /><span class="dim idcsep">:</span>{/if}
           {#each comp.parts as p, i}{#if i}<span class="plus">+</span>{/if}<button class="part" onclick={() => onsearch(p.component)} title="look up {p.component}">{p.component}</button>{#if p.count > 1}<span class="dim">×{p.count}</span>{/if}{#if meaningOf(p.component)}<span class="cmean">{meaningOf(p.component)}</span>{/if}{/each}
         </p>
       {/if}
@@ -893,6 +907,17 @@
     </section>
   {/if}
 
+  {#if relatedRows.length}
+    <!-- "related": same-concept words in another language (looser than the bridge). Kept at the very
+         bottom (after origin / used-in) since it's the lowest-confidence, gloss-pivoted tier. -->
+    <section class="bridge related">
+      <h3>related</h3>
+      <ul class="langs">
+        {#each relatedRows as r (r.id)}{@render rowItem(r)}{/each}
+      </ul>
+    </section>
+  {/if}
+
   {#if boundOpen}
     {@const bc = boundCompounds(boundOpen)}
     <div class="mbg" role="presentation" onclick={closeBound}>
@@ -932,8 +957,9 @@
   .dread { font-family: var(--mono); font-size: 0.9rem; color: var(--muted); }
   /* tight reading separator (the old "  ·  " ate too much space) + romaji gloss + "+N more" toggle */
   .dread .rsep { color: var(--faint); margin: 0 0.28rem; }
-  .rmore { background: none; border: none; padding: 0 0.2rem; font-family: var(--mono); font-size: 0.72rem; color: var(--muted); cursor: pointer; }
-  .rmore:hover { color: var(--text); background: none; }
+  /* "+" / "−" toggle, sized to match the readings so it reads as part of the line, not a tiny tag */
+  .rmore { background: none; border: none; padding: 0 0.25rem; font-family: var(--mono); font-size: 0.95rem; line-height: 1; color: var(--text); cursor: pointer; flex: none; }
+  .rmore:hover { color: #fff; background: none; }
   .senses { margin: 0.5rem 0 0; padding: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 0.35rem; }
   /* collapsed: clip to ~2 lines and fade the cut, so a long definition doesn't wall off the page */
   .senses.clamp { max-height: 2.9rem; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 74%, transparent); mask-image: linear-gradient(to bottom, #000 74%, transparent); }
@@ -965,6 +991,8 @@
 
   /* Block B - the bridge: the same meaning written differently elsewhere. Tappable rows. */
   .bridge { margin-bottom: 0.6rem; }
+  /* the bottom "related" band gets breathing room from origin / used-in above it */
+  .bridge.related { margin-top: 1.4rem; }
   .langs { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
   .langs li { border-bottom: 1px solid var(--border); }
   .lang { display: flex; gap: 0.8rem; align-items: flex-start; width: 100%; text-align: left; background: none; border: none; border-radius: 0; padding: 0.7rem 0.5rem; }
@@ -998,6 +1026,9 @@
      to its own line); it grows into the space after the label and clips to one line when long. */
   .dreads { flex: 1 1 0; min-width: 0; line-height: 1.5; }
   .dreads.clamp { white-space: nowrap; overflow: hidden; }
+  /* fade the last renderable character into nothing (like a "show more" cue) instead of a hard cut —
+     only when the readings actually overflow */
+  .dreads.faded { -webkit-mask-image: linear-gradient(to right, #000 80%, transparent); mask-image: linear-gradient(to right, #000 80%, transparent); }
   /* radical line (#16) + usage badge (#17) + script-strip caption (#7) */
   .radline { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 0.55rem; font-size: 0.9rem; }
   .rtag { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 0.06rem 0.46rem; }

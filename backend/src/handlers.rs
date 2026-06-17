@@ -717,7 +717,18 @@ fn char_components(conn: &rusqlite::Connection, ch: char, ids: Option<&str>) -> 
                     if seen.insert(c) {
                         // fall back to the parent-character gloss when the template omitted one
                         let gloss = gloss.or_else(|| component_gloss(conn, c));
-                        out.push(Component { ch: comp, gloss, role });
+                        // a phonetic component lends its own reading as the sound ("(sound: mǎ)")
+                        let sound = if role.as_deref() == Some("phonetic") {
+                            conn.query_row(
+                                "SELECT value FROM char_reading WHERE cp=?1 AND kind='pinyin' LIMIT 1",
+                                [c as i64],
+                                |r| r.get(0),
+                            )
+                            .ok()
+                        } else {
+                            None
+                        };
+                        out.push(Component { ch: comp, gloss, role, sound });
                     }
                 }
             }
@@ -730,7 +741,7 @@ fn char_components(conn: &rusqlite::Connection, ch: char, ids: Option<&str>) -> 
     let mut out = Vec::new();
     for c in leaves {
         if seen.insert(c) {
-            out.push(Component { ch: c.to_string(), gloss: component_gloss(conn, c), role: None });
+            out.push(Component { ch: c.to_string(), gloss: component_gloss(conn, c), role: None, sound: None });
         }
     }
     out
