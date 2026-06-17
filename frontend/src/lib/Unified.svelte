@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CharInfo, Entry, Hit, ReadingKV, Variety } from './types'
-  import { primaryForm, varietyLabel, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, splitRecon, formTag, glossParts } from './display'
+  import { primaryForm, varietyLabel, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, splitRecon, formTag, glossParts, isBoundForm } from './display'
   import ScriptForms from './ScriptForms.svelte'
   import { AlertTriangle } from '@lucide/svelte'
   import { readingRomaji } from './romaji'
@@ -410,7 +410,21 @@
   let showOrigin = $state(false)
   let showWords = $state(false)
   const wordCount = $derived(wordGroups.reduce((n, g) => n + g.items.length, 0))
+
+  // Bound form: a morpheme that doesn't stand alone as a word — it only carries meaning inside
+  // compounds. CC-CEDICT flags these; instead of leaking the jargon into the prose we show a small
+  // tappable "bound" tag whose popup explains it and lists the compounds the character lives in.
+  let boundOpen = $state<Row | null>(null)
+  function boundCompounds(r: Row): { lexeme_id: number; headword: string; glosses: string[] }[] {
+    return (entry?.compounds ?? []).filter((l) => l.variety === r.variety).slice(0, 30)
+  }
+  function pivot(q: string) {
+    boundOpen = null
+    onsearch(q)
+  }
 </script>
+
+<svelte:window onkeydown={(e) => { if (e.key === 'Escape' && boundOpen) boundOpen = null }} />
 
 <article class="u">
   <!-- one tappable cross-language row (bridge band + plain results list) -->
@@ -449,6 +463,7 @@
                 <span class="dform">{r.form}</span>
               {/if}
               {#if r.reading}<span class="dread">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>{/if}
+              {#if isBoundForm(r.glosses)}<button class="btag" onclick={() => (boundOpen = r)} title="bound form — only used in compounds">bound</button>{/if}
             </div>
             {#if ss.length}
               <ol class="senses" class:clamp={!expanded.has(r.id) && overflow.has(r.id)} use:clampProbe={{ id: r.id, rem: 2.9 }}>
@@ -557,6 +572,23 @@
     </section>
   {/if}
 
+  {#if boundOpen}
+    {@const bc = boundCompounds(boundOpen)}
+    <div class="mbg" role="presentation" onclick={() => (boundOpen = null)}>
+      <div class="modal" role="dialog" aria-modal="true" aria-label="bound form" onclick={(e) => e.stopPropagation()}>
+        <div class="mh"><span class="mglyph">{boundOpen.form}</span><span class="mtag">bound form</span></div>
+        <p class="mexp">Not used as a word on its own — it carries meaning only inside compounds.</p>
+        {#if bc.length}
+          <div class="mlabel">appears in</div>
+          <div class="chips">
+            {#each bc as l (l.lexeme_id)}<button class="chip" onclick={() => pivot(l.headword)} title={glossLine(l.glosses, 1)}>{l.headword}</button>{/each}
+          </div>
+        {/if}
+        <button class="mclose" onclick={() => (boundOpen = null)}>close</button>
+      </div>
+    </div>
+  {/if}
+
   {#if entry && entry.etymology}
     <section class="origin">
       <button class="oh" aria-expanded={showOrigin} onclick={() => (showOrigin = !showOrigin)}>
@@ -598,6 +630,22 @@
   .xref { font-family: var(--han); color: var(--text); background: none; border: none; padding: 0; font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
   .xref:hover { color: #fff; background: none; }
   .more:hover { color: var(--text); background: none; }
+
+  /* "bound" tag — a bound morpheme (only used in compounds); taps open an explainer + its compounds */
+  .btag { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: 999px; padding: 0.06rem 0.42rem; line-height: 1.4; cursor: pointer; align-self: center; }
+  .btag:hover { color: var(--text); border-color: var(--border-strong); background: none; }
+
+  /* bound-form popup — minimal monochrome dialog */
+  .mbg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 50; }
+  .modal { width: min(28rem, 100%); max-height: 80vh; overflow-y: auto; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: calc(var(--r) * 1.5); padding: 1.2rem 1.2rem 1rem; }
+  .mh { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
+  .mglyph { font-family: var(--han); font-size: 1.9rem; line-height: 1; }
+  .mtag { font-family: var(--mono); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .mexp { margin: 0 0 0.9rem; font-size: 0.92rem; line-height: 1.5; color: var(--text); }
+  .mlabel { font-family: var(--mono); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); margin-bottom: 0.5rem; }
+  .modal .chips { margin-bottom: 0.4rem; }
+  .mclose { display: block; margin-top: 0.9rem; margin-left: auto; font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); background: none; border: none; padding: 0.3rem 0; cursor: pointer; }
+  .mclose:hover { color: var(--text); background: none; }
 
   /* Block B - the bridge: the same meaning written differently elsewhere. Tappable rows. */
   .bridge { margin-bottom: 0.6rem; }

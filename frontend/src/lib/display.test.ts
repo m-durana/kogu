@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, isBoundForm } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -214,6 +214,10 @@ describe('cleanGloss - strip CC-CEDICT markup', () => {
     // a real sense starting with (bound form) is no longer treated as minor
     expect(isMinorGloss('(bound form) row; line')).toBe(false)
   })
+  it('strips "(meaningless bound form)" too', () => {
+    expect(cleanGloss('(old) actor; (meaningless bound form)')).toBe('(old) actor')
+    expect(isMinorGloss('(meaningless bound form)')).toBe(true) // nothing left → minor
+  })
   it('strips CC-Canto (Cantonese) tag and Mandarin-equivalent note', () => {
     // the 粵語 row label + the "written differently" bridge now carry this info structurally
     expect(cleanGloss('to not have (Cantonese) (Mandarin equivalent: 沒有|没有[mei2 you3])')).toBe('to not have')
@@ -319,6 +323,19 @@ describe('glossParts - tappable cross-reference target', () => {
   })
   it('does not match a target that is not a Han glyph', () => {
     expect(glossParts('see above')).toEqual([{ v: 'see above' }])
+  })
+})
+
+describe('isBoundForm - detect a bound-morpheme marker across a row\'s glosses', () => {
+  it('true when any gloss carries the "(bound form)" marker', () => {
+    expect(isBoundForm(['(bound form) up; above'])).toBe(true)
+    expect(isBoundForm(['no; not so', '(bound form) not; un-'])).toBe(true) // 不: only later sense bound
+    expect(isBoundForm(['(meaningless bound form)'])).toBe(true)
+  })
+  it('false when no gloss is a bound form', () => {
+    expect(isBoundForm(['dragon', 'surname Long'])).toBe(false)
+    expect(isBoundForm([])).toBe(false)
+    expect(isBoundForm(['the bound copy of a book'])).toBe(false) // "bound" but not the marker
   })
 })
 
