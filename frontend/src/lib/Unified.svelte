@@ -308,11 +308,15 @@
   }
 
   // measure whether a senses block exceeds the 2-line clamp (so the "more" toggle shows only when
-  // needed). scrollHeight is the full content height even while clamped, so this works in both states.
+  // needed). scrollHeight is the full content height even while clamped. We must re-measure after the
+  // CJK web font swaps in (Noto loads after first paint and the text can grow past 2 lines) - and the
+  // ResizeObserver on the clamped node won't fire then (its box is pinned to max-height), so also hook
+  // document.fonts.ready and an rAF. Threshold tracks the CSS max-height (2.9rem) closely so a block
+  // that's visibly clipped always gets a toggle (no dead zone).
   function clampProbe(node: HTMLElement, id: number) {
     const measure = () => {
       const twoLines = parseFloat(getComputedStyle(document.documentElement).fontSize) * 2.9
-      const over = node.scrollHeight > twoLines + 4
+      const over = node.scrollHeight > twoLines + 1
       if (over === overflow.has(id)) return
       const n = new Set(overflow)
       if (over) n.add(id)
@@ -320,6 +324,8 @@
       overflow = n
     }
     measure()
+    requestAnimationFrame(measure)
+    document.fonts?.ready?.then(measure)
     const ro = new ResizeObserver(measure)
     ro.observe(node)
     return { destroy: () => ro.disconnect() }
