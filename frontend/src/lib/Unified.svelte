@@ -434,7 +434,7 @@
               <span class="dvar">{sectionName[r.variety]}</span>
               {#if r.variety === 'zh'}
                 {@const zp = zhPair(r)}
-                {#if zp.same}<span class="dform"><span class="ftag">trad/simp</span>{zp.trad}</span>{:else}<span class="dform"><span class="ftag">trad</span>{zp.trad}<span class="fsep">·</span><span class="ftag">simp</span>{zp.simp}</span>{/if}
+                {#if zp.same}<span class="dform"><span class="ftag">TC/SC</span>{zp.trad}</span>{:else}<span class="dform"><span class="ftag">TC</span>{zp.trad}<span class="fsep">·</span><span class="ftag">SC</span>{zp.simp}</span>{/if}
               {:else if r.alt}
                 <span class="dform"><span class="ftag">{formTag(r.formScript)}</span>{r.form}<span class="fsep">·</span><span class="ftag">{formTag(r.altScript)}</span>{r.alt}</span>
               {/if}

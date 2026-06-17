@@ -231,14 +231,14 @@ describe('cleanGloss - strip CC-CEDICT markup', () => {
 
 describe('script-forms helpers', () => {
   it('scriptShort maps single + joined scripts to English tags', () => {
-    expect(scriptShort('traditional')).toBe('trad')
-    expect(scriptShort('simplified')).toBe('simp')
+    expect(scriptShort('traditional')).toBe('TC')
+    expect(scriptShort('simplified')).toBe('SC')
     expect(scriptShort('shinjitai')).toBe('JP')
-    expect(scriptShort('simplified+shinjitai')).toBe('simp JP')
+    expect(scriptShort('simplified+shinjitai')).toBe('SC JP')
   })
   it('formTag maps surface-form scripts', () => {
-    expect(formTag('trad')).toBe('trad')
-    expect(formTag('simp')).toBe('simp')
+    expect(formTag('trad')).toBe('TC')
+    expect(formTag('simp')).toBe('SC')
     expect(formTag('kana')).toBe('')
   })
   it('orderBranches sorts traditional → simplified → shinjitai', () => {
