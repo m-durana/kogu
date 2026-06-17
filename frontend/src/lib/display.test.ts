@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -558,5 +558,50 @@ describe('cleanGloss - trailing "(from Japanese …)" source note removed', () =
   })
   it('does not touch a normal parenthetical', () => {
     expect(cleanGloss('to conform to (as in 入時)')).toBe('to conform to (as in 入時)')
+  })
+})
+
+// ── "written for sound" marker: phonetic-loan / transliteration words ──
+describe('isSoundLoan - fires only on the phono-semantic-matching badge', () => {
+  // 1. psm badge present (沙發 "sofa") → sound loan
+  it('true when phono-semantic-matching is present', () => {
+    expect(isSoundLoan(['borrowed-from-english', 'phono-semantic-matching'])).toBe(true)
+  })
+  // 2. psm alone (幽默 "humour") → sound loan
+  it('true for psm alone', () => {
+    expect(isSoundLoan(['phono-semantic-matching'])).toBe(true)
+  })
+  // 3. a plain borrowed loan that is NOT psm (a Sino-Japanese loan / wasei-kango) → NOT a sound loan
+  it('false for borrowed/calque without psm', () => {
+    expect(isSoundLoan(['borrowed', 'borrowed-from-japanese', 'wasei-kango'])).toBe(false)
+  })
+  // 4. a normal native word (電話) has no badges → NOT a sound loan
+  it('false for empty badges', () => {
+    expect(isSoundLoan([])).toBe(false)
+  })
+  // 5. null / undefined safety
+  it('false for null/undefined', () => {
+    expect(isSoundLoan(null)).toBe(false)
+    expect(isSoundLoan(undefined)).toBe(false)
+  })
+})
+
+describe('soundLoanSource + soundLoanTitle - name the source language when known', () => {
+  it('extracts English from borrowed-from-english', () => {
+    expect(soundLoanSource(['phono-semantic-matching', 'borrowed-from-english'])).toBe('English')
+  })
+  it('extracts French', () => {
+    expect(soundLoanSource(['borrowed-from-french', 'phono-semantic-matching'])).toBe('French')
+  })
+  it('null when no borrowed-from-<lang> badge', () => {
+    expect(soundLoanSource(['phono-semantic-matching'])).toBeNull()
+  })
+  it('title names the source when known', () => {
+    expect(soundLoanTitle(['phono-semantic-matching', 'borrowed-from-english'])).toContain('from English')
+  })
+  it('title falls back to generic loanword wording', () => {
+    const t = soundLoanTitle(['phono-semantic-matching'])
+    expect(t).toContain('sound')
+    expect(t).not.toContain('from ')
   })
 })

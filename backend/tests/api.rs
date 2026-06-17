@@ -959,6 +959,70 @@ async fn first_origin_is_the_looked_up_variety() {
     }
 }
 
+// ── "written for sound" marker: phonetic-loan / transliteration words carry the psm badge ──
+// Helper: the origin_badges of the entry for the variety whose form is exactly `q` (so a same-glyph
+// hit in another language doesn't shadow the Chinese transliteration we mean to test).
+async fn badges_for(q: &str) -> Vec<String> {
+    let v = search(q).await;
+    // pick the hit whose headword equals the query (the looked-up form), else the top hit.
+    let hit = v["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["headword"] == q)
+        .or_else(|| v["results"].get(0))
+        .expect("a hit");
+    let id = hit["lexeme_id"].as_i64().unwrap();
+    let e = get(&format!("/entry/{}", id)).await.1;
+    e["origin_badges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|b| b.as_str().unwrap().to_string())
+        .collect()
+}
+
+#[tokio::test]
+async fn sofa_is_phono_semantic_matching() {
+    // 沙發 shāfā "sofa" — a phonetic loan; the characters were chosen for their sound.
+    let b = badges_for("沙發").await;
+    assert!(b.contains(&"phono-semantic-matching".to_string()), "沙發 badges = {b:?}");
+}
+
+#[tokio::test]
+async fn humour_is_phono_semantic_matching() {
+    // 幽默 yōumò "humour" — Hu Shih's classic psm coinage.
+    let b = badges_for("幽默").await;
+    assert!(b.contains(&"phono-semantic-matching".to_string()), "幽默 badges = {b:?}");
+}
+
+#[tokio::test]
+async fn club_is_phono_semantic_matching() {
+    // 俱樂部 "club" — a phonetic loan written with sound-and-meaning-fitting characters.
+    let b = badges_for("俱樂部").await;
+    assert!(b.contains(&"phono-semantic-matching".to_string()), "俱樂部 badges = {b:?}");
+}
+
+#[tokio::test]
+async fn telephone_is_not_a_sound_loan() {
+    // 電話 "telephone" — a normal semantic compound (electric + speech), NOT a transliteration.
+    let b = badges_for("電話").await;
+    assert!(
+        !b.contains(&"phono-semantic-matching".to_string()),
+        "電話 must not carry the sound-loan badge, got {b:?}"
+    );
+}
+
+#[tokio::test]
+async fn ordinary_word_has_no_sound_loan_badge() {
+    // 機場 "airport" — a plain compound; no phonetic-loan signal.
+    let b = badges_for("機場").await;
+    assert!(
+        !b.contains(&"phono-semantic-matching".to_string()),
+        "機場 must not carry the sound-loan badge, got {b:?}"
+    );
+}
+
 // ── #16: radical marking + appears-in characters + standalone parent ──
 #[tokio::test]
 async fn chuo_radical_is_flagged() {

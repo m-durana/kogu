@@ -16,7 +16,7 @@
 
 <script lang="ts">
   import type { CharInfo, Entry, Hit, ReadingKV, Variety } from './types'
-  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont } from './display'
+  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle } from './display'
   import ScriptForms from './ScriptForms.svelte'
   import IdcBox from './IdcBox.svelte'
   import { AlertTriangle } from '@lucide/svelte'
@@ -299,6 +299,11 @@
       }),
   )
   const isGlyphSearch = $derived(defRows.length > 0)
+  // "written for sound" marker: a MULTI-character transliteration / phonetic loan (沙發, 幽默, 俱樂部)
+  // whose characters were picked for their sound, not meaning. Driven by the entry's origin badges
+  // (phono-semantic-matching). Single characters are excluded — they use the component role display.
+  const soundLoan = $derived(!single && !!entry && isSoundLoan(entry.origin_badges))
+  const soundLoanTip = $derived(soundLoan ? soundLoanTitle(entry!.origin_badges) : '')
 
   // Cantonese shares the Han script: a single character written 中 is almost always written and
   // understood the same in 粵, differing only in pronunciation. So when there's no SEPARATE Cantonese
@@ -687,6 +692,10 @@
     <!-- Block A - the definition: the typed glyph across every language that writes it, co-equally -->
     <section class="def">
       <h2 class="glyph" lang={langTag(headVariety)} style="font-family:{hanFont(headVariety)}">{head}</h2>
+      {#if soundLoan}
+        <!-- transliteration / phonetic loan: the characters were chosen for their sound, not meaning -->
+        <p class="soundloan"><span class="role role-phonetic">written for sound</span> <span class="slnote" title={soundLoanTip}>loanword — characters chosen for sound, not meaning</span></p>
+      {/if}
       <div class="defs">
         {#each defRows as r (r.id)}
           {@const ss = shownSenses(r)}
@@ -758,7 +767,7 @@
     </section>
   {/if}
 
-  {#if entry && single && headChar}
+  {#if isGlyphSearch && entry && single && headChar}
     <!-- single character: a compact structure line (no repeated glyph), then the words that use it.
          (Readings used to live in their own section here; they're now folded onto the definition rows
          above — 中 pinyin / 粵 jyutping / 日 on·kun — so there's no duplicate "readings" block.) -->
@@ -804,7 +813,7 @@
         </div>
       {/if}
     </section>
-  {:else if entry && entry.characters.length}
+  {:else if isGlyphSearch && entry && entry.characters.length}
     <!-- jukugo: break the word into its component characters. Same tappable row system as the
          "usually written" / "written differently" bands (one list style across the app), showing the
          languages it lives in, its reading, and one meaning. -->
@@ -828,7 +837,7 @@
         {/each}
       </ul>
     </section>
-  {:else if enriching}
+  {:else if isGlyphSearch && enriching}
     <!-- reserve the structure + words space while the entry loads, so nothing pops in below -->
     <section class="skel" aria-hidden="true">
       <div class="skel-h"></div>
@@ -852,7 +861,7 @@
     </div>
   {/snippet}
 
-  {#if originAccounts.length}
+  {#if isGlyphSearch && originAccounts.length}
     <section class="origin">
       <button class="oh" aria-expanded={showOrigin} onclick={() => setOpen('origin', !showOrigin)}>
         origin <span class="chev">{showOrigin ? '−' : '+'}</span>
@@ -880,7 +889,7 @@
     </section>
   {/if}
 
-  {#if entry && wordGroups.length}
+  {#if isGlyphSearch && entry && wordGroups.length}
     <section class="words">
       <button class="oh" aria-expanded={showWords} onclick={() => setOpen('words', !showWords)}>
         used in <span class="count">{wordCount}</span> <span class="chev">{showWords ? '−' : '+'}</span>
@@ -898,7 +907,7 @@
         {/each}
       {/if}
     </section>
-  {:else if entry && entry.appears_in.length}
+  {:else if isGlyphSearch && entry && entry.appears_in.length}
     <!-- a radical/bound component isn't a morpheme in words; show the CHARACTERS that contain it -->
     <section class="words">
       <button class="oh" aria-expanded={showWords} onclick={() => setOpen('words', !showWords)}>
@@ -914,7 +923,7 @@
     </section>
   {/if}
 
-  {#if relatedRows.length}
+  {#if isGlyphSearch && relatedRows.length}
     <!-- "related": same-concept words in another language (looser than the bridge). Kept at the very
          bottom (after origin / used-in) since it's the lowest-confidence, gloss-pivoted tier. -->
     <section class="bridge related">
@@ -1065,6 +1074,11 @@
   .role { font-family: var(--mono); font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.06em; padding: 0.05rem 0.38rem; border-radius: 999px; line-height: 1.5; align-self: center; }
   .role-semantic { color: var(--bg); background: var(--muted); }
   .role-phonetic { color: var(--muted); background: none; border: 1px solid var(--border-strong); }
+
+  /* "written for sound" marker for transliteration / phonetic-loan words (沙發, 幽默) — reuses the
+     outlined phonetic role chip, with a faint explanatory note. Monochrome, sits under the headword. */
+  .soundloan { display: flex; align-items: center; gap: 0.5rem; margin: 0.1rem 0 0.5rem; flex-wrap: wrap; }
+  .slnote { color: var(--muted); font-size: 0.82rem; cursor: help; }
 
   /* words: collapsible (toggle header like origin), grouped by language with breathing room */
   .words { margin-top: 1.6rem; }

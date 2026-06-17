@@ -338,6 +338,41 @@ export function linkifyHan(s: string): GlossPart[] {
 }
 export const glossParts = linkifyHan
 
+// === "Written for sound" marker (phonetic-loan / transliteration words) ===
+// For a CHARACTER the app shows which component is semantic vs phonetic (媽 = 女 meaning + 馬 sound).
+// For most multi-character WORDS that doesn't apply — words are semantic compounds. The exception is
+// transliterations / phonetic loans, where the characters were chosen for their SOUND, not meaning
+// (沙發 shāfā "sofa", 幽默 yōumò "humour", 俱樂部 "club"). We surface those with a small marker, driven
+// ENTIRELY by the existing origin badges — no classifier. The strongest, precise signal is wiktextract's
+// `phono-semantic-matching` (psm) badge: a foreign word written with sound-fitting characters. A plain
+// `borrowed-*` badge alone is NOT enough (a Sino-Japanese loan / wasei-kango is borrowed but is still a
+// meaning-compound), so we require the psm badge. Single characters are excluded by the caller (they use
+// the component role display instead).
+export function isSoundLoan(badges: string[] | null | undefined): boolean {
+  return !!badges && badges.includes('phono-semantic-matching')
+}
+
+// The label + tooltip for the sound-loan marker. `borrowed-from-<lang>` (if present) names the source
+// language, so we can say "loanword from English" rather than just "loanword".
+const LANG_NAMES: Record<string, string> = {
+  english: 'English', french: 'French', german: 'German', japanese: 'Japanese',
+  sanskrit: 'Sanskrit', chinese: 'Chinese', dutch: 'Dutch', portuguese: 'Portuguese',
+}
+export function soundLoanSource(badges: string[] | null | undefined): string | null {
+  if (!badges) return null
+  for (const b of badges) {
+    const m = /^borrowed-from-(.+)$/.exec(b)
+    if (m && LANG_NAMES[m[1]]) return LANG_NAMES[m[1]]
+  }
+  return null
+}
+export function soundLoanTitle(badges: string[] | null | undefined): string {
+  const src = soundLoanSource(badges)
+  return src
+    ? `Loanword from ${src}: the characters were chosen for their sound, not their meaning.`
+    : 'Loanword: the characters were chosen for their sound, not their meaning.'
+}
+
 // === Origin (etymology) rendering ===
 // Etymology arrives as one Wiktionary string that often MERGES several statements (newline-separated)
 // and sometimes numbered "Etymology 1/2" sections, peppered with academic jargon (形聲, OC, STEDT,
