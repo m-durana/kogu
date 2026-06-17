@@ -215,17 +215,19 @@
   // (冇 has no on/kun → no synthetic row; its nominal Mandarin pinyin stays suppressed.)
   const synthJaRow = $derived.by<Row | null>(() => {
     if (!single || !headChar) return null
-    if (rows.some((r) => r.kind === 'form' && r.variety === 'ja')) return null // a real ja word exists
     const on = headChar.readings.filter((r) => r.kind === 'onyomi' && isKana(r.value)).map((r) => r.value)
     const kun = headChar.readings.filter((r) => r.kind === 'kunyomi' && isKana(r.value)).map((r) => r.value)
     if (!on.length && !kun.length) return null
     const gloss = headChar.gloss_ja || headChar.gloss_en || ''
     if (!gloss) return null
     // the Japanese form is the shinjitai if one exists, else the orthodox (traditional) glyph - NOT
-    // necessarily what was typed: Japan writes 陝 (traditional), never the PRC 陕. If that differs from
-    // the typed glyph, this row naturally falls into the "written differently" bridge instead of block A.
+    // necessarily what was typed: Japan writes 電 / 陝, never the PRC 电 / 陕. It's still the SAME
+    // character, so this row is a co-equal block-A definition (it just displays Japan's glyph).
     const sf = headChar.script_forms
     const jaForm = sf?.branches.find((b) => b.script.includes('shinjitai'))?.form ?? sf?.orthodox ?? head
+    // only skip if Japan already has a real lexeme for the SAME glyph (don't be fooled by a
+    // different-glyph ja cognate in same_form, e.g. 電's 稲妻 - that's a bridge, not 電 itself).
+    if (rows.some((r) => r.kind === 'form' && r.variety === 'ja' && r.form === jaForm)) return null
     return {
       id: -(head.codePointAt(0) ?? 1) - 1,
       variety: 'ja',
@@ -254,7 +256,9 @@
   // 中/粵/日 order. Query-driven, not a hard-coded language rank - so no language is privileged by fiat.
   const defRows = $derived(
     allRows
-      .filter((r) => r.kind === 'form' && r.form === head)
+      // same-glyph words + the synthesized Japanese row (same character in Japan's script, e.g. 电→電):
+      // all co-equal definitions. The synth row shows Japan's form when it differs from the typed glyph.
+      .filter((r) => r.synthetic || (r.kind === 'form' && r.form === head))
       .sort((a, b) => {
         // frequency-led: the top search hit (highest-frequency form) leads, then 中/粵/日.
         const am = `${a.variety}|${a.form}` === primaryKey ? 0 : 1
@@ -270,7 +274,7 @@
   const bridgeRows = $derived(
     isGlyphSearch
       ? allRows
-          .filter((r) => !(r.kind === 'form' && r.form === head))
+          .filter((r) => !r.synthetic && !(r.kind === 'form' && r.form === head))
           // trusted curated equivalents lead; fuzzy gloss-pivot synonyms follow. Within each, 中/粵/日.
           .sort((a, b) => {
             const ae = a.relation === 'equivalent' ? 0 : 1
@@ -439,6 +443,9 @@
                 {#if zp.same}<span class="dform"><span class="ftag">TC/SC</span>{zp.trad}</span>{:else}<span class="dform"><span class="ftag">TC</span>{zp.trad}<span class="fsep">·</span><span class="ftag">SC</span>{zp.simp}</span>{/if}
               {:else if r.alt}
                 <span class="dform"><span class="ftag">{formTag(r.formScript)}</span>{r.form}<span class="fsep">·</span><span class="ftag">{formTag(r.altScript)}</span>{r.alt}</span>
+              {:else if r.form !== head}
+                <!-- the language writes the same character with a different glyph (Japan: 电 → 電) -->
+                <span class="dform">{r.form}</span>
               {/if}
               {#if r.reading}<span class="dread">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>{/if}
             </div>
