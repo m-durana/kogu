@@ -79,7 +79,12 @@ def _ingest_cedict(conn, ids: _Ids) -> int:
                 readings.append((lid, "pinyin", raw))
                 readings.append((lid, "pinyin_num", numbered))
                 readings.append((lid, "pinyin_plain", toneless))
-            senses.append((ids.next_sense(), lid, None, "; ".join(glosses), 0))
+            # one sense row per CC-CEDICT '/'-delimited sense (NOT joined into one), so Chinese
+            # entries enumerate like JMdict's Japanese ones instead of collapsing to a single "1.".
+            # The '/' is CC-CEDICT's real sense boundary; ';' inside a sense stays (it marks synonyms,
+            # exactly as JMdict uses it), so we never over-split.
+            for order, g in enumerate(glosses):
+                senses.append((ids.next_sense(), lid, None, g, order))
             n += 1
     conn.executemany("INSERT INTO lexeme(id,variety,headword,reading,freq,freq_source) VALUES (?,?,?,?,?,?)", lexemes)
     conn.executemany("INSERT INTO surface_form(id,lexeme_id,form,script,region,is_primary) VALUES (?,?,?,?,?,?)", forms)

@@ -539,6 +539,23 @@ async fn char_components_empty_for_atomic() {
     assert!(e["characters"][0]["components"].as_array().unwrap().is_empty(), "木 is atomic");
 }
 
+// CC-CEDICT '/'-delimited senses become separate numbered senses (like JMdict), instead of
+// collapsing into one "1." — so Chinese and Japanese entries enumerate uniformly.
+#[tokio::test]
+async fn cedict_senses_enumerate_uniformly() {
+    let hit = entry_of(&search("輪").await, "zh", "輪");
+    let e = get(&format!("/entry/{}", hit["lexeme_id"].as_i64().unwrap())).await.1;
+    let senses = e["senses"].as_array().unwrap();
+    assert!(senses.len() >= 3, "輪 zh should enumerate multiple senses, got {}", senses.len());
+    // synonyms WITHIN a single CC-CEDICT sense (';') must stay joined, never over-split
+    assert!(
+        senses.iter().any(|s| s["gloss_en"].as_str().unwrap().contains("; ")),
+        "intra-sense synonyms stay together"
+    );
+    // sense_order is 0,1,2… and the first sense is not the whole blob
+    assert!(senses[0]["gloss_en"].as_str().unwrap().len() < 60, "first sense is one sense, not the join");
+}
+
 // P7 (edge). /why for unknown id is 404.
 #[tokio::test]
 async fn why_unknown_404() {
