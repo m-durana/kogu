@@ -251,6 +251,26 @@ fn english_weight(quality: f64) -> f64 {
     }
 }
 
+/// Count glosses that carry real meaning, ignoring bare cross-references ("used in 洗馬", "variant of
+/// X", "see Y", "surname Z", "abbr…"). Used only as a deterministic ranking tiebreak so the richer
+/// reading of a homograph leads — mirrors the frontend `isMinorGloss` so backend rank and the def the
+/// UI keeps agree. Lowercased prefix check; deliberately cheap.
+fn meaningful_gloss_count(glosses: &[String]) -> usize {
+    glosses
+        .iter()
+        .filter(|g| {
+            let s = g.trim().to_lowercase();
+            !s.is_empty()
+                && !s.starts_with("used in")
+                && !s.starts_with("variant of")
+                && !s.starts_with("old variant of")
+                && !s.starts_with("see ")
+                && !s.starts_with("surname ")
+                && !s.starts_with("abbr")
+        })
+        .count()
+}
+
 const W_EXACT: f64 = 1.0;
 const W_VARIANT: f64 = 0.85;
 const W_READING: f64 = 0.72;
@@ -402,7 +422,18 @@ pub fn search(
             hits.push(hit);
         }
     }
-    hits.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    // Rank by score, then DETERMINISTIC tiebreaks — without them, equal-score homographs (洗 xǐ "to
+    // wash" vs xiǎn "used in 洗馬", same freq → same score) were ordered by HashMap iteration, which is
+    // randomly seeded per request, so the same character led with a different reading on each visit.
+    // Tiebreak on richer-meaning first (more non-cross-reference glosses), then lowest lexeme_id, so a
+    // glyph always resolves to the same primary reading.
+    hits.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(meaningful_gloss_count(&b.glosses).cmp(&meaningful_gloss_count(&a.glosses)))
+            .then(a.lexeme_id.cmp(&b.lexeme_id))
+    });
 
     // kokuji fallback: a single valid character with no word-lexeme (峠 has one; 込/凪 don't)
     // still deserves a character page. Synthesise a hit keyed by a negative codepoint id.

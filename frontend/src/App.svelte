@@ -1,7 +1,7 @@
 <script lang="ts">
   import { search, entry as fetchEntry } from './lib/api'
   import type { Entry, Hit, CharInfo } from './lib/types'
-  import { primaryForm, varietyLabel, regionsOf, shortGloss, cleanGloss } from './lib/display'
+  import { primaryForm, varietyLabel, regionsOf, shortGloss, cleanGloss, langTag, hanFont } from './lib/display'
   import Unified from './lib/Unified.svelte'
   import Pad from './lib/Pad.svelte'
   import Ocr from './lib/Ocr.svelte'
@@ -27,6 +27,18 @@
   let breakdown = $state<CharInfo[]>([])
 
   const HAN = /\p{Script=Han}/u
+
+  // Render typed CJK in the same regional serif as the headword it resolves to (a Japanese word's 誤
+  // shouldn't show the Simplified-Chinese glyph in the box while the headword shows the Japanese one).
+  // Latin stays Newsreader; the CJK fallback follows the top hit's variety once results arrive.
+  const queryLang = $derived(results[0]?.variety ?? 'zh')
+  const inputFont = $derived(
+    queryLang === 'ja'
+      ? '"Newsreader", Georgia, var(--han-ja), serif'
+      : queryLang === 'yue'
+        ? '"Newsreader", Georgia, var(--han-tc), serif'
+        : 'var(--sans)',
+  )
 
   // first language-flagged meaning for a component character, kept short
   function charMeaning(c: CharInfo): string {
@@ -82,7 +94,11 @@
       // no list step. Enrich the lexeme whose form is EXACTLY what was typed (so 氣 enriches the
       // Chinese 氣, not the Japanese 気 that may rank first) - this is the word shown in the field, so
       // its senses / words / origin must come from the same lexeme. Falls back to the top hit.
-      if (res.classified_as === 'han' && results.length) {
+      // Show the unified word view for Han-script words — INCLUDING mixed kanji+kana words like 入り口
+      // (which classify as 'kana' because of the り but are real Han-script words), and for ANY single
+      // result (no point making the user click a one-item list — "just show me").
+      const hanLike = res.classified_as === 'han' || results.some((r) => HAN.test(r.headword))
+      if ((hanLike || results.length === 1) && results.length) {
         unified = true
         enriching = true
         const exact =
@@ -90,7 +106,10 @@
           results.find((r) => r.forms.some((f) => f.form === term && f.is_primary)) ??
           results[0]
         const topId = exact.lexeme_id
-        fetchEntry(topId)
+        // tie the enrich fetch to the same abort controller as the search, so a superseded click
+        // cancels its in-flight /entry instead of competing for the rate-limit budget (a cause of the
+        // spurious "search failed" when clicking through words quickly).
+        fetchEntry(topId, ctrl.signal)
           .then((e) => {
             if (q.trim() === term && unified) enrichEntry = e
           })
@@ -231,6 +250,8 @@
       <span class="searchicon" aria-hidden="true"><Search size={17} /></span>
       <input
         type="text"
+        lang={langTag(queryLang)}
+        style="font-family:{inputFont}"
         aria-label="Search by hanzi, kanji, pinyin, jyutping, kana, or English"
         placeholder="character · reading · meaning"
         value={q}
@@ -278,7 +299,7 @@
         {@const d = primaryForm(r.forms, r.variety, q)}
         <li>
           <button class="hit" onclick={() => doSearch(d?.primary.form ?? r.headword)}>
-            <span class="hw">
+            <span class="hw" lang={langTag(r.variety)} style="font-family:{hanFont(r.variety)}">
               {d?.primary.form ?? r.headword}{#if d?.alternate}<span class="alt">{d.alternate.form}</span>{/if}
             </span>
             <span class="meta-col">

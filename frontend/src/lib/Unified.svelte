@@ -1,7 +1,24 @@
+<script module lang="ts">
+  // Per-word UI state cache: when you open bound / show-more / origin / used-in, click a link, then
+  // come back, the panels stay as you left them (cached ~1h). A fresh search of the same term resets
+  // it (the component restores from cache only on back/forward; App re-creates state on a new search).
+  type UiSnap = {
+    expanded: number[]
+    showOrigin: boolean
+    showWords: boolean
+    jaReadOpen: boolean
+    boundId: number | null
+    ts: number
+  }
+  const UI_TTL = 60 * 60 * 1000 // ~1 hour
+  const uiCache = new Map<string, UiSnap>()
+</script>
+
 <script lang="ts">
   import type { CharInfo, Entry, Hit, ReadingKV, Variety } from './types'
-  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, describeIds, numWord, etymologyTokens } from './display'
+  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont } from './display'
   import ScriptForms from './ScriptForms.svelte'
+  import IdcBox from './IdcBox.svelte'
   import { AlertTriangle } from '@lucide/svelte'
   import { readingRomaji } from './romaji'
 
@@ -189,6 +206,12 @@
 
   // the headword glyph: what the user looked up
   const head = $derived(anchor || rows[0]?.form || '')
+  // the variety the looked-up glyph resolved to — drives the headword's regional font so a Japanese
+  // word's 誤 renders with the Japanese glyph, not the Simplified-Chinese one.
+  const headVariety = $derived<Variety>((hits[0]?.variety ?? entry?.variety ?? 'zh') as Variety)
+  // the searched word split into its glyphs — used to echo the form AS TYPED in the characters
+  // breakdown (search the simplified/JP 食虫植物 and 虫 stays 虫, not the trad 蟲 the lexeme is keyed on).
+  const headChars = $derived([...head])
 
   // the (language, form) this page resolved to - marked in the stack. Keyed by form, not lexeme id,
   // because dedupe may keep a richer lexeme of the same written form than the exact top hit.
@@ -331,24 +354,63 @@
       .sort((a, b) => VORDER.indexOf(a.variety) - VORDER.indexOf(b.variety)),
   )
 
+  // Block C - "related": same-meaning words in another language linked only by a shared concept
+  // (the fuzzy gloss-pivot tier, relation 'synonym'). Lower trust than the curated "written
+  // differently" bridge, so shown under a clearly hedged heading and only for multi-character words
+  // (single characters already get co-equal defs + everyday-word + the synthetic Japanese row).
+  const relatedRows = $derived<Row[]>(
+    !single
+      ? (entry?.translations ?? [])
+          .filter((l) => l.relation === 'synonym' && l.headword !== head)
+          .map((l) => ({
+            id: l.lexeme_id,
+            variety: l.variety,
+            form: l.headword,
+            alt: null,
+            formScript: '',
+            altScript: '',
+            reading: l.reading ?? '',
+            glosses: l.glosses,
+            relation: 'synonym',
+            kind: 'equiv' as const,
+          }))
+          .sort((a, b) => VORDER.indexOf(a.variety) - VORDER.indexOf(b.variety))
+          .slice(0, 12)
+      : [],
+  )
+
   // numbered senses for a definition row - the full hit glosses (every sense), cleaned. Identical
   // treatment for every language (no POS on one and not another) so the languages stay co-equal.
   // Collapsed to ~2 lines with a per-row "more" toggle so a long Chinese definition (or a 13-sense
   // kanji) doesn't wall off the page; the toggle only appears when the senses actually overflow 2 lines.
   let expanded = $state(new Set<number>())
   let overflow = $state(new Set<number>())
-  function senseList(r: Row): string[] {
+  // major meanings shown by default. Bare cross-references ("abbr. for 入聲", "variant of X", "used
+  // in …") are demoted and hidden behind "show more" — UNLESS a row has no major sense at all (中共 =
+  // "abbr. for 中國共產黨" is the only meaning), in which case they ARE the definition and stay visible.
+  function majorSenses(r: Row): string[] {
     const all = r.glosses.map(cleanGloss).filter(Boolean)
-    // real meanings lead; "surname X" / "variant of" / "used in" cross-refs sink to the end (stable)
-    return [...all.filter((g) => !isMinorGloss(g)), ...all.filter((g) => isMinorGloss(g))]
+    const major = all.filter((g) => !isMinorGloss(g))
+    return major.length ? major : all
   }
-
+  function minorSenses(r: Row): string[] {
+    const all = r.glosses.map(cleanGloss).filter(Boolean)
+    const major = all.filter((g) => !isMinorGloss(g))
+    return major.length ? all.filter((g) => isMinorGloss(g)) : []
+  }
+  function shownSenses(r: Row): string[] {
+    return expanded.has(r.id) ? [...majorSenses(r), ...minorSenses(r)] : majorSenses(r)
+  }
+  function hasMoreSenses(r: Row): boolean {
+    return minorSenses(r).length > 0 || overflow.has(r.id)
+  }
 
   function toggleSenses(id: number) {
     const n = new Set(expanded)
     if (n.has(id)) n.delete(id)
     else n.add(id)
     expanded = n
+    save()
   }
 
   // measure whether a senses block exceeds the 2-line clamp (so the "more" toggle shows only when
@@ -396,27 +458,19 @@
   )
   const falseFriendLangs = $derived(defLangs.join(' and '))
 
-  // The character's readings, grouped by language for the readings line: 中 pinyin, 粵 jyutping (kept
-  // per request), 日 on'yomi then kun'yomi each as kana + romaji (Chinese readers can't read kana).
-  // Shows ALL the character's readings - it's the pronunciation reference, kept on the entry.
-  type RItem = { main: string; sub?: string }
-  type RGroup = { vh: string; items: RItem[] }
-  function charReadingGroups(c: CharInfo): RGroup[] {
-    const g: RGroup[] = []
-    const pinyin = c.readings.filter((r) => r.kind === 'pinyin').map((r) => r.value)
-    if (pinyin.length) g.push({ vh: '中', items: pinyin.map((v) => ({ main: v })) })
-    const jyut = c.readings.filter((r) => r.kind === 'jyutping').map((r) => r.value)
-    if (jyut.length) g.push({ vh: '粵', items: jyut.map((v) => ({ main: v })) })
-    const on = c.readings.filter((r) => r.kind === 'onyomi').map((r) => r.value).filter(isKana)
-    const kun = c.readings.filter((r) => r.kind === 'kunyomi').map((r) => r.value).filter(isKana)
-    const ja: RItem[] = [
-      ...on.map((v) => ({ main: v, sub: readingRomaji('onyomi', v) })),
-      ...kun.map((v) => ({ main: v, sub: readingRomaji('kunyomi', v) })),
-    ]
-    if (ja.length) g.push({ vh: '日', items: ja })
-    return g
-  }
-  const READINGS_ID = -1 // clamp/expand key for the readings line (distinct from any lexeme id)
+  // The single character's full Japanese on/kun readings (kana + romaji), shown right on the 日
+  // definition row — Chinese readers can't read kana, so each gets its romaji. Capped to JA_CAP with a
+  // "+N" toggle so a kanji with a dozen readings doesn't wrap into a wall. (中 pinyin / 粵 jyutping are
+  // short and already sit on their rows; there is no separate "readings" section any more.)
+  let jaReadOpen = $state(false)
+  const jaReadItems = $derived.by<{ main: string; sub: string }[]>(() => {
+    if (!single || !headChar) return []
+    const mk = (kind: string) =>
+      headChar!.readings
+        .filter((r) => r.kind === kind && isKana(r.value))
+        .map((r) => ({ main: r.value, sub: readingRomaji(kind as 'onyomi' | 'kunyomi', r.value) }))
+    return [...mk('onyomi'), ...mk('kunyomi')]
+  })
 
   // which languages a character actually belongs to (for the lean breakdown): 中 if it has a Mandarin
   // reading, 粵 jyutping, 日 a kana on/kun reading.
@@ -426,6 +480,23 @@
     if (c.readings.some((r) => r.kind === 'jyutping')) out.push('粵')
     if (c.readings.some((r) => (r.kind === 'onyomi' || r.kind === 'kunyomi') && isKana(r.value))) out.push('日')
     return out
+  }
+
+  // usage label from the per-character "used" count (how many words contain it). Only the rare end
+  // gets a badge — common glyphs need none. 0 words = archaic/unused; 1–10 = uncommon.
+  function usageLabel(n: number): string {
+    return n === 0 ? 'rarely used' : n <= 10 ? 'uncommon' : ''
+  }
+
+  // one compact reading for a component character in the breakdown row — primary pinyin (tone-marked),
+  // else jyutping, else the first few kana on/kun. Keeps the row consistent with the word rows.
+  function charReading(c: CharInfo): string {
+    const p = c.readings.filter((r) => r.kind === 'pinyin').map((r) => r.value)
+    if (p.length) return pinyinMarks(p[0])
+    const j = c.readings.filter((r) => r.kind === 'jyutping').map((r) => r.value)
+    if (j.length) return j[0]
+    const k = c.readings.filter((r) => (r.kind === 'onyomi' || r.kind === 'kunyomi') && isKana(r.value)).map((r) => r.value)
+    return k.slice(0, 3).join('  ')
   }
 
   // first MEANINGFUL sense only, cleaned - the character breakdown stays lean and never leads with a
@@ -458,24 +529,101 @@
   let showOrigin = $state(false)
   let showWords = $state(false)
   const wordCount = $derived(wordGroups.reduce((n, g) => n + g.items.length, 0))
-  // origin split into delineated segments (drops bare "Etymology N" headers with no body, so a
-  // header-only etymology renders nothing rather than an empty toggle)
-  const etySegs = $derived(entry?.etymology ? etymologyTokens(entry.etymology) : [])
+  // origin: one account per language for the same glyph (中 Sinitic + 日 Japonic, both true). Falls
+  // back to the single legacy etymology field if the backend didn't supply per-variety accounts.
+  const originAccounts = $derived.by(() => {
+    const accs = entry?.origins ?? []
+    if (accs.length) return accs
+    if (entry?.etymology) return [{ variety: entry.variety, headword: entry.headword, text: entry.etymology }]
+    return []
+  })
 
   // Bound form: a morpheme that doesn't stand alone as a word — it only carries meaning inside
   // compounds. CC-CEDICT flags these; instead of leaking the jargon into the prose we show a small
   // tappable "bound" tag whose popup explains it and lists the compounds the character lives in.
   let boundOpen = $state<Row | null>(null)
+  // origin jargon (形聲, OC, STEDT…): a plain-English explanation. On desktop it's the button's
+  // title= (hover), but hover doesn't exist on touch, so tapping a term opens this small popup too.
+  let openTerm = $state<string | null>(null)
   function boundCompounds(r: Row): { lexeme_id: number; headword: string; glosses: string[] }[] {
     return (entry?.compounds ?? []).filter((l) => l.variety === r.variety).slice(0, 30)
   }
+
+  // ── per-word UI state cache (#101): keep panels as left when you click a link and come back ──
+  function save() {
+    if (!head) return
+    uiCache.set(head, {
+      expanded: [...expanded],
+      showOrigin,
+      showWords,
+      jaReadOpen,
+      boundId: boundOpen?.id ?? null,
+      ts: Date.now(),
+    })
+  }
+  function setOpen(which: 'origin' | 'words', val: boolean) {
+    if (which === 'origin') showOrigin = val
+    else showWords = val
+    save()
+  }
+  function openBound(r: Row) {
+    boundOpen = r
+    save()
+  }
+  function closeBound() {
+    boundOpen = null
+    save()
+  }
+  function toggleJaRead() {
+    jaReadOpen = !jaReadOpen
+    save()
+  }
   function pivot(q: string) {
+    save() // persist the open bound menu so it's still open when we come back
     boundOpen = null
     onsearch(q)
   }
+  // restore the cached panel state when this word (re)appears (back/forward nav); a fresh search of a
+  // new term gets fresh defaults. Keyed on head so toggling panels doesn't re-trigger a restore.
+  let restoredFor = ''
+  $effect(() => {
+    const h = head
+    if (h === restoredFor) return
+    restoredFor = h
+    const snap = h ? uiCache.get(h) : undefined
+    if (snap && Date.now() - snap.ts < UI_TTL) {
+      expanded = new Set(snap.expanded)
+      showOrigin = snap.showOrigin
+      showWords = snap.showWords
+      jaReadOpen = snap.jaReadOpen
+      boundOpen = snap.boundId != null ? allRows.find((r) => r.id === snap.boundId) ?? null : null
+    } else {
+      expanded = new Set()
+      showOrigin = false
+      showWords = false
+      jaReadOpen = false
+      boundOpen = null
+    }
+  })
+
+  // ── readings "show more" (#102): clamp the 日 on/kun line to ONE line; "+" reveals the rest when it
+  // would wrap. Line-break driven (not a fixed count). ──
+  let jaReadOver = $state(false)
+  function readProbe(node: HTMLElement) {
+    const measure = () => {
+      const line = parseFloat(getComputedStyle(node).lineHeight) || 22
+      jaReadOver = node.scrollHeight > line * 1.6
+    }
+    measure()
+    requestAnimationFrame(measure)
+    document.fonts?.ready?.then(measure)
+    const ro = new ResizeObserver(measure)
+    ro.observe(node)
+    return { destroy: () => ro.disconnect() }
+  }
 </script>
 
-<svelte:window onkeydown={(e) => { if (e.key === 'Escape' && boundOpen) boundOpen = null }} />
+<svelte:window onkeydown={(e) => { if (e.key === 'Escape') { if (boundOpen) closeBound(); openTerm = null } }} />
 
 <article class="u">
   <!-- one tappable cross-language row (bridge band + plain results list) -->
@@ -485,7 +633,7 @@
         <span class="body">
           <span class="top">
             <span class="lvar"><span class="vh">{varietyLabel(r.variety)}</span></span>
-            <span class="form">{#if r.alt}<span class="ftag">{formTag(r.formScript)}</span>{r.form}<span class="fsep">·</span><span class="ftag">{formTag(r.altScript)}</span>{r.alt}{:else}{r.form}{/if}</span>
+            <span class="form" lang={langTag(r.variety)} style="font-family:{hanFont(r.variety)}">{#if r.alt}<span class="ftag">{formTag(r.formScript)}</span>{r.form}<span class="fsep">·</span><span class="ftag">{formTag(r.altScript)}</span>{r.alt}{:else}{r.form}{/if}</span>
             {#if r.reading}<span class="read">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>{/if}
           </span>
           {#if briefGloss(r.glosses)}<span class="gloss">{briefGloss(r.glosses)}</span>{/if}
@@ -497,31 +645,37 @@
   {#if isGlyphSearch}
     <!-- Block A - the definition: the typed glyph across every language that writes it, co-equally -->
     <section class="def">
-      <h2 class="glyph">{head}</h2>
+      <h2 class="glyph" lang={langTag(headVariety)} style="font-family:{hanFont(headVariety)}">{head}</h2>
       <div class="defs">
         {#each defRows as r (r.id)}
-          {@const ss = senseList(r)}
+          {@const ss = shownSenses(r)}
           <div class="dl">
             <div class="dlh">
               <span class="dvar">{varietyLabel(r.variety)}</span>
               {#if r.variety === 'zh'}
                 {@const zp = zhPair(r)}
-                {#if zp.same}<span class="dform"><span class="ftag">TC/SC</span>{zp.trad}</span>{:else}<span class="dform"><span class="ftag">TC</span>{zp.trad}<span class="fsep">·</span><span class="ftag">SC</span>{zp.simp}</span>{/if}
+                {#if zp.same}<span class="dform" lang={langTag(r.variety)} style="font-family:{hanFont(r.variety)}"><span class="ftag">TC/SC</span>{zp.trad}</span>{:else}<span class="dform"><span class="ftag">TC</span><span lang="zh-Hant" style="font-family:var(--han-tc)">{zp.trad}</span><span class="fsep">·</span><span class="ftag">SC</span><span lang="zh-Hans" style="font-family:var(--han)">{zp.simp}</span></span>{/if}
               {:else if r.alt}
-                <span class="dform"><span class="ftag">{formTag(r.formScript)}</span>{r.form}<span class="fsep">·</span><span class="ftag">{formTag(r.altScript)}</span>{r.alt}</span>
+                <span class="dform" lang={langTag(r.variety)} style="font-family:{hanFont(r.variety)}"><span class="ftag">{formTag(r.formScript)}</span>{r.form}<span class="fsep">·</span><span class="ftag">{formTag(r.altScript)}</span>{r.alt}</span>
               {:else if r.form !== head}
                 <!-- the language writes the same character with a different glyph (Japan: 电 → 電) -->
-                <span class="dform">{r.form}</span>
+                <span class="dform" lang={langTag(r.variety)} style="font-family:{hanFont(r.variety)}">{r.form}</span>
               {/if}
-              {#if r.reading}<span class="dread">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>{/if}
+              {#if r.variety === 'ja' && jaReadItems.length}
+                <!-- the kanji's full on/kun readings (kana + romaji) live right on the 日 row now — no
+                     separate "readings" section. Clamped to ONE line; "+" reveals the rest when it wraps. -->
+                <span class="dread dreads" class:clamp={!jaReadOpen} use:readProbe>{#each jaReadItems as it, i}{#if i}<span class="rsep">·</span>{/if}{it.main}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead}>{jaReadOpen ? '−' : '+'}</button>{/if}
+              {:else if r.reading}
+                <span class="dread">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>
+              {/if}
               {#if r.variety === 'zh' && headJyut && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread">{headJyut}</span>{/if}
-              {#if isBoundForm(r.glosses)}<button class="btag" onclick={() => (boundOpen = r)} title="bound form — only used in compounds">bound</button>{/if}
+              {#if isBoundForm(r.glosses)}<button class="btag" onclick={() => openBound(r)} title="bound form — only used in compounds">bound</button>{/if}
             </div>
             {#if ss.length}
               <ol class="senses" class:clamp={!expanded.has(r.id) && overflow.has(r.id)} use:clampProbe={{ id: r.id, rem: 2.9 }}>
                 {#each ss as g}<li><span class="sg">{#each glossParts(g) as p}{#if p.link}<button class="xref" onclick={() => onsearch(p.v)}>{p.v}</button>{:else}{p.v}{/if}{/each}</span></li>{/each}
               </ol>
-              {#if overflow.has(r.id)}
+              {#if hasMoreSenses(r)}
                 <button class="more" onclick={() => toggleSenses(r.id)}>{expanded.has(r.id) ? 'show less' : 'show more'}</button>
               {/if}
             {/if}
@@ -552,6 +706,17 @@
         </ul>
       </section>
     {/if}
+
+    {#if relatedRows.length}
+      <!-- Block C - related: same-concept words in another language (looser than the bridge). For a
+           multi-char word like 客人 these are the Japanese お客様 / 来客 etc. that share the meaning. -->
+      <section class="bridge">
+        <h3>related</h3>
+        <ul class="langs">
+          {#each relatedRows as r (r.id)}{@render rowItem(r)}{/each}
+        </ul>
+      </section>
+    {/if}
   {:else if listRows.length}
     <!-- English / reading search: a plain results list -->
     <section class="bridge">
@@ -562,57 +727,69 @@
   {/if}
 
   {#if entry && single && headChar}
-    <!-- single character: a compact structure line (no repeated glyph), then the words that use it -->
-    {#if charReadingGroups(headChar).length}
-      <!-- readings: the character's pronunciations, kept on the entry. 中 pinyin · 粵 jyutping · 日
-           on'yomi/kun'yomi as kana + romaji. Collapsed to ~3 lines with a toggle. -->
-      <section class="readings">
-        <h3>readings</h3>
-        <div class="rds" class:clamp={!expanded.has(READINGS_ID) && overflow.has(READINGS_ID)} use:clampProbe={{ id: READINGS_ID, rem: 4.4 }}>
-          {#each charReadingGroups(headChar) as g}
-            <div class="rgrp"><span class="rvh">{g.vh}</span><span class="rtext">{#each g.items as it, i}{i ? '  ·  ' : ''}{it.main}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{/each}</span></div>
-          {/each}
-        </div>
-        {#if overflow.has(READINGS_ID)}
-          <button class="more" onclick={() => toggleSenses(READINGS_ID)}>{expanded.has(READINGS_ID) ? 'show less' : 'show more'}</button>
-        {/if}
-      </section>
-    {/if}
+    <!-- single character: a compact structure line (no repeated glyph), then the words that use it.
+         (Readings used to live in their own section here; they're now folded onto the definition rows
+         above — 中 pinyin / 粵 jyutping / 日 on·kun — so there's no duplicate "readings" block.) -->
     <section class="struct">
       <h3>structure</h3>
+      {#if headChar.is_radical}
+        <!-- this glyph is a Kangxi radical / bound component, not a standalone word -->
+        <p class="radline">
+          <span class="rtag">radical</span>
+          {#if headChar.radical_number}<span class="dim">Kangxi {headChar.radical_number}</span>{/if}
+          {#if headChar.standalone}<span class="dim">· written</span> <button class="part" onclick={() => onsearch(headChar.standalone!)} title="look up {headChar.standalone}">{headChar.standalone}</button> <span class="dim">when standalone</span>{/if}
+        </p>
+      {/if}
       {#if headChar.script_forms}
-        <div class="strip"><ScriptForms forms={headChar.script_forms} anchor={head} {onsearch} /></div>
+        <div class="strip">
+          <ScriptForms forms={headChar.script_forms} anchor={head} {onsearch} />
+          {#if headChar.script_forms.branches.length > 1}<div class="stripcap">same character across scripts — tap a form</div>{/if}
+        </div>
       {/if}
       {#if decomp}
         <p class="comp">
-          <span class="dim">{numWord(decomp.count)} ×</span>
+          {#if comp?.idc}<IdcBox idc={comp.idc} />{/if}
+          <span class="dim">Made of {numWord(decomp.count)} ×</span>
           <button class="part" onclick={() => onsearch(decomp.base)} title="look up {decomp.base}">{decomp.base}</button>
           {#if meaningOf(decomp.base)}<span class="cmean">{meaningOf(decomp.base)}</span>{/if}
-          {#if comp?.arrangement}<span class="arr">{comp.arrangement}</span>{/if}
         </p>
       {:else if comp}
         <p class="comp">
-          <span class="dim">made of</span>
+          {#if comp.idc}<IdcBox idc={comp.idc} />{/if}
+          <span class="dim">Made of</span>
           {#each comp.parts as p, i}{#if i}<span class="plus">+</span>{/if}<button class="part" onclick={() => onsearch(p.component)} title="look up {p.component}">{p.component}</button>{#if p.count > 1}<span class="dim">×{p.count}</span>{/if}{#if meaningOf(p.component)}<span class="cmean">{meaningOf(p.component)}</span>{/if}{/each}
-          {#if comp.arrangement}<span class="arr">{comp.arrangement}</span>{/if}
         </p>
       {/if}
-      {#if headChar.strokes}<div class="cln"><span class="dim">{headChar.strokes} strokes</span></div>{/if}
+      {#if headChar.strokes || usageLabel(headChar.used_count)}
+        <div class="cln">
+          {#if headChar.strokes}<span class="dim">{headChar.strokes} strokes</span>{/if}
+          {#if usageLabel(headChar.used_count)}<span class="usetag">{usageLabel(headChar.used_count)}</span>{/if}
+        </div>
+      {/if}
     </section>
   {:else if entry && entry.characters.length}
-    <!-- jukugo: break the word into its component characters. Lean: which languages it lives in + one
-         meaning. Tap to open the full character page. -->
+    <!-- jukugo: break the word into its component characters. Same tappable row system as the
+         "usually written" / "written differently" bands (one list style across the app), showing the
+         languages it lives in, its reading, and one meaning. -->
     <section class="chars">
       <h3>characters</h3>
-      {#each entry.characters as c}
-        <button class="char" onclick={() => onsearch(c.ch)} title="look up {c.ch}">
-          <span class="cg">{c.ch}</span>
-          <span class="cmeta">
-            <span class="clangs">{#each charLangs(c) as l}<span class="clang">{l}</span>{/each}</span>
-            {#if firstSense(c.gloss_en)}<span class="cgl">{firstSense(c.gloss_en)}</span>{/if}
-          </span>
-        </button>
-      {/each}
+      <ul class="langs">
+        {#each entry.characters as c, i (c.ch)}
+          {@const glyph = headChars.length === entry.characters.length ? headChars[i] : c.ch}
+          <li>
+            <button class="lang" onclick={() => onsearch(glyph)} title="look up {glyph}">
+              <span class="body">
+                <span class="top">
+                  <span class="lvar"><span class="vh">{charLangs(c).join(' ')}</span></span>
+                  <span class="form" lang={langTag(headVariety)} style="font-family:{hanFont(headVariety)}">{glyph}</span>
+                  {#if charReading(c)}<span class="read">{charReading(c)}</span>{/if}
+                </span>
+                {#if firstSense(c.gloss_en)}<span class="gloss">{firstSense(c.gloss_en)}</span>{/if}
+              </span>
+            </button>
+          </li>
+        {/each}
+      </ul>
     </section>
   {:else if enriching}
     <!-- reserve the structure + words space while the entry loads, so nothing pops in below -->
@@ -625,29 +802,50 @@
     </section>
   {/if}
 
-  {#if etySegs.length}
+  {#snippet etyBody(text: string)}
+    <!-- one account's prose: flowing paragraphs (no fake numbering, no dividing rule); Wiktionary
+         "*"/"**" lines become indented sub-points; a real "Etymology N" heading (rare) is kept. -->
+    <div class="etylist">
+      {#each etymologyTokens(text) as seg}
+        <div class="etyseg" class:sub={seg.depth > 0} style="--depth:{seg.depth}">
+          {#if seg.heading}<div class="etyhead">{seg.heading}</div>{/if}
+          <p class="ety">{#each seg.tokens as s}{#if s.t === 'ruby'}<ruby><button class="kanji" onclick={() => onsearch(s.base)}>{s.base}</button><rt>{s.rt}</rt></ruby>{:else if s.t === 'recon'}<span class="recon" title={s.title}>{s.v}</span>{:else if s.t === 'abbr'}<button class="term" title={s.title} onclick={() => (openTerm = s.title)}>{s.v}</button>{:else if s.t === 'han'}<button class="kanji" onclick={() => onsearch(s.v)}>{s.v}</button>{:else}{s.v}{/if}{/each}</p>
+        </div>
+      {/each}
+    </div>
+  {/snippet}
+
+  {#if originAccounts.length}
     <section class="origin">
-      <button class="oh" aria-expanded={showOrigin} onclick={() => (showOrigin = !showOrigin)}>
+      <button class="oh" aria-expanded={showOrigin} onclick={() => setOpen('origin', !showOrigin)}>
         origin <span class="chev">{showOrigin ? '−' : '+'}</span>
       </button>
       {#if showOrigin}
-        <!-- multiple merged statements are shown as separate, delineated paragraphs (with their
-             "Etymology N" label when the source numbers them) so it's clear which is which -->
-        <div class="etylist" class:multi={etySegs.length > 1}>
-          {#each etySegs as seg, i}
-            <div class="etyseg">
-              {#if seg.heading}<div class="etyhead">{seg.heading}</div>{:else if etySegs.length > 1}<div class="etyhead">{i + 1}</div>{/if}
-              <p class="ety">{#each seg.tokens as s}{#if s.t === 'ruby'}<ruby><button class="kanji" onclick={() => onsearch(s.base)}>{s.base}</button><rt>{s.rt}</rt></ruby>{:else if s.t === 'recon'}<span class="recon" title={s.title}>{s.v}</span>{:else if s.t === 'abbr'}<abbr class="term" title={s.title}>{s.v}</abbr>{:else if s.t === 'han'}<button class="kanji" onclick={() => onsearch(s.v)}>{s.v}</button>{:else}{s.v}{/if}{/each}</p>
+        <!-- one account per language: 山's Chinese (Sinitic) AND Japanese (Japonic) origins are both
+             true and complementary, so each is labelled by variety instead of showing only one. -->
+        {#each originAccounts as acc (acc.variety)}
+          <div class="oacc">
+            {#if originAccounts.length > 1}
+              <div class="olang"><span class="ovar" lang={langTag(acc.variety)} style="font-family:{hanFont(acc.variety)}">{varietyLabel(acc.variety)}</span> <span class="ohw" lang={langTag(acc.variety)} style="font-family:{hanFont(acc.variety)}">{acc.headword}</span></div>
+            {/if}
+            {@render etyBody(acc.text)}
+          </div>
+        {/each}
+        {#if openTerm}
+          <div class="termpop" role="presentation" onclick={() => (openTerm = null)}>
+            <div class="termcard" role="dialog" aria-modal="true" onclick={(e) => e.stopPropagation()}>
+              <p>{openTerm}</p>
+              <button class="mclose" onclick={() => (openTerm = null)}>close</button>
             </div>
-          {/each}
-        </div>
+          </div>
+        {/if}
       {/if}
     </section>
   {/if}
 
   {#if entry && wordGroups.length}
     <section class="words">
-      <button class="oh" aria-expanded={showWords} onclick={() => (showWords = !showWords)}>
+      <button class="oh" aria-expanded={showWords} onclick={() => setOpen('words', !showWords)}>
         used in <span class="count">{wordCount}</span> <span class="chev">{showWords ? '−' : '+'}</span>
       </button>
       {#if showWords}
@@ -663,11 +861,25 @@
         {/each}
       {/if}
     </section>
+  {:else if entry && entry.appears_in.length}
+    <!-- a radical/bound component isn't a morpheme in words; show the CHARACTERS that contain it -->
+    <section class="words">
+      <button class="oh" aria-expanded={showWords} onclick={() => setOpen('words', !showWords)}>
+        appears in <span class="count">{entry.appears_in.length}</span> characters <span class="chev">{showWords ? '−' : '+'}</span>
+      </button>
+      {#if showWords}
+        <div class="chips">
+          {#each entry.appears_in as c (c.ch)}
+            <button class="chip" onclick={() => onsearch(c.ch)} title={c.gloss ?? ''} lang={langTag(headVariety)} style="font-family:{hanFont(headVariety)}">{c.ch}</button>
+          {/each}
+        </div>
+      {/if}
+    </section>
   {/if}
 
   {#if boundOpen}
     {@const bc = boundCompounds(boundOpen)}
-    <div class="mbg" role="presentation" onclick={() => (boundOpen = null)}>
+    <div class="mbg" role="presentation" onclick={closeBound}>
       <div class="modal" role="dialog" aria-modal="true" aria-label="bound form" onclick={(e) => e.stopPropagation()}>
         <div class="mh"><span class="mglyph">{boundOpen.form}</span><span class="mtag">bound form</span></div>
         <p class="mexp">Not used as a word on its own — it carries meaning only inside compounds.</p>
@@ -677,7 +889,7 @@
             {#each bc as l (l.lexeme_id)}<button class="chip" onclick={() => pivot(l.headword)} title={glossLine(l.glosses, 1)}>{l.headword}</button>{/each}
           </div>
         {/if}
-        <button class="mclose" onclick={() => (boundOpen = null)}>close</button>
+        <button class="mclose" onclick={closeBound}>close</button>
       </div>
     </div>
   {/if}
@@ -692,7 +904,7 @@
      (margins don't collapse inside the flex column, so keep both sides small + let h3's top margin lead) */
   .def { margin-bottom: 0.6rem; }
   .glyph { font-family: var(--han); font-size: clamp(3rem, 16vw, 4.5rem); line-height: 1; margin: 0 0 1.1rem; font-weight: 500; }
-  .defs { display: flex; flex-direction: column; gap: 1.2rem; }
+  .defs { display: flex; flex-direction: column; gap: 0.8rem; }
   .dlh { display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap; }
   /* the language leads (it's the heading of the definition); the reading is secondary */
   .dvar { font-family: var(--han); font-size: 1.1rem; color: var(--text); font-weight: 500; letter-spacing: 0.02em; }
@@ -700,13 +912,19 @@
   .dcanto { margin-left: 0.5rem; color: var(--muted); font-weight: 400; }
   .dform { font-family: var(--han); font-size: 1.15rem; }
   .dform .ftag { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); margin-right: 0.18rem; vertical-align: 0.35em; }
-  .dform .fsep { color: var(--faint); margin: 0 0.35rem; }
+  .dform .fsep { color: var(--faint); margin: 0 0.18rem; }
   .dread { font-family: var(--mono); font-size: 0.9rem; color: var(--muted); }
+  /* tight reading separator (the old "  ·  " ate too much space) + romaji gloss + "+N more" toggle */
+  .dread .rsep { color: var(--faint); margin: 0 0.28rem; }
+  .rmore { background: none; border: none; padding: 0 0.2rem; font-family: var(--mono); font-size: 0.72rem; color: var(--muted); cursor: pointer; }
+  .rmore:hover { color: var(--text); background: none; }
   .senses { margin: 0.5rem 0 0; padding: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 0.35rem; }
   /* collapsed: clip to ~2 lines and fade the cut, so a long definition doesn't wall off the page */
   .senses.clamp { max-height: 2.9rem; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 74%, transparent); mask-image: linear-gradient(to bottom, #000 74%, transparent); }
   .senses li { position: relative; padding-left: 1.5rem; font-size: 1rem; line-height: 1.45; color: var(--text); counter-increment: s; }
-  .senses li::before { content: counter(s); position: absolute; left: 0; top: 0.05rem; font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
+  /* always number senses — including a single-sense definition — so "1." reads as a definition, not
+     as loose text bumping against the language tag. */
+  .senses li::before { content: counter(s) '.'; position: absolute; left: 0; top: 0.05rem; font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
   .more { background: none; border: none; padding: 0.3rem 0; margin-top: 0.1rem; font-family: var(--mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
   /* tappable cross-reference target inside a gloss ("variant of 著" → jump to 著) */
   .xref { font-family: var(--han); color: var(--text); background: none; border: none; padding: 0; font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
@@ -753,34 +971,39 @@
   h3 { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 1.9rem 0 0.8rem; }
   .dim { color: var(--faint); }
 
-  /* jukugo component characters - the WHOLE row is tappable (glyph + tags + meaning) */
-  .char { display: flex; gap: 0.9rem; align-items: center; width: 100%; text-align: left; padding: 0.7rem 0.3rem; background: none; border: none; border-top: 1px solid var(--border); }
-  .char:hover { background: var(--surface); }
-  .cg { font-family: var(--han); font-size: 2.4rem; line-height: 1; padding: 0 0.3rem; flex: none; }
-  .cmeta { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-  .clangs { display: flex; gap: 0.3rem; margin-bottom: 0.25rem; }
-  .clang { font-family: var(--han); font-size: 0.8rem; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0.05rem 0.32rem; }
-  .cgl { font-size: 0.95rem; color: var(--text); }
+  /* jukugo component characters now reuse the shared .langs/.lang row system (see "written
+     differently"); no bespoke character-row styles needed. */
 
-  /* readings line - 中/粵/日 grouped, on/kun shown as kana + romaji; collapses to ~3 lines */
-  .rds { display: flex; flex-direction: column; gap: 0.4rem; }
-  .rds.clamp { max-height: 4.4rem; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent); mask-image: linear-gradient(to bottom, #000 78%, transparent); }
-  .rgrp { display: flex; gap: 0.7rem; align-items: baseline; font-family: var(--mono); font-size: 0.95rem; }
-  .rvh { font-family: var(--han); color: var(--muted); font-size: 1rem; flex: none; min-width: 1.2em; }
-  .rtext { color: var(--text); }
-  .rsub { color: var(--muted); margin-left: 0.25rem; font-size: 0.86em; }
+  /* romaji gloss under each Japanese reading (kana is opaque to Chinese readers) */
+  .rsub { color: var(--faint); margin-left: 0.2rem; font-size: 0.82em; }
+  /* 日 readings sit on their own line so a long on/kun list wraps; clamp to one line + "+" reveals */
+  .dreads { flex: 1 1 100%; line-height: 1.5; }
+  .dreads.clamp { max-height: 1.6em; overflow: hidden; }
+  /* radical line (#16) + usage badge (#17) + script-strip caption (#7) */
+  .radline { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 0.55rem; font-size: 0.9rem; }
+  .rtag { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 0.06rem 0.46rem; }
+  .radline .part { font-size: 1.15rem; }
+  .usetag { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); border: 1px solid var(--border); border-radius: 999px; padding: 0.04rem 0.42rem; }
+  .stripcap { font-family: var(--mono); font-size: 0.6rem; color: var(--faint); letter-spacing: 0.02em; margin-top: 0.4rem; }
+  /* per-language origin account label (中 山 / 日 山) */
+  .oacc { margin-top: 1rem; }
+  .oacc:first-of-type { margin-top: 0; }
+  .olang { display: flex; align-items: baseline; gap: 0.4rem; margin-bottom: 0.25rem; }
+  .olang .ovar { font-size: 0.95rem; color: var(--muted); }
+  .olang .ohw { font-size: 0.95rem; color: var(--faint); }
   /* structure block - composition (what parts make it up, e.g. 森 = three 木) + a quiet stroke count */
   .cln { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 0.5rem; font-size: 0.8rem; }
-  .comp { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0.6rem 0 0; }
-  .part { font-family: var(--han); color: var(--text); background: none; border: none; padding: 0 0.1rem; font-size: 1.6rem; line-height: 1; }
+  /* English label + Chinese glyph kept close in size so the line reads as one phrase (was 0.82rem vs
+     1.6rem — too far apart). The component glyph leads only slightly. */
+  .comp { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin: 0.6rem 0 0; }
+  .part { font-family: var(--han); color: var(--text); background: none; border: none; padding: 0 0.1rem; font-size: 1.25rem; line-height: 1; }
   .part:hover { color: #fff; background: none; }
-  .comp .dim { font-size: 0.82rem; }
+  .comp .dim { font-size: 0.95rem; }
   .plus { color: var(--faint); font-family: var(--mono); }
   /* a component's meaning, e.g. 木 (tree) — the "explain the parts" layer */
-  .cmean { color: var(--muted); font-size: 0.82rem; margin-left: -0.1rem; }
+  .cmean { color: var(--muted); font-size: 0.9rem; margin-left: -0.05rem; }
   .cmean::before { content: '('; }
   .cmean::after { content: ')'; }
-  .arr { color: var(--muted); font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; margin-left: 0.3rem; }
 
   /* words: collapsible (toggle header like origin), grouped by language with breathing room */
   .words { margin-top: 1.6rem; }
@@ -790,27 +1013,37 @@
   .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
   .chip { display: inline-flex; align-items: center; gap: 0.35rem; font-family: var(--han); font-size: 1.05rem; padding: 0.25rem 0.55rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); }
   .chip:hover { border-color: var(--border-strong); }
-  .cv { font-size: 0.7rem; color: var(--faint); }
 
   .origin { margin-top: 1.2rem; }
   .oh { display: inline-flex; align-items: center; gap: 0.4rem; background: none; border: none; padding: 0.2rem 0; font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
   .oh:hover { color: var(--text); background: none; }
   .oh .chev { font-family: var(--mono); }
   .etylist { margin-top: 0.5rem; }
-  /* when several statements are merged, give each its own delineated block */
-  .etylist.multi .etyseg { padding-left: 0.9rem; border-left: 1px solid var(--border); margin-top: 0.9rem; }
-  .etylist.multi .etyseg:first-child { margin-top: 0; }
+  /* one flowing account: plain stacked paragraphs, no dividing rule, no fake numbering */
+  .etyseg { margin-top: 0.7rem; }
+  .etyseg:first-child { margin-top: 0; }
+  /* a Wiktionary "*"/"**" sub-point: indent by its depth and mark with a quiet bullet */
+  .etyseg.sub { margin-top: 0.25rem; padding-left: calc(0.7rem + (var(--depth) - 1) * 0.9rem); }
+  .etyseg.sub .ety { position: relative; }
+  .etyseg.sub .ety::before { content: '‣'; position: absolute; left: -0.7rem; color: var(--faint); }
   .etyhead { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); margin-bottom: 0.2rem; }
   .ety { font-size: 0.95rem; color: var(--muted); line-height: 1.9; margin: 0; }
   .ety ruby { font-family: var(--han); }
   .ety rt { font-size: 0.55em; color: var(--faint); font-family: var(--han); }
   .ety .kanji { background: none; border: none; padding: 0; font: inherit; color: var(--text); font-family: var(--han); }
   .ety .kanji:hover { text-decoration: underline; }
-  /* jargon term with a plain-English tooltip (tap/hover) */
-  .ety .term { color: var(--text); text-decoration: underline dotted; text-underline-offset: 2px; cursor: help; }
+  /* jargon term: dotted-underline like a glossary word. Desktop gets the title= hover; tap opens the
+     popup below (hover doesn't exist on touch, which is why the tooltip "didn't work on mobile"). */
+  .ety .term { color: var(--text); text-decoration: underline dotted; text-underline-offset: 2px; cursor: help; background: none; border: none; padding: 0; font: inherit; }
+  .ety .term:hover { color: #fff; background: none; }
   /* phonological reconstructions de-emphasised so the narrative reads first */
   .ety .recon { font-size: 0.78em; color: var(--faint); font-family: var(--mono); }
   .ety .recon[title] { cursor: help; }
+
+  /* tapped-term explanation — a small centred card (mobile-friendly; no hover needed) */
+  .termpop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 50; }
+  .termcard { width: min(24rem, 100%); background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: calc(var(--r) * 1.5); padding: 1.1rem 1.1rem 0.9rem; }
+  .termcard p { margin: 0; font-size: 0.95rem; line-height: 1.5; color: var(--text); }
 
   /* loading skeleton - reserves the lower sections' space so they don't pop in */
   .skel { margin-top: 1.4rem; }

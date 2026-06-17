@@ -839,3 +839,183 @@ async fn probe_script_forms_kokuji() {
         assert_eq!(sf["is_kokuji"], true, "峠 should be kokuji");
     }
 }
+
+// ── #90: homograph ranking is DETERMINISTIC (was random per request via HashMap order) ──
+// helper: the first result's reading + glosses joined
+fn first_reading(v: &Value) -> String {
+    v["results"][0]["reading"].as_str().unwrap_or("").to_string()
+}
+fn first_id(v: &Value) -> i64 {
+    v["results"][0]["lexeme_id"].as_i64().unwrap_or(0)
+}
+
+#[tokio::test]
+async fn xi_homograph_leads_with_wash_not_xiang_ma() {
+    // 洗 has xǐ ("to wash", rich) and xiǎn ("used in 洗馬", a bare cross-reference). The wash reading
+    // must lead — the richer-meaning tiebreak picks it over the minor-gloss homograph.
+    let v = search("洗").await;
+    let g = v["results"][0]["glosses"].as_array().unwrap();
+    let joined = g.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join("; ");
+    assert!(
+        joined.contains("wash") || joined.contains("bathe"),
+        "洗 should lead with the wash reading, got: {joined}"
+    );
+    assert_eq!(first_reading(&v), "xi3", "lead reading should be xi3");
+}
+
+#[tokio::test]
+async fn xi_ranking_is_stable_across_requests() {
+    // build a fresh search (and thus a fresh HashMap) several times; the lead lexeme must not change.
+    let id0 = first_id(&search("洗").await);
+    for _ in 0..6 {
+        assert_eq!(first_id(&search("洗").await), id0, "洗 lead lexeme must be stable across requests");
+    }
+}
+
+#[tokio::test]
+async fn homograph_xing_is_stable_across_requests() {
+    // 行 is a multi-reading homograph (xíng / háng / héng). Whichever leads, it must be the SAME one
+    // every time — no per-request flicker.
+    let id0 = first_id(&search("行").await);
+    for _ in 0..6 {
+        assert_eq!(first_id(&search("行").await), id0, "行 lead lexeme must be deterministic");
+    }
+}
+
+#[tokio::test]
+async fn richer_reading_outranks_bare_cross_reference() {
+    // the lead 洗 result must carry a real (non-"used in …") meaning, i.e. more than the lone xiǎn
+    // cross-reference gloss.
+    let v = search("洗").await;
+    let g = v["results"][0]["glosses"].as_array().unwrap();
+    let meaningful = g
+        .iter()
+        .filter_map(|x| x.as_str())
+        .filter(|s| !s.trim_start().to_lowercase().starts_with("used in"))
+        .count();
+    assert!(meaningful >= 1, "lead reading should have a real meaning, not only a cross-reference");
+}
+
+#[tokio::test]
+async fn equal_score_results_have_total_order() {
+    // two 洗 lexemes share a frequency/score; the result order must be a total order (no duplicate
+    // ids, deterministic) — re-running yields an identical id sequence.
+    let ids = |v: &Value| -> Vec<i64> {
+        v["results"].as_array().unwrap().iter().map(|r| r["lexeme_id"].as_i64().unwrap()).collect()
+    };
+    let a = ids(&search("洗").await);
+    let b = ids(&search("洗").await);
+    assert_eq!(a, b, "identical queries must return an identical result order");
+}
+
+// ── #19: per-language origin accounts (中 Sinitic + 日 Japonic for the same glyph) ──
+async fn top_entry(q: &str) -> Value {
+    let v = search(q).await;
+    let id = v["results"][0]["lexeme_id"].as_i64().expect("a hit");
+    get(&format!("/entry/{}", id)).await.1
+}
+
+#[tokio::test]
+async fn shan_has_per_language_origins() {
+    let e = top_entry("山").await;
+    let origins = e["origins"].as_array().expect("origins array");
+    assert!(origins.len() >= 2, "山 should carry >=2 language origins, got {}", origins.len());
+    let vars: Vec<&str> = origins.iter().filter_map(|o| o["variety"].as_str()).collect();
+    assert!(vars.contains(&"zh"), "expect a Chinese origin");
+    assert!(vars.contains(&"ja"), "expect a Japanese origin");
+}
+
+#[tokio::test]
+async fn origin_accounts_have_nonempty_text() {
+    let e = top_entry("山").await;
+    for o in e["origins"].as_array().unwrap() {
+        assert!(!o["text"].as_str().unwrap_or("").is_empty(), "each origin has text");
+        assert!(!o["variety"].as_str().unwrap_or("").is_empty(), "each origin has a variety");
+    }
+}
+
+#[tokio::test]
+async fn etymology_field_kept_for_backcompat() {
+    let e = top_entry("山").await;
+    assert!(e["etymology"].is_string(), "legacy etymology field still present");
+}
+
+#[tokio::test]
+async fn char_entry_origins_not_thin() {
+    // 山 = U+5C71 = 23665 char page now pulls origins from its word-lexemes
+    let (_, e) = get("/entry/-23665").await;
+    assert!(e["origins"].as_array().unwrap().len() >= 1, "char page should carry an origin");
+}
+
+#[tokio::test]
+async fn first_origin_is_the_looked_up_variety() {
+    let v = search("人").await;
+    let top_var = v["results"][0]["variety"].as_str().unwrap().to_string();
+    let id = v["results"][0]["lexeme_id"].as_i64().unwrap();
+    let e = get(&format!("/entry/{}", id)).await.1;
+    if let Some(first) = e["origins"].as_array().unwrap().first() {
+        assert_eq!(first["variety"].as_str().unwrap(), top_var, "looked-up variety leads");
+    }
+}
+
+// ── #16: radical marking + appears-in characters + standalone parent ──
+#[tokio::test]
+async fn chuo_radical_is_flagged() {
+    // 辵 = U+8FB5 = 36789
+    let (_, e) = get("/entry/-36789").await;
+    let c = &e["characters"][0];
+    assert_eq!(c["is_radical"], true, "辵 should be flagged as a radical");
+    assert_eq!(c["radical_number"], 162, "辵 is Kangxi radical 162");
+}
+
+#[tokio::test]
+async fn chi_radical_appears_in_characters() {
+    // 彳 = U+5F73 = 24435
+    let (_, e) = get("/entry/-24435").await;
+    assert_eq!(e["characters"][0]["is_radical"], true, "彳 is a radical");
+    assert!(!e["appears_in"].as_array().unwrap().is_empty(), "彳 should appear in characters");
+}
+
+#[tokio::test]
+async fn water_radical_variant_has_standalone() {
+    // 氵 = U+6C35 = 27701 → standalone 水
+    let (_, e) = get("/entry/-27701").await;
+    let c = &e["characters"][0];
+    assert_eq!(c["is_radical"], true);
+    assert_eq!(c["standalone"], "水", "氵 stands for 水");
+    let ai: Vec<&str> = e["appears_in"].as_array().unwrap().iter().filter_map(|x| x["ch"].as_str()).collect();
+    assert!(ai.len() > 3, "氵 appears in many characters, got {}", ai.len());
+}
+
+#[tokio::test]
+async fn common_char_with_radical_gloss_is_not_a_radical() {
+    // 山 = U+5C71 = 23665: has a "Kangxi radical 46" gloss but heads thousands of words → NOT a radical
+    let (_, e) = get("/entry/-23665").await;
+    assert_eq!(e["characters"][0]["is_radical"], false, "山 is a real char, not a radical entry");
+}
+
+#[tokio::test]
+async fn ordinary_entry_has_no_appears_in() {
+    let e = top_entry("山").await;
+    assert!(e["appears_in"].as_array().unwrap().is_empty(), "non-radical entry has empty appears_in");
+}
+
+// ── #17: per-character "used" count ──
+#[tokio::test]
+async fn used_count_separates_common_from_rare() {
+    let (_, ren) = get("/entry/-20154").await; // 人 U+4EBA
+    let (_, chuo) = get("/entry/-36789").await; // 辵 U+8FB5 (rare/radical)
+    let ren_n = ren["characters"][0]["used_count"].as_i64().unwrap();
+    let chuo_n = chuo["characters"][0]["used_count"].as_i64().unwrap();
+    assert!(ren_n > 100, "人 should appear in many words, got {ren_n}");
+    assert!(chuo_n <= 3, "辵 should appear in ~no words, got {chuo_n}");
+    assert!(ren_n > chuo_n, "common char outranks rare char in usage");
+}
+
+#[tokio::test]
+async fn used_count_present_and_nonnegative() {
+    let e = top_entry("山").await;
+    let n = e["characters"][0]["used_count"].as_i64().expect("used_count present");
+    assert!(n >= 0, "used_count is non-negative");
+    assert!(n > 50, "山 is common");
+}

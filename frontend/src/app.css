@@ -20,8 +20,14 @@
      glyph (incl. 粵 and Japanese) renders in the same face/weight instead of a per-glyph system
      fallback that made 粵 bold and Chinese/Japanese mismatch. System serifs are the pre-load fallback. */
   --mono: "Space Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --sans: "Newsreader", Georgia, "Times New Roman", serif;
+  /* The Latin brand serif has NO CJK glyphs, so append --han: CJK typed in the search box renders in
+     the same Noto serif as the headword (was falling back to a mismatched system CJK serif). */
+  --sans: "Newsreader", Georgia, "Times New Roman", var(--han), serif;
   --han: "Noto Serif SC", "Songti SC", "Hiragino Mincho ProN", "Noto Serif CJK SC", serif;
+  /* Han unification: U+8AA4 誤 (and many others) has region-specific shapes. A single SC cut shows the
+     SC glyph even for a Japanese word, so we load JP/TC cuts too and pick per the element's lang. */
+  --han-ja: "Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", var(--han);
+  --han-tc: "Noto Serif TC", "Songti TC", var(--han);
 
   /* subtle rounding (iOS-ish), monochrome */
   --r: 9px;
@@ -32,6 +38,10 @@
 }
 
 * { box-sizing: border-box; }
+
+/* Region-correct Han glyphs: glyph elements are also stamped with a `lang` (keyed to the word's
+   variety) for accessibility/selection; the actual regional serif is applied per-element via an inline
+   font-family (hanFont) so it reliably beats component-scoped styles. See display.ts hanFont/langTag. */
 
 /* keyboard focus ring (visible only for keyboard nav, not mouse) */
 :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }

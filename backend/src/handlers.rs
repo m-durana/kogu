@@ -237,9 +237,32 @@ fn build_entry(
     // lexical "why": origin badges + Wiktionary etymology passthrough
     let mut bs = conn.prepare("SELECT badge FROM origin_badge WHERE lexeme_id=?1 ORDER BY badge")?;
     let origin_badges: Vec<String> = bs.query_map([id], |r| r.get(0))?.collect::<Result<_, _>>()?;
-    let etymology: Option<String> = conn
-        .query_row("SELECT text FROM etymology WHERE lexeme_id=?1", [id], |r| r.get(0))
-        .ok();
+    let etymology: Option<String> = etymology_of(conn, id);
+
+    // per-language origin accounts: the looked-up lexeme first, then the same-glyph cognates in the
+    // OTHER languages (山 carries both a Sinitic and a Japonic etymology). One account per variety.
+    let mut origins: Vec<OriginAccount> = Vec::new();
+    let mut ety_vars: std::collections::HashSet<String> = std::collections::HashSet::new();
+    if let Some(t) = etymology.clone() {
+        ety_vars.insert(variety.clone());
+        origins.push(OriginAccount { variety: variety.clone(), headword: headword.clone(), text: t });
+    }
+    for l in &same_form {
+        if ety_vars.contains(&l.variety) {
+            continue;
+        }
+        if let Some(t) = etymology_of(conn, l.lexeme_id) {
+            ety_vars.insert(l.variety.clone());
+            origins.push(OriginAccount { variety: l.variety.clone(), headword: l.headword.clone(), text: t });
+        }
+    }
+
+    // for a radical/bound component, replace the word "used in" with "appears in characters"
+    let appears_in = if headword.chars().count() == 1 && characters.first().map(|c| c.is_radical).unwrap_or(false) {
+        appears_in_chars(conn, headword.chars().next().unwrap())?
+    } else {
+        Vec::new()
+    };
 
     Ok(Some(Entry {
         lexeme_id: id,
@@ -256,6 +279,8 @@ fn build_entry(
         compounds,
         origin_badges,
         etymology,
+        origins,
+        appears_in,
     }))
 }
 
@@ -306,6 +331,28 @@ fn build_char_entry(conn: &rusqlite::Connection, cp: u32) -> rusqlite::Result<Op
         .flatten();
     let senses: Vec<Sense> = gloss.into_iter().map(|g| Sense { pos: None, gloss_en: g }).collect();
     let compounds = char_compounds(conn, ch, &variety, 0)?;
+    let is_radical = ci.is_radical;
+
+    // per-language origin accounts from ANY word-lexeme written with this glyph, so the char page is
+    // not thin (and matches the word page): one etymology per variety.
+    let mut origins: Vec<OriginAccount> = Vec::new();
+    let mut ety_vars: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut q = conn.prepare("SELECT id, variety, headword FROM lexeme WHERE headword=?1")?;
+    let cands: Vec<(i64, String, String)> = q
+        .query_map([ch.to_string()], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+        .collect::<Result<_, _>>()?;
+    for (lid, var, hw) in cands {
+        if ety_vars.contains(&var) {
+            continue;
+        }
+        if let Some(t) = etymology_of(conn, lid) {
+            ety_vars.insert(var.clone());
+            origins.push(OriginAccount { variety: var, headword: hw, text: t });
+        }
+    }
+    let etymology = origins.first().map(|o| o.text.clone());
+    let appears_in = if is_radical { appears_in_chars(conn, ch)? } else { Vec::new() };
+
     Ok(Some(Entry {
         lexeme_id: -(cp as i64),
         variety,
@@ -320,7 +367,9 @@ fn build_char_entry(conn: &rusqlite::Connection, cp: u32) -> rusqlite::Result<Op
         translations: Vec::new(),
         compounds,
         origin_badges: Vec::new(),
-        etymology: None,
+        etymology,
+        origins,
+        appears_in,
     }))
 }
 
@@ -561,6 +610,59 @@ fn atomize(conn: &rusqlite::Connection, ch: char, depth: u8, out: &mut Vec<char>
         }
     }
 }
+/// The Wiktionary etymology paragraph for a lexeme, if any.
+fn etymology_of(conn: &rusqlite::Connection, id: i64) -> Option<String> {
+    conn.query_row("SELECT text FROM etymology WHERE lexeme_id=?1", [id], |r| r.get(0)).ok()
+}
+
+/// A gloss that flags the glyph as a Kangxi radical / bound component ("Kangxi radical 60",
+/// "radical number 85", "rad. no. 162").
+fn is_radical_gloss(gloss: Option<&str>) -> bool {
+    match gloss {
+        Some(g) => {
+            let l = g.to_lowercase();
+            l.contains("kangxi radical") || l.contains("radical number") || l.contains("rad. no")
+        }
+        None => false,
+    }
+}
+
+/// Parse the Kangxi radical number out of such a gloss ("...Kangxi radical 60" → 60).
+fn radical_gloss_number(gloss: Option<&str>) -> Option<i64> {
+    let g = gloss?.to_lowercase();
+    for kw in ["kangxi radical", "radical number", "rad. no.", "rad. no", "radical"] {
+        if let Some(pos) = g.find(kw) {
+            let rest = &g[pos + kw.len()..];
+            let num: String = rest
+                .chars()
+                .skip_while(|c| !c.is_ascii_digit())
+                .take_while(|c| c.is_ascii_digit())
+                .collect();
+            if let Ok(n) = num.parse::<i64>() {
+                return Some(n);
+            }
+        }
+    }
+    None
+}
+
+/// Characters that CONTAIN this glyph as a component (氵 → 河, 海, 湖…), via the IDS decomposition —
+/// the "appears in characters" list that replaces a radical's word "used in". Lightest (fewest
+/// strokes) first; capped so a high-frequency radical doesn't dump thousands.
+fn appears_in_chars(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Vec<CharLite>> {
+    let pat = format!("%{}%", ch);
+    let mut s = conn.prepare(
+        "SELECT char, gloss_en FROM character WHERE ids LIKE ?1 AND cp <> ?2 \
+         ORDER BY strokes IS NULL, strokes ASC, cp ASC LIMIT 40",
+    )?;
+    let out: Vec<CharLite> = s
+        .query_map(rusqlite::params![pat, ch as i64], |r| {
+            Ok(CharLite { ch: r.get(0)?, gloss: r.get(1)? })
+        })?
+        .collect::<Result<_, _>>()?;
+    Ok(out)
+}
+
 /// Radical-variant forms → the parent character whose meaning they carry, so 亻/氵/扌… are glossed
 /// as person/water/hand instead of "radical number N" (or, for 亻, nothing at all).
 fn radical_parent(c: char) -> char {
@@ -669,6 +771,21 @@ fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<C
     let decomp = uniform_decomp(conn, ch);
     let components = char_components(conn, ch, ids.as_deref());
 
+    // usage signal + radical detection — both keyed on how many lexemes contain this glyph.
+    let used_count: i64 =
+        conn.query_row("SELECT count(*) FROM form_char WHERE cp=?1", [cp], |r| r.get(0)).unwrap_or(0);
+    let rad_gloss = is_radical_gloss(gloss_en.as_deref());
+    // a genuine bound radical flags as a radical in its gloss AND appears in almost no words of its
+    // own (彳: 3, 辵: 0). 山/木/水 carry a radical gloss too but head thousands of words → not radicals.
+    let is_radical = rad_gloss && used_count <= 3;
+    let radical_number = if rad_gloss {
+        radical_gloss_number(gloss_en.as_deref()).or(radical)
+    } else {
+        radical
+    };
+    let parent = radical_parent(ch);
+    let standalone = if is_radical && parent != ch { Some(parent.to_string()) } else { None };
+
     Ok(Some(CharInfo {
         ch: ch.to_string(),
         is_orthodox,
@@ -682,6 +799,10 @@ fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<C
         script_forms,
         decomp,
         components,
+        is_radical,
+        radical_number,
+        standalone,
+        used_count,
     }))
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -334,6 +334,7 @@ describe('describeIds - composition with structure kept (森 = three 木)', () =
     expect(describeIds('⿱木⿰木木', '森')).toEqual({
       parts: [{ component: '木', count: 3 }],
       arrangement: 'stacked top to bottom',
+      idc: '⿱',
       repeated: { component: '木', count: 3 },
     })
   })
@@ -438,5 +439,124 @@ describe('ocrSelectedText - OCR character selection', () => {
   })
   it('ignores out-of-range keys', () => {
     expect(ocrSelectedText(lines, new Set(['9-9', '0-0']))).toBe('機')
+  })
+})
+
+// ── #74: IDC operator exposed for the box diagram ─────────────────────────────
+describe('describeIds.idc - the top-level Ideographic Description Char for the box diagram', () => {
+  it('side-by-side ⿰', () => {
+    expect(describeIds('⿰女子', '好')!.idc).toBe('⿰')
+  })
+  it('stacked ⿱', () => {
+    expect(describeIds('⿱木⿰木木', '森')!.idc).toBe('⿱')
+  })
+  it('enclosure ⿴', () => {
+    expect(describeIds('⿴囗玉', '国')!.idc).toBe('⿴')
+  })
+  it('lower-left wrap ⿺ (the 辶 / 廴 type)', () => {
+    expect(describeIds('⿺辶首', '道')!.idc).toBe('⿺')
+  })
+  it('null when there is no IDC operator (flat/atomic)', () => {
+    expect(describeIds('木', '木')).toBeNull()
+  })
+  it('strips [SOURCE] tags before reading the IDC', () => {
+    expect(describeIds('⿰糸氏[GTV]', '紙')!.idc).toBe('⿰')
+  })
+})
+
+// ── #13 / #85 / #87: Han linkification reaches the Supplementary Ideographic Plane ──
+describe('linkifyHan - Ext-B (SIP) glyphs link instead of falling through as tofu', () => {
+  it('links 𣥆 (U+23946, the 辵 origin glyph that used to render as plain text)', () => {
+    expect(linkifyHan('version is 𣥆.')).toEqual([
+      { v: 'version is ' },
+      { v: '𣥆', link: true },
+      { v: '.' },
+    ])
+  })
+  it('links a run mixing BMP and SIP Han', () => {
+    const parts = linkifyHan('害 from 𫲸 and 𥎆')
+    expect(parts.filter((p) => p.link).map((p) => p.v)).toEqual(['害', '𫲸', '𥎆'])
+  })
+  it('still links ordinary BMP Han', () => {
+    expect(glossParts('see 你')[1]).toEqual({ v: '你', link: true })
+  })
+  it('etymologyTokens emits a han token for an Ext-B glyph', () => {
+    const toks = etymologyTokens('obsolete form 𣥆 here')[0].tokens
+    expect(toks.some((t) => t.t === 'han' && t.v === '𣥆')).toBe(true)
+  })
+  it('furiganaTokens treats an Ext-B base as ruby', () => {
+    expect(furiganaTokens('𣥆(あ)')).toEqual([{ t: 'ruby', base: '𣥆', rt: 'あ' }])
+  })
+})
+
+// ── #14 / #86: origin sectioning — bullet depth, no fake numbering, marker cleanup ──
+describe('etymologyTokens - Wiktionary bullet sub-points + leaked-marker cleanup', () => {
+  it('a line led by "*" becomes depth 1 with the marker stripped', () => {
+    const segs = etymologyTokens('Two theories:\n* Same etymon as 仁')
+    expect(segs[1].depth).toBe(1)
+    expect(segs[1].tokens[0]).toEqual({ t: 'text', v: 'Same etymon as ' })
+  })
+  it('"**" becomes depth 2', () => {
+    const segs = etymologyTokens('lead\n** deeply nested point')
+    expect(segs[1].depth).toBe(2)
+  })
+  it('top-level lines are depth 0', () => {
+    expect(etymologyTokens('A pictogram.')[0].depth).toBe(0)
+  })
+  it('drops a "*:" pronunciation-table leak line entirely', () => {
+    const segs = etymologyTokens('real prose\n*: /pʰ/ leaked IPA')
+    expect(segs.length).toBe(1)
+    expect(segs[0].tokens[0]).toEqual({ t: 'text', v: 'real prose' })
+  })
+  it('strips an orphan leading "]" (stripped reference tag)', () => {
+    const segs = etymologyTokens(']\nA drawing of a cart')
+    expect(segs.length).toBe(1)
+    expect(segs[0].tokens[0]).toEqual({ t: 'text', v: 'A drawing of a cart' })
+  })
+  it('does NOT treat an inline reconstruction "*njin" as a bullet', () => {
+    const segs = etymologyTokens('related to *njin forms')
+    expect(segs[0].depth).toBe(0)
+    expect(segs[0].tokens[0]).toEqual({ t: 'text', v: 'related to *njin forms' })
+  })
+})
+
+// ── #92: region-correct font + lang per variety ───────────────────────────────
+describe('langTag / hanFont - regional Han glyph selection by variety', () => {
+  it('Japanese → ja + JP serif', () => {
+    expect(langTag('ja')).toBe('ja')
+    expect(hanFont('ja')).toBe('var(--han-ja)')
+  })
+  it('Cantonese → zh-Hant + TC serif', () => {
+    expect(langTag('yue')).toBe('zh-Hant')
+    expect(hanFont('yue')).toBe('var(--han-tc)')
+  })
+  it('Mandarin → zh-Hans + default (SC) serif', () => {
+    expect(langTag('zh')).toBe('zh-Hans')
+    expect(hanFont('zh')).toBe('var(--han)')
+  })
+  it('every variety maps to a non-empty BCP-47 tag', () => {
+    for (const v of ['zh', 'yue', 'ja'] as const) expect(langTag(v).length).toBeGreaterThan(0)
+  })
+  it('ja and zh resolve to different fonts (the 誤 fix)', () => {
+    expect(hanFont('ja')).not.toBe(hanFont('zh'))
+  })
+})
+
+// ── #99 Fix A: drop trailing borrowed-source notes, keep the meaning ──
+describe('cleanGloss - trailing "(from Japanese …)" source note removed', () => {
+  it('strips the packaging note source tag', () => {
+    expect(cleanGloss('containing (n pieces) (from Japanese 入 "iri")')).toBe('containing (n pieces)')
+  })
+  it('keeps the real meaning before a (from Japanese) note', () => {
+    expect(cleanGloss('idiot; fool (from Japanese 馬鹿)')).toBe('idiot; fool')
+  })
+  it('handles (from English …)', () => {
+    expect(cleanGloss('percent (from English)')).toBe('percent')
+  })
+  it('only strips a TRAILING source note, not mid-gloss text', () => {
+    expect(cleanGloss('to enter; to go into')).toBe('to enter; to go into')
+  })
+  it('does not touch a normal parenthetical', () => {
+    expect(cleanGloss('to conform to (as in 入時)')).toBe('to conform to (as in 入時)')
   })
 })

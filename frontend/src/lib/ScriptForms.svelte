@@ -48,7 +48,10 @@
     padding: 0.1rem 0.2rem; border-radius: var(--r); border: 1px solid transparent;
   }
   .b:hover { background: var(--surface); }
-  .b.cur { border-color: var(--border-strong); background: var(--surface); }
+  /* the looked-up form used to get a boxed ring (border + fill) — it read as a stray outline,
+     especially on a simplified glyph. Mark "current" with a quiet underline on the glyph instead. */
+  .b.cur { background: none; }
+  .b.cur .g { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--border-strong); }
   .tag { font-family: var(--mono); font-size: 0.62rem; color: var(--faint); }
   .g { font-family: var(--han); font-size: 1.7rem; line-height: 1; color: var(--text); }
   .arrow { color: var(--faint); align-self: center; }

@@ -48,8 +48,28 @@ pub struct Entry {
     pub compounds: Vec<LinkLite>,
     /// lexical "why": origin badges (wasei-kango, borrowed-from-japanese, calque, …) - no LLM.
     pub origin_badges: Vec<String>,
-    /// Wiktionary etymology paragraph, passthrough (no generated prose).
+    /// Wiktionary etymology paragraph for the looked-up lexeme, passthrough (kept for back-compat).
     pub etymology: Option<String>,
+    /// Per-language origin accounts (中 Sinitic, 日 Japonic, …) for the SAME glyph. The Chinese and
+    /// Japanese etymologies of 山 are both true and complementary; we surface each, labelled by
+    /// variety, instead of silently showing whichever lexeme happened to rank first.
+    pub origins: Vec<OriginAccount>,
+    /// For a radical/bound-component entry (彳, 辵, 氵…): the characters that CONTAIN it, replacing the
+    /// word "used in" list (a radical isn't a morpheme in words). Empty for ordinary entries.
+    pub appears_in: Vec<CharLite>,
+}
+
+#[derive(Serialize)]
+pub struct OriginAccount {
+    pub variety: String,
+    pub headword: String,
+    pub text: String,
+}
+
+#[derive(Serialize)]
+pub struct CharLite {
+    pub ch: String,
+    pub gloss: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -89,6 +109,15 @@ pub struct CharInfo {
     /// "child"), so the structure section explains the parts, not just lists them. Radical-variant
     /// forms are glossed via their parent character (亻 → "person").
     pub components: Vec<Component>,
+    /// true when this glyph is primarily a Kangxi RADICAL / bound component, not a standalone word
+    /// (彳, 辵, 氵, 艹…). Detected from a radical-flagging gloss AND near-zero containing words.
+    pub is_radical: bool,
+    /// the Kangxi radical number when known (parsed from the gloss), for the radical line.
+    pub radical_number: Option<i64>,
+    /// the standalone character a radical-variant form stands for (氵→水, 辶→辵), when it differs.
+    pub standalone: Option<String>,
+    /// how many lexemes contain this character (a usage signal): 0 = archaic/unused, large = core.
+    pub used_count: i64,
 }
 
 #[derive(Serialize)]

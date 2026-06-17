@@ -71,6 +71,19 @@ export function varietyLabel(v: Variety): string {
   return v === 'zh' ? '中' : v === 'yue' ? '粵' : '日'
 }
 
+/** BCP-47 lang tag for a variety, stamped on glyph elements so screen readers / text selection know
+ * the language, and so the matching regional Han font is chosen. */
+export function langTag(v: Variety): string {
+  return v === 'ja' ? 'ja' : v === 'yue' ? 'zh-Hant' : 'zh-Hans'
+}
+
+/** Region-correct Han serif for a variety — applied inline so it beats component-scoped styles. U+8AA4
+ * 誤 (and many Han-unified chars) render with different shapes per region; a single Simplified cut drew
+ * the Chinese 誤 even for a Japanese word, so Japanese/Cantonese get their own cut. */
+export function hanFont(v: Variety): string {
+  return v === 'ja' ? 'var(--han-ja)' : v === 'yue' ? 'var(--han-tc)' : 'var(--han)'
+}
+
 /** Region codes present across a hit's forms, in a stable order (core four). */
 export function regionsOf(hit: Hit): string[] {
   const order = ['CN', 'TW', 'HK', 'JP']
@@ -187,6 +200,9 @@ export type IdsPart = { component: string; count: number }
 export interface IdsInfo {
   parts: IdsPart[]
   arrangement: string | null
+  /** the top-level Ideographic Description Character itself (⿰⿱⿴…), so the UI can draw the layout
+   * as a small box diagram instead of spelling it out in prose. null when there's no IDC operator. */
+  idc: string | null
   /** set when the character is one component repeated (森 → {木, 3}); the headline insight */
   repeated: IdsPart | null
 }
@@ -219,7 +235,7 @@ export function describeIds(ids: string | null, self = ''): IdsInfo | null {
   for (const c of leaves) counts.set(c, (counts.get(c) ?? 0) + 1)
   const parts = [...counts.entries()].map(([component, count]) => ({ component, count }))
   const repeated = parts.length === 1 && parts[0].count >= 2 ? parts[0] : null
-  return { parts, arrangement, repeated }
+  return { parts, arrangement, idc: firstIdc ?? null, repeated }
 }
 
 const NUM_WORD = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
@@ -242,6 +258,9 @@ export function cleanGloss(g: string): string {
   s = s.replace(/\[[A-Za-zÀ-ÿüÜ0-9·,.\s]*\]/g, '') // [hang2 kong1 gang3], [fa3] - before pipes
   s = s.replace(/([^\s;,，|[\]]+)\|([^\s;,，|[\]]+)/g, '$1') // 處|处 -> 處
   s = s.replace(/[,;]?\s*(?:Taiwan|Mainland|also|old|erhua|Cantonese)\s+pr\.\s*/gi, ' ') // pr. notes
+  // trailing borrowed-source note ("…(from Japanese 入 "iri")") — metadata, not meaning; drop it but
+  // keep the actual sense before it (馬鹿 "idiot (from Japanese)" → "idiot").
+  s = s.replace(/[,;]?\s*\(from (?:Japanese|English|French|German|Latin|Korean|Chinese|Sanskrit|Mongolian|Manchu)\b[^)]*\)\s*$/i, '')
   s = s.replace(/\(\s*\)/g, '') // empty parens left behind
   s = s.replace(/\s*;\s*/g, '; ') // normalise sense separators
   s = s.replace(/(?:;\s*)+/g, '; ')
@@ -296,9 +315,12 @@ export function isBoundForm(glosses: string[]): boolean {
 }
 
 export type GlossPart = { v: string; link?: boolean }
-// Han run: CJK Unified (incl. ext-A) + compat ideographs + iteration mark 々. Explicit ranges, not
-// \p{Han}: the build-time regex parser rejects Unicode script-name escapes.
-const HAN_RUN = /[㐀-鿿豈-﫿々]+/g
+// Han run: CJK Unified (incl. ext-A, U+3400–9FFF) + compat ideographs (U+F900–FAFF) + iteration
+// mark 々, AND the Supplementary Ideographic Plane (Ext B–F, U+20000–3FFFF) matched via its surrogate
+// pairs (high D840–D8BF, low DC00–DFFF). The SIP range is why 辵's 𣥆 (U+23946) and ~830 other origin
+// glyphs were rendering as plain unlinked tofu. Explicit ranges + a surrogate alternation, not
+// \p{Han}/the `u` flag: the build-time regex parser rejects Unicode script-name escapes.
+const HAN_RUN = /(?:[㐀-鿿豈-﫿々]|[\uD840-\uD8BF][\uDC00-\uDFFF])+/g
 /** Split a string so every Han run becomes a tappable link and the rest stays plain text — used in
  * glosses ("variant of 著" → 著 links; "ear; handle 耳" → 耳 links) and origin prose. */
 export function linkifyHan(s: string): GlossPart[] {
@@ -371,6 +393,10 @@ export type EtyInline =
 export interface EtySegment {
   /** numbered-section label ("Etymology 2") when the source delineates several, else null */
   heading: string | null
+  /** indent depth for Wiktionary bullet sub-points (a line led by * / **). 0 = top-level paragraph.
+   * These are nested points under a lead-in ("…proposes two etymologies: * X ** if so… * Y"); the
+   * raw "*" used to leak as an unexplained character, so we lift it to real indentation instead. */
+  depth: number
   tokens: EtyInline[]
 }
 
@@ -425,16 +451,28 @@ export function etymologyTokens(text: string): EtySegment[] {
   const segs: EtySegment[] = []
   let heading: string | null = null
   for (const raw of text.split('\n')) {
-    const line = raw.trim()
+    let line = raw.trim()
     if (!line) continue
     const hm = line.match(/^;?\s*(Etymology\s+\d+)\s*$/i)
     if (hm) {
       heading = hm[1]
       continue
     }
-    const body = line.replace(/^;\s*/, '').trim() // drop a leading "; " definition-list marker
-    if (!body) continue
-    segs.push({ heading, tokens: inlineEty(body) })
+    // drop a leading "; " definition-list marker, and an orphan "]" left when a [reference] tag was
+    // stripped upstream (a few entries, e.g. 車, literally start "]\nPictogram…").
+    line = line.replace(/^[;\]]\s*/, '').trim()
+    // Wiktionary bullet sub-points: a line led by one or more "*" (followed by space) is a nested
+    // point under a lead-in; "*:" is a leaked pronunciation/IPA-table row, not prose. Lift the "*"
+    // to a real indent depth and drop the raw marker; drop the "*:" pronunciation leaks entirely.
+    let depth = 0
+    const bm = line.match(/^(\*+)(:+)?[ \t]+/)
+    if (bm) {
+      if (bm[2]) continue // "*: …" pronunciation table — not etymology
+      depth = bm[1].length
+      line = line.slice(bm[0].length).trim()
+    }
+    if (!line) continue
+    segs.push({ heading, depth, tokens: inlineEty(line) })
     heading = null // a heading labels only its first following statement
   }
   return segs
@@ -447,7 +485,7 @@ export type FuriToken = { t: 'text'; v: string } | { t: 'ruby'; base: string; rt
  * stays plain text. Rendered with <ruby>/<rt> so the reading sits ON the character. */
 export function furiganaTokens(text: string): FuriToken[] {
   const out: FuriToken[] = []
-  const han = '[\u3400-\u9FFF\uF900-\uFAFF\u3005\u3006]+'
+  const han = '(?:[\u3400-\u9FFF\uF900-\uFAFF\u3005\u3006]|[\uD840-\uD8BF][\uDC00-\uDFFF])+'
   const reading = "[\u3040-\u30FF \u30FC\u30FBA-Za-z\u0100-\u017F\u00E0-\u00FC'\u0304\u0301\u0300\u030C-]+"
   const re = new RegExp('(' + han + ')\\((' + reading + ')\\)', 'g')
   let last = 0

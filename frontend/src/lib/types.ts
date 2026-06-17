@@ -64,6 +64,24 @@ export interface CharInfo {
   decomp: { base: string; count: number } | null
   /** distinct components with meanings (好 → 女 "woman", 子 "child"); radical forms glossed via parent */
   components: { ch: string; gloss: string | null }[]
+  /** the glyph is primarily a Kangxi radical / bound component (彳, 辵, 氵…), not a standalone word */
+  is_radical: boolean
+  /** Kangxi radical number when known */
+  radical_number: number | null
+  /** standalone character a radical-variant form stands for (氵→水), when it differs */
+  standalone: string | null
+  /** how many lexemes contain this character — usage signal (0 = archaic, large = core) */
+  used_count: number
+}
+
+export interface OriginAccount {
+  variety: Variety
+  headword: string
+  text: string
+}
+export interface CharLite {
+  ch: string
+  gloss: string | null
 }
 export interface Sense {
   pos: string | null
@@ -93,6 +111,10 @@ export interface Entry {
   compounds: LinkLite[]
   origin_badges: string[]
   etymology: string | null
+  /** per-language origin accounts (中 Sinitic, 日 Japonic) for the same glyph */
+  origins: OriginAccount[]
+  /** for a radical/bound-component entry: characters that contain it (replaces word "used in") */
+  appears_in: CharLite[]
 }
 
 export interface ConceptGroup {

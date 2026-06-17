@@ -15,6 +15,21 @@
   let t0 = 0
   let timer: ReturnType<typeof setTimeout> | undefined
 
+  // While the pad is open, drawing strokes that stray off the canvas would otherwise drag-select the
+  // page text behind it. Disable text selection document-wide for as long as the pad is mounted, and
+  // restore the previous value on close.
+  $effect(() => {
+    const body = document.body
+    const prev = body.style.userSelect
+    const prevWebkit = body.style.getPropertyValue('-webkit-user-select')
+    body.style.userSelect = 'none'
+    body.style.setProperty('-webkit-user-select', 'none')
+    return () => {
+      body.style.userSelect = prev
+      body.style.setProperty('-webkit-user-select', prevWebkit)
+    }
+  })
+
   const ctx = () => canvas.getContext('2d')!
   function pos(e: PointerEvent): [number, number] {
     const r = canvas.getBoundingClientRect()
