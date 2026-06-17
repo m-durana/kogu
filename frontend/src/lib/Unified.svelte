@@ -3,6 +3,7 @@
   import { primaryForm, varietyLabel, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, splitRecon, formTag } from './display'
   import ScriptForms from './ScriptForms.svelte'
   import { AlertTriangle } from '@lucide/svelte'
+  import { readingRomaji } from './romaji'
 
   // The unified cross-language view - one Han word, seen across 中 / 粵 / 日 at once.
   // Renders instantly from search hits; enriches (decomposition, origin) when the full entry loads.
@@ -241,12 +242,6 @@
   })
   const allRows = $derived(synthJaRow ? [...rows, synthJaRow] : rows)
 
-  // STRUCTURE readings now only show what block A DOESN'T (block A already gives each language's
-  // reading + meaning). That leaves just the Cantonese jyutping - legitimate (Cantonese reads all Han)
-  // and shown nowhere else - when there's no 粵 definition row. pinyin/on-kun are always either a block-A
-  // duplicate or a nominal reading, so they never appear here (keeps 冇's nominal mǎo suppressed).
-  const structureAllow = $derived(new Set(defRows.some((r) => r.variety === 'yue') ? [] : ['yue']))
-
   // === The co-equal cross-language model ===
   // There is NO single privileged headword. A Han glyph that is a real word in two or more languages
   // is the NORM, not the exception - it is the whole point of the app. So the typed glyph's meaning is
@@ -313,10 +308,11 @@
   // ResizeObserver on the clamped node won't fire then (its box is pinned to max-height), so also hook
   // document.fonts.ready and an rAF. Threshold tracks the CSS max-height (2.9rem) closely so a block
   // that's visibly clipped always gets a toggle (no dead zone).
-  function clampProbe(node: HTMLElement, id: number) {
+  function clampProbe(node: HTMLElement, opts: { id: number; rem: number }) {
+    const { id, rem } = opts
     const measure = () => {
-      const twoLines = parseFloat(getComputedStyle(document.documentElement).fontSize) * 2.9
-      const over = node.scrollHeight > twoLines + 1
+      const limit = parseFloat(getComputedStyle(document.documentElement).fontSize) * rem
+      const over = node.scrollHeight > limit + 1
       if (over === overflow.has(id)) return
       const n = new Set(overflow)
       if (over) n.add(id)
@@ -347,27 +343,27 @@
   )
   const falseFriendLangs = $derived(defLangs.join(' and '))
 
-  // Character readings GROUPED by language (中 pinyin / 粵 jyutping / 日 on'yomi · kun'yomi), so it's
-  // always clear which language a reading belongs to - a Chinese reader shouldn't have to puzzle over
-  // kana. `allow` gates pinyin / on-kun to the languages this word is actually used in (so a 粵-only
-  // word doesn't show a nominal Mandarin pinyin); jyutping is never gated (Cantonese writes all Han).
-  type RGroup = { vh: string; text: string }
-  function charReadingGroups(c: CharInfo, allow?: Set<string>): RGroup[] {
+  // The character's readings, grouped by language for the readings line: 中 pinyin, 粵 jyutping (kept
+  // per request), 日 on'yomi then kun'yomi each as kana + romaji (Chinese readers can't read kana).
+  // Shows ALL the character's readings - it's the pronunciation reference, kept on the entry.
+  type RItem = { main: string; sub?: string }
+  type RGroup = { vh: string; items: RItem[] }
+  function charReadingGroups(c: CharInfo): RGroup[] {
     const g: RGroup[] = []
     const pinyin = c.readings.filter((r) => r.kind === 'pinyin').map((r) => r.value)
-    if (pinyin.length && (!allow || allow.has('zh'))) g.push({ vh: '中', text: pinyin.join('  ') })
+    if (pinyin.length) g.push({ vh: '中', items: pinyin.map((v) => ({ main: v })) })
     const jyut = c.readings.filter((r) => r.kind === 'jyutping').map((r) => r.value)
-    if (jyut.length && (!allow || allow.has('yue'))) g.push({ vh: '粵', text: jyut.join('  ') })
+    if (jyut.length) g.push({ vh: '粵', items: jyut.map((v) => ({ main: v })) })
     const on = c.readings.filter((r) => r.kind === 'onyomi').map((r) => r.value).filter(isKana)
     const kun = c.readings.filter((r) => r.kind === 'kunyomi').map((r) => r.value).filter(isKana)
-    if ((on.length || kun.length) && (!allow || allow.has('ja'))) {
-      const parts: string[] = []
-      if (on.length) parts.push(on.join(' '))
-      if (kun.length) parts.push(kun.join(' '))
-      g.push({ vh: '日', text: parts.join('    ') })
-    }
+    const ja: RItem[] = [
+      ...on.map((v) => ({ main: v, sub: readingRomaji('onyomi', v) })),
+      ...kun.map((v) => ({ main: v, sub: readingRomaji('kunyomi', v) })),
+    ]
+    if (ja.length) g.push({ vh: '日', items: ja })
     return g
   }
+  const READINGS_ID = -1 // clamp/expand key for the readings line (distinct from any lexeme id)
 
   // which languages a character actually belongs to (for the lean breakdown): 中 if it has a Mandarin
   // reading, 粵 jyutping, 日 a kana on/kun reading.
@@ -447,7 +443,7 @@
               {#if r.reading}<span class="dread">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>{/if}
             </div>
             {#if ss.length}
-              <ol class="senses" class:clamp={!expanded.has(r.id) && overflow.has(r.id)} use:clampProbe={r.id}>
+              <ol class="senses" class:clamp={!expanded.has(r.id) && overflow.has(r.id)} use:clampProbe={{ id: r.id, rem: 2.9 }}>
                 {#each ss as g}<li><span class="sg">{g}</span></li>{/each}
               </ol>
               {#if overflow.has(r.id)}
@@ -482,19 +478,29 @@
 
   {#if entry && single && headChar}
     <!-- single character: a compact structure line (no repeated glyph), then the words that use it -->
+    {#if charReadingGroups(headChar).length}
+      <!-- readings: the character's pronunciations, kept on the entry. 中 pinyin · 粵 jyutping · 日
+           on'yomi/kun'yomi as kana + romaji. Collapsed to ~3 lines with a toggle. -->
+      <section class="readings">
+        <h3>readings</h3>
+        <div class="rds" class:clamp={!expanded.has(READINGS_ID) && overflow.has(READINGS_ID)} use:clampProbe={{ id: READINGS_ID, rem: 4.4 }}>
+          {#each charReadingGroups(headChar) as g}
+            <div class="rgrp"><span class="rvh">{g.vh}</span><span class="rtext">{#each g.items as it, i}{i ? '  ·  ' : ''}{it.main}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{/each}</span></div>
+          {/each}
+        </div>
+        {#if overflow.has(READINGS_ID)}
+          <button class="more" onclick={() => toggleSenses(READINGS_ID)}>{expanded.has(READINGS_ID) ? 'show less' : 'show more'}</button>
+        {/if}
+      </section>
+    {/if}
     <section class="struct">
       <h3>structure</h3>
-      {#if charReadingGroups(headChar, structureAllow).length}
-        <div class="crd">
-          {#each charReadingGroups(headChar, structureAllow) as g}<div class="rgrp"><span class="rvh">{g.vh}</span><span class="rtext">{g.text}</span></div>{/each}
-        </div>
-      {/if}
       {#if headChar.script_forms}
         <div class="strip"><ScriptForms forms={headChar.script_forms} anchor={head} {onsearch} /></div>
       {/if}
       <div class="cln">
+        {#if cleanIds(headChar.ids)}<span class="dim">parts</span> {#each cleanIds(headChar.ids).split(/\s+/).filter(Boolean) as p}<button class="part" onclick={() => onsearch(p)} title="look up {p}">{p}</button>{/each}{/if}
         {#if headChar.strokes}<span class="dim">{headChar.strokes} strokes</span>{/if}
-        {#if cleanIds(headChar.ids)}<span class="dim">parts</span> <span class="ids">{cleanIds(headChar.ids)}</span>{/if}
       </div>
     </section>
   {:else if entry && entry.characters.length}
@@ -615,13 +621,17 @@
   .clang { font-family: var(--han); font-size: 0.8rem; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0.05rem 0.32rem; }
   .cgl { font-size: 0.95rem; color: var(--text); }
 
-  /* single-character structure block - readings grouped by language (中/粵/日), then decomposition */
-  .crd { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.1rem; }
+  /* readings line - 中/粵/日 grouped, on/kun shown as kana + romaji; collapses to ~3 lines */
+  .rds { display: flex; flex-direction: column; gap: 0.4rem; }
+  .rds.clamp { max-height: 4.4rem; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 65%, transparent); mask-image: linear-gradient(to bottom, #000 65%, transparent); }
   .rgrp { display: flex; gap: 0.7rem; align-items: baseline; font-family: var(--mono); font-size: 0.95rem; }
   .rvh { font-family: var(--han); color: var(--muted); font-size: 1rem; flex: none; min-width: 1.2em; }
   .rtext { color: var(--text); }
-  .cln { display: flex; gap: 0.7rem; align-items: center; flex-wrap: wrap; margin-top: 0.5rem; font-size: 0.8rem; }
-  .ids { font-family: var(--han); color: var(--muted); }
+  .rsub { color: var(--muted); margin-left: 0.25rem; font-size: 0.86em; }
+  /* structure block - decomposition (tappable parts) + a quiet stroke count */
+  .cln { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 0.5rem; font-size: 0.8rem; }
+  .part { font-family: var(--han); color: var(--muted); background: none; border: none; padding: 0 0.15rem; font-size: 1.05rem; line-height: 1; }
+  .part:hover { color: var(--text); background: none; }
 
   /* words: collapsible (toggle header like origin), grouped by language with breathing room */
   .words { margin-top: 1.6rem; }
