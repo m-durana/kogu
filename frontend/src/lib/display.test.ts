@@ -230,15 +230,15 @@ describe('cleanGloss - strip CC-CEDICT markup', () => {
 })
 
 describe('script-forms helpers', () => {
-  it('scriptShort maps single + joined scripts to CJK tags', () => {
-    expect(scriptShort('traditional')).toBe('繁')
-    expect(scriptShort('simplified')).toBe('简')
-    expect(scriptShort('shinjitai')).toBe('日')
-    expect(scriptShort('simplified+shinjitai')).toBe('简 日')
+  it('scriptShort maps single + joined scripts to English tags', () => {
+    expect(scriptShort('traditional')).toBe('trad')
+    expect(scriptShort('simplified')).toBe('simp')
+    expect(scriptShort('shinjitai')).toBe('JP')
+    expect(scriptShort('simplified+shinjitai')).toBe('simp JP')
   })
   it('formTag maps surface-form scripts', () => {
-    expect(formTag('trad')).toBe('繁')
-    expect(formTag('simp')).toBe('简')
+    expect(formTag('trad')).toBe('trad')
+    expect(formTag('simp')).toBe('simp')
     expect(formTag('kana')).toBe('')
   })
   it('orderBranches sorts traditional → simplified → shinjitai', () => {

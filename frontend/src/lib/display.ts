@@ -124,23 +124,24 @@ export function pinyinMarks(reading: string): string {
 import type { FormBranch } from './types'
 
 // Short CJK tag(s) for a branch's script. The script may be "+"-joined (学 is both 简 and 日).
+// short English script labels (kept English until localization; the app is English-heavy for now)
 const SCRIPT_TAG: Record<string, string> = {
-  traditional: '繁',
-  simplified: '简',
-  shinjitai: '日',
-  'z-variant': '異',
+  traditional: 'trad',
+  simplified: 'simp',
+  shinjitai: 'JP',
+  'z-variant': 'var',
 }
 export function scriptShort(script: string): string {
   return script
     .split('+')
-    .map((s) => SCRIPT_TAG[s] ?? '異')
+    .map((s) => SCRIPT_TAG[s] ?? 'var')
     .filter((v, i, a) => a.indexOf(v) === i)
     .join(' ')
 }
 
 // Tag for a surface_form's script (trad/simp/shinjitai) — used to label both Chinese forms equally.
 export function formTag(script: string): string {
-  return ({ trad: '繁', simp: '简', shinjitai: '日' } as Record<string, string>)[script] ?? ''
+  return ({ trad: 'trad', simp: 'simp', shinjitai: 'JP' } as Record<string, string>)[script] ?? ''
 }
 
 // Stable display order for the forms strip: traditional → simplified → shinjitai → z-variant.

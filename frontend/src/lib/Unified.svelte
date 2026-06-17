@@ -290,9 +290,10 @@
 
   // numbered senses for a definition row - the full hit glosses (every sense), cleaned. Identical
   // treatment for every language (no POS on one and not another) so the languages stay co-equal.
-  // Capped with a per-row toggle so a 13-sense kanji doesn't wall off the bridge below.
-  const SENSE_CAP = 6
+  // Collapsed to ~2 lines with a per-row "more" toggle so a long Chinese definition (or a 13-sense
+  // kanji) doesn't wall off the page; the toggle only appears when the senses actually overflow 2 lines.
   let expanded = $state(new Set<number>())
+  let overflow = $state(new Set<number>())
   function senseList(r: Row): string[] {
     const all = r.glosses.map(cleanGloss).filter(Boolean)
     // real meanings lead; "surname X" / "variant of" / "used in" cross-refs sink to the end (stable)
@@ -304,6 +305,24 @@
     if (n.has(id)) n.delete(id)
     else n.add(id)
     expanded = n
+  }
+
+  // measure whether a senses block exceeds the 2-line clamp (so the "more" toggle shows only when
+  // needed). scrollHeight is the full content height even while clamped, so this works in both states.
+  function clampProbe(node: HTMLElement, id: number) {
+    const measure = () => {
+      const twoLines = parseFloat(getComputedStyle(document.documentElement).fontSize) * 2.9
+      const over = node.scrollHeight > twoLines + 4
+      if (over === overflow.has(id)) return
+      const n = new Set(overflow)
+      if (over) n.add(id)
+      else n.delete(id)
+      overflow = n
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(node)
+    return { destroy: () => ro.disconnect() }
   }
 
   // false friends are SAME-glyph words whose meaning diverges (手紙) - they sit co-equally in block A,
@@ -415,18 +434,18 @@
               <span class="dvar">{sectionName[r.variety]}</span>
               {#if r.variety === 'zh'}
                 {@const zp = zhPair(r)}
-                {#if zp.same}<span class="dform"><span class="ftag">繁简</span>{zp.trad}</span>{:else}<span class="dform"><span class="ftag">繁</span>{zp.trad}<span class="fsep">·</span><span class="ftag">简</span>{zp.simp}</span>{/if}
+                {#if zp.same}<span class="dform"><span class="ftag">trad/simp</span>{zp.trad}</span>{:else}<span class="dform"><span class="ftag">trad</span>{zp.trad}<span class="fsep">·</span><span class="ftag">simp</span>{zp.simp}</span>{/if}
               {:else if r.alt}
                 <span class="dform"><span class="ftag">{formTag(r.formScript)}</span>{r.form}<span class="fsep">·</span><span class="ftag">{formTag(r.altScript)}</span>{r.alt}</span>
               {/if}
               {#if r.reading}<span class="dread">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>{/if}
             </div>
             {#if ss.length}
-              <ol class="senses">
-                {#each (expanded.has(r.id) ? ss : ss.slice(0, SENSE_CAP)) as g}<li><span class="sg">{g}</span></li>{/each}
+              <ol class="senses" class:clamp={!expanded.has(r.id)} use:clampProbe={r.id}>
+                {#each ss as g}<li><span class="sg">{g}</span></li>{/each}
               </ol>
-              {#if ss.length > SENSE_CAP}
-                <button class="more" onclick={() => toggleSenses(r.id)}>{expanded.has(r.id) ? 'show less' : `show all ${ss.length}`}</button>
+              {#if overflow.has(r.id)}
+                <button class="more" onclick={() => toggleSenses(r.id)}>{expanded.has(r.id) ? 'show less' : 'show more'}</button>
               {/if}
             {/if}
           </div>
@@ -550,6 +569,8 @@
   .dform .fsep { color: var(--faint); margin: 0 0.35rem; }
   .dread { font-family: var(--mono); font-size: 0.9rem; color: var(--muted); }
   .senses { margin: 0.5rem 0 0; padding: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 0.35rem; }
+  /* collapsed: clip to ~2 lines and fade the cut, so a long definition doesn't wall off the page */
+  .senses.clamp { max-height: 2.9rem; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent); mask-image: linear-gradient(to bottom, #000 60%, transparent); }
   .senses li { position: relative; padding-left: 1.5rem; font-size: 1rem; line-height: 1.45; color: var(--text); counter-increment: s; }
   .senses li::before { content: counter(s); position: absolute; left: 0; top: 0.05rem; font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
   .more { background: none; border: none; padding: 0.3rem 0; margin-top: 0.1rem; font-family: var(--mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
