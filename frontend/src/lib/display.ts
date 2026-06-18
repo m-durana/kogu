@@ -513,6 +513,87 @@ export function isSoundLoan(badges: string[] | null | undefined): boolean {
   return !!badges && badges.includes('phono-semantic-matching')
 }
 
+// === Middle Chinese "phonological why" ===
+// A phono-semantic compound borrows its phonetic component's SOUND (媽 = 女 meaning + 馬 sound). The
+// modern pinyin shows the present-day link; the Middle Chinese (廣韻 / Baxter) reading shows the
+// HISTORICAL one, which is often closer (and sometimes diverged: 媽 muX in 廣韻 ≠ 馬 maeX, a modern-only
+// re-analysis). These helpers split a Baxter reading so the UI can say WHETHER the sound link holds in
+// Middle Chinese — honestly, never asserting a match that the readings don't support.
+
+// Strip Baxter tone marks (final X = rising 上, H = departing 去; level/entering carry none).
+function mcToneless(r: string): string {
+  return r.replace(/[XH]$/, '')
+}
+// Baxter initial = the leading consonant letters before the first vowel (maeX → "m", duwng → "d",
+// tshjeng → "tsh"). Used to test a shared initial consonant between a char and its phonetic part.
+function mcInitial(r: string): string {
+  const m = /^[^aeiou]*/.exec(mcToneless(r))
+  return m ? m[0] : ''
+}
+// Baxter rhyme = everything from the first vowel onward, tone stripped (maeX → "ae", duwng → "uwng").
+function mcRhyme(r: string): string {
+  const t = mcToneless(r)
+  const m = /[aeiou].*$/.exec(t)
+  return m ? m[0] : t
+}
+
+export interface McLink {
+  /** the character's own Middle Chinese reading(s), Baxter (媽 → ["muX"]) */
+  charMc: string[]
+  /** its phonetic component's Middle Chinese reading(s) (馬 → ["maeX"]) */
+  compMc: string[]
+  /** the phonetic component glyph (for the note: "shared a sound with 同") */
+  comp: string
+  /** how the two relate in Middle Chinese:
+   *  - 'same'    identical reading (strong, certain link: 銅 duwng = 同 duwng)
+   *  - 'related' some shared sound (same rhyme and/or same initial consonant)
+   *  - 'diverged' no shared initial or rhyme (the series only works in the modern reading) */
+  relation: 'same' | 'related' | 'diverged'
+  /** a short plain-English sentence describing the historical sound link — phrased cautiously so a
+   * partial resemblance (shared initial only) is never overstated as a full sound match */
+  note: string
+}
+
+/** Build the Middle Chinese sound-link explanation for a phonetic component, or null when there isn't
+ * enough data (one side lacks an MC reading). `comp` is the phonetic component glyph.
+ *
+ * Comparison is deliberately conservative on a Baxter string: an exact toneless match is a confident
+ * link; a shared rhyme or shared initial is reported as a partial resemblance (never asserted as a
+ * full match, since e.g. 媽 muX / 馬 maeX share only the m- initial); no overlap is reported as
+ * divergence (the phonetic-series logic then holds only in the modern reading). */
+export function mcSoundLink(
+  charMc: string[] | undefined,
+  compMc: string[] | undefined,
+  comp: string,
+): McLink | null {
+  const a = (charMc ?? []).filter(Boolean)
+  const b = (compMc ?? []).filter(Boolean)
+  if (!a.length || !b.length) return null
+
+  const exact = a.some((x) => b.some((y) => mcToneless(x) === mcToneless(y)))
+  const sharedInitial = a.some((x) => b.some((y) => mcInitial(x) !== '' && mcInitial(x) === mcInitial(y)))
+  const sharedRhyme = a.some((x) => b.some((y) => mcRhyme(x) === mcRhyme(y)))
+
+  let relation: McLink['relation']
+  let note: string
+  if (exact) {
+    relation = 'same'
+    note = `In Middle Chinese both read the same (${mcToneless(a[0])}), so ${comp} clearly lent the sound.`
+  } else if (sharedRhyme) {
+    relation = 'related'
+    note = sharedInitial
+      ? `In Middle Chinese they shared the same initial and rhyme, marking ${comp} as the sound component.`
+      : `In Middle Chinese they shared the same rhyme, marking ${comp} as the sound component.`
+  } else if (sharedInitial) {
+    relation = 'related'
+    note = `In Middle Chinese they shared only the initial consonant, a partial sound link to ${comp}.`
+  } else {
+    relation = 'diverged'
+    note = `Their Middle Chinese readings differ; ${comp} marks the sound in the modern reading, not the older one.`
+  }
+  return { charMc: a, compMc: b, comp, relation, note }
+}
+
 // The label + tooltip for the sound-loan marker. `borrowed-from-<lang>` (if present) names the source
 // language, so we can say "loanword from English" rather than just "loanword".
 const LANG_NAMES: Record<string, string> = {

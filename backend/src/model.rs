@@ -162,6 +162,11 @@ pub struct Component {
     /// for a phonetic component, the sound it lends — the component's own reading (馬 → "ma3"), so the
     /// UI can show "(sound: mǎ)". None for non-phonetic components or when no reading is known.
     pub sound: Option<String>,
+    /// for a phonetic component, its Middle Chinese (廣韻 / Baxter) reading(s) — the HISTORICAL sound
+    /// it lent (同 → "duwng"), so the structure section can show the phonological "why": the modern
+    /// pinyin link plus the older Middle Chinese one. Empty for non-phonetic components or no MC data.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mc_sound: Vec<String>,
 }
 
 #[derive(Serialize)]

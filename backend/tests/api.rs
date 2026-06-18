@@ -1442,3 +1442,88 @@ async fn suggest_skips_wildcards() {
     let v = get(&format!("/suggest?q={}", enc("你*"))).await.1;
     assert_eq!(v["suggestions"].as_array().unwrap().len(), 0);
 }
+
+// ── Middle Chinese (phonological why) ──────────────────────────────────────────────────────────
+// MC (廣韻 / Baxter) readings ride on char_reading kind='mc'; the char's own reading flows through
+// the `readings` list, and a phonetic component's reading(s) ride on `components[].mc_sound`.
+fn mc_readings(char_obj: &Value) -> Vec<String> {
+    char_obj["readings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|r| r["kind"] == "mc")
+        .map(|r| r["value"].as_str().unwrap().to_string())
+        .collect()
+}
+async fn char0_of(headword: &str, variety: &str) -> Value {
+    let hit = entry_of(&search(headword).await, variety, headword);
+    let e = get(&format!("/entry/{}", hit["lexeme_id"].as_i64().unwrap())).await.1;
+    e["characters"][0].clone()
+}
+
+#[tokio::test]
+async fn mc_char_own_reading() {
+    // 馬 = maeX in Baxter's Middle Chinese transcription (textbook value).
+    let c = char0_of("馬", "zh").await;
+    assert!(mc_readings(&c).contains(&"maeX".to_string()), "馬 should carry MC maeX: {:?}", mc_readings(&c));
+}
+
+#[tokio::test]
+async fn mc_known_values_are_correct() {
+    for (ch, want) in [("母", "muwX"), ("海", "xojX"), ("同", "duwng")] {
+        let c = char0_of(ch, "zh").await;
+        assert!(
+            mc_readings(&c).contains(&want.to_string()),
+            "{ch} should carry MC {want}: {:?}",
+            mc_readings(&c)
+        );
+    }
+}
+
+#[tokio::test]
+async fn mc_phonetic_component_carries_mc_sound() {
+    // 銅 = 金 (semantic) + 同 (phonetic). The phonetic component 同 lent its sound; its MC reading
+    // (duwng) should ride on that component, and it should MATCH 銅's own MC reading (real link).
+    let c = char0_of("銅", "zh").await;
+    let comp = c["components"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|x| x["ch"] == "同")
+        .expect("銅 has a 同 component");
+    let mc: Vec<String> =
+        comp["mc_sound"].as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_string()).collect();
+    assert!(mc.contains(&"duwng".to_string()), "同's mc_sound should include duwng: {mc:?}");
+    assert!(mc_readings(&c).contains(&"duwng".to_string()), "銅 itself reads duwng: {:?}", mc_readings(&c));
+}
+
+#[tokio::test]
+async fn mc_non_phonetic_component_has_no_mc_sound() {
+    // The SEMANTIC component never carries mc_sound (it lent meaning, not sound): 銅's 金 (semantic).
+    let c = char0_of("銅", "zh").await;
+    let semantic = c["components"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|x| x["ch"] == "金")
+        .expect("銅 has a 金 component");
+    // mc_sound is skipped when empty, so it is either absent or an empty array.
+    let empty = semantic.get("mc_sound").map_or(true, |v| v.as_array().map_or(true, |a| a.is_empty()));
+    assert!(empty, "semantic 金 should not carry mc_sound: {:?}", semantic.get("mc_sound"));
+}
+
+#[tokio::test]
+async fn mc_media_no_false_link_for_ma() {
+    // 媽 is a LATE character: in 廣韻 it read muX (like 母), NOT like its modern phonetic 馬 (maeX).
+    // We must surface both honestly and never fabricate a match. 媽's own MC ≠ 馬's MC.
+    let c = char0_of("媽", "zh").await;
+    let ma_self = mc_readings(&c);
+    assert!(ma_self.contains(&"muX".to_string()), "媽 reads muX in 廣韻: {ma_self:?}");
+    // its phonetic component 馬 carries maeX, which is genuinely different (no shared reading).
+    if let Some(comp) = c["components"].as_array().unwrap().iter().find(|x| x["ch"] == "馬") {
+        let mc: Vec<String> =
+            comp["mc_sound"].as_array().unwrap_or(&vec![]).iter().map(|v| v.as_str().unwrap().to_string()).collect();
+        assert!(mc.contains(&"maeX".to_string()), "馬's mc_sound is maeX: {mc:?}");
+        assert!(!ma_self.iter().any(|r| mc.contains(r)), "媽 and 馬 must NOT share an MC reading: {ma_self:?} vs {mc:?}");
+    }
+}

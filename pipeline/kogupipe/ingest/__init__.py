@@ -12,6 +12,7 @@ from . import (
     etymology,
     frequency,
     lexemes,
+    middle_chinese,
     romaji,
     translations,
 )
@@ -19,6 +20,7 @@ from . import (
 INGEST_STEPS = [
     ("character backbone (Unihan + cjkvi-ids + OpenCC)", backbone.ingest),
     ("phono-semantic component roles (Wiktionary Han-compound)", components.ingest),
+    ("Middle Chinese readings (廣韻 / Baxter, nk2028)", middle_chinese.ingest),
     ("lexemes (CC-CEDICT + JMdict + Kanjidic)", lexemes.ingest),
     ("Cantonese (CC-Canto: jyutping + 粵字)", cantonese.ingest),
     ("concept layer (gloss pivot)", concepts.ingest),

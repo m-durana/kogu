@@ -63,8 +63,10 @@ export interface CharInfo {
   /** set when the char is N copies of one base glyph (森 → {base:'木', count:3}); else null */
   decomp: { base: string; count: number } | null
   /** distinct components with meanings (好 → 女 "woman", 子 "child"); radical forms glossed via parent.
-   * role: 'semantic' carries the meaning, 'phonetic' carries the sound (媽 = 女 semantic + 馬 phonetic). */
-  components: { ch: string; gloss: string | null; role: string | null; sound: string | null }[]
+   * role: 'semantic' carries the meaning, 'phonetic' carries the sound (媽 = 女 semantic + 馬 phonetic).
+   * mc_sound: a phonetic component's Middle Chinese (廣韻 / Baxter) reading(s) — the historical sound
+   * it lent (同 → ["duwng"]); absent/empty for non-phonetic components or when no MC data exists. */
+  components: { ch: string; gloss: string | null; role: string | null; sound: string | null; mc_sound?: string[] }[]
   /** the glyph is primarily a Kangxi radical / bound component (彳, 辵, 氵…), not a standalone word */
   is_radical: boolean
   /** Kangxi radical number when known */

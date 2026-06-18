@@ -16,7 +16,7 @@
 
 <script lang="ts">
   import type { CharInfo, Entry, Hit, ReadingKV, Variety } from './types'
-  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, isAlwaysBound, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle, scriptShort, scSwitchTarget, scriptChangeNote, scriptChangeFromForms, jyutpingToYale } from './display'
+  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, isAlwaysBound, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle, scriptShort, scSwitchTarget, scriptChangeNote, scriptChangeFromForms, jyutpingToYale, mcSoundLink } from './display'
   import { speakReading, canSpeak } from './speech'
   import { settings } from './settings.svelte'
   import ScriptForms from './ScriptForms.svelte'
@@ -353,6 +353,15 @@
   // "made of" parts. Only when at least one role is known.
   const roleParts = $derived(single && headChar ? headChar.components : [])
   const hasRoles = $derived(roleParts.some((c) => c.role === 'semantic' || c.role === 'phonetic'))
+
+  // phonological "why": the character's own Middle Chinese reading(s) and, for the phonetic component,
+  // whether they shared a sound back then (銅 duwng from 同 duwng). Baxter transcription of the 廣韻.
+  const charMc = $derived((headChar?.readings ?? []).filter((r) => r.kind === 'mc').map((r) => r.value))
+  // built once per phonetic component: the MC sound-link explanation, or null when MC data is missing.
+  function mcLinkFor(c: { ch: string; role: string | null; mc_sound?: string[] }) {
+    if (c.role !== 'phonetic') return null
+    return mcSoundLink(charMc, c.mc_sound, c.ch)
+  }
 
   // Block B - the bridge: how the same meaning is written DIFFERENTLY in another language (a different
   // glyph or the cross-script form). Everything that isn't a same-glyph definition. Only meaningful
@@ -882,8 +891,17 @@
         <!-- phono-semantic: which part carries the meaning vs the sound (媽 = 女 meaning + 馬 sound) -->
         <p class="comp">
           {#if comp?.idc}<IdcBox idc={comp.idc} /><span class="dim idcsep">:</span>{/if}
-          {#each roleParts as c, i}{#if i}<span class="plus">+</span>{/if}<span class="cpart"><button class="part" onclick={() => onsearch(c.ch)} title="look up {c.ch}">{c.ch}</button>{#if c.role === 'phonetic' && c.sound}<span class="crole">sound: {pinyinMarks(c.sound)}</span>{:else if c.role === 'semantic' && meaningOf(c.ch)}<span class="crole">meaning: {meaningOf(c.ch)}</span>{:else if meaningOf(c.ch)}<span class="cmean">{meaningOf(c.ch)}</span>{/if}</span>{/each}
+          {#each roleParts as c, i}{#if i}<span class="plus">+</span>{/if}<span class="cpart"><button class="part" onclick={() => onsearch(c.ch)} title="look up {c.ch}">{c.ch}</button>{#if c.role === 'phonetic' && c.sound}<span class="crole">sound: {pinyinMarks(c.sound)}{#if c.mc_sound?.length}<span class="cmc" title="Middle Chinese reading (廣韻, Baxter transcription)"> · MC {c.mc_sound[0]}</span>{/if}</span>{:else if c.role === 'semantic' && meaningOf(c.ch)}<span class="crole">meaning: {meaningOf(c.ch)}</span>{:else if meaningOf(c.ch)}<span class="cmean">{meaningOf(c.ch)}</span>{/if}</span>{/each}
         </p>
+        <!-- phonological "why": the historical (Middle Chinese) sound link between the character and
+             its phonetic component. Stated honestly: a full match, a partial resemblance, or a note
+             that the link only holds in the modern reading. -->
+        {#each roleParts as c}{@const link = mcLinkFor(c)}{#if link}
+          <p class="phonowhy" class:diverged={link.relation === 'diverged'}>
+            <span class="mcpair"><span class="mch" title="this character's Middle Chinese reading (廣韻, Baxter)">{head} <b>{charMc[0]}</b></span><span class="dim">·</span><span class="mch" title="{c.ch}'s Middle Chinese reading (廣韻, Baxter)">{c.ch} <b>{link.compMc[0]}</b></span></span>
+            <span class="pwnote">{link.note}</span>
+          </p>
+        {/if}{/each}
       {:else if decomp}
         <p class="comp">
           {#if comp?.idc}<IdcBox idc={comp.idc} /><span class="dim idcsep">:</span>{/if}
@@ -1199,6 +1217,16 @@
   .cmean::after { content: ')'; }
   /* role-labelled part gloss: "meaning: woman, girl" / "sound: mǎ" as plain text (no chip, no parens) */
   .crole { color: var(--muted); font-size: 0.9rem; margin-left: 0.3rem; }
+  /* the phonetic component's Middle Chinese reading, appended to the modern "sound:" line */
+  .cmc { font-family: var(--mono); font-size: 0.82rem; color: var(--faint); }
+
+  /* phonological "why": the historical (Middle Chinese) sound link char ↔ phonetic component */
+  .phonowhy { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.7rem; margin: 0.4rem 0 0; font-size: 0.85rem; line-height: 1.55; }
+  .mcpair { display: inline-flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+  .mch { color: var(--muted); }
+  .mch b { font-family: var(--mono); font-weight: 600; color: var(--text); letter-spacing: 0.01em; }
+  .pwnote { color: var(--muted); }
+  .phonowhy.diverged .pwnote { color: var(--faint); }
   /* phono-semantic role badge: meaning (filled) vs sound (outlined) — monochrome */
   .role { font-family: var(--mono); font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.06em; padding: 0.05rem 0.38rem; border-radius: 999px; line-height: 1.5; align-self: center; }
   .role-phonetic { color: var(--muted); background: none; border: 1px solid var(--border-strong); }

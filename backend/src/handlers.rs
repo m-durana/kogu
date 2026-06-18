@@ -912,6 +912,19 @@ fn component_gloss(conn: &rusqlite::Connection, ch: char) -> Option<String> {
     .ok()
     .flatten()
 }
+/// Middle Chinese (廣韻 / Baxter) reading(s) for a character, ordered for stable display.
+fn mc_readings(conn: &rusqlite::Connection, ch: char) -> Vec<String> {
+    let mut s = match conn
+        .prepare("SELECT value FROM char_reading WHERE cp=?1 AND kind='mc' ORDER BY value")
+    {
+        Ok(s) => s,
+        Err(_) => return Vec::new(),
+    };
+    s.query_map([ch as i64], |r| r.get(0))
+        .map(|it| it.filter_map(Result::ok).collect())
+        .unwrap_or_default()
+}
+
 /// Distinct Han components of a character with their meanings — the "what the parts are" layer of the
 /// structure section. Prefers the structured phono-semantic roles (char_component: 媽 = 女 semantic +
 /// 馬 phonetic) when present; otherwise falls back to the flat one-level IDS leaves (no role).
@@ -934,7 +947,8 @@ fn char_components(conn: &rusqlite::Connection, ch: char, ids: Option<&str>) -> 
                         // fall back to the parent-character gloss when the template omitted one
                         let gloss = gloss.or_else(|| component_gloss(conn, c));
                         // a phonetic component lends its own reading as the sound ("(sound: mǎ)")
-                        let sound = if role.as_deref() == Some("phonetic") {
+                        let phonetic = role.as_deref() == Some("phonetic");
+                        let sound = if phonetic {
                             conn.query_row(
                                 "SELECT value FROM char_reading WHERE cp=?1 AND kind='pinyin' LIMIT 1",
                                 [c as i64],
@@ -944,7 +958,9 @@ fn char_components(conn: &rusqlite::Connection, ch: char, ids: Option<&str>) -> 
                         } else {
                             None
                         };
-                        out.push(Component { ch: comp, gloss, role, sound });
+                        // its Middle Chinese reading(s): the HISTORICAL sound link (同 → duwng)
+                        let mc_sound = if phonetic { mc_readings(conn, c) } else { Vec::new() };
+                        out.push(Component { ch: comp, gloss, role, sound, mc_sound });
                     }
                 }
             }
@@ -957,7 +973,7 @@ fn char_components(conn: &rusqlite::Connection, ch: char, ids: Option<&str>) -> 
     let mut out = Vec::new();
     for c in leaves {
         if seen.insert(c) {
-            out.push(Component { ch: c.to_string(), gloss: component_gloss(conn, c), role: None, sound: None });
+            out.push(Component { ch: c.to_string(), gloss: component_gloss(conn, c), role: None, sound: None, mc_sound: Vec::new() });
         }
     }
     out

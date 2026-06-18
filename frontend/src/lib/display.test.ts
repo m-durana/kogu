@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle, reformLabel, scriptChangeNote, scriptChangeFromForms, scSwitchTarget, glyphWikiUrl, SEARCH_PLACEHOLDERS, placeholderAt, isAlwaysBound, jyutpingToYale } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle, reformLabel, scriptChangeNote, scriptChangeFromForms, scSwitchTarget, glyphWikiUrl, SEARCH_PLACEHOLDERS, placeholderAt, isAlwaysBound, jyutpingToYale, mcSoundLink } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -868,5 +868,61 @@ describe('glyphWikiUrl - tofu fallback target (item 148)', () => {
   })
   it('returns null for empty input', () => {
     expect(glyphWikiUrl('')).toBeNull()
+  })
+})
+
+describe('mcSoundLink (phonological why)', () => {
+  it('returns null when the character has no Middle Chinese reading', () => {
+    expect(mcSoundLink([], ['duwng'], '同')).toBeNull()
+    expect(mcSoundLink(undefined, ['duwng'], '同')).toBeNull()
+  })
+  it('returns null when the phonetic component has no Middle Chinese reading', () => {
+    expect(mcSoundLink(['duwng'], [], '同')).toBeNull()
+  })
+  it('flags an exact Middle Chinese match (銅 duwng = 同 duwng)', () => {
+    const r = mcSoundLink(['duwng'], ['duwng'], '同')!
+    expect(r.relation).toBe('same')
+    expect(r.note).toContain('同')
+    expect(r.note).toContain('duwng')
+  })
+  it('flags a shared rhyme when initials differ (晴 dzjeng vs 青 tsheng)', () => {
+    // dzjeng vs tsheng: initials dz / tsh differ, rhyme eng is shared
+    const r = mcSoundLink(['dzjeng'], ['tsheng'], '青')!
+    expect(r.relation).toBe('related')
+    expect(r.note).toContain('rhyme')
+  })
+  it('reports a shared-initial-only resemblance cautiously (海 xojX vs 每 mwojX -> share rhyme)', () => {
+    // initials x / m differ, rhyme oj is shared → partial link, never asserted as a full match
+    const r = mcSoundLink(['xojX'], ['mwojX'], '每')!
+    expect(r.relation).toBe('related')
+    expect(r.note).not.toMatch(/read the same/)
+  })
+  it('does NOT overstate the 媽/馬 link: shared m- only, not a full match', () => {
+    // 媽 is a late character: in 廣韻 it read like 母 (muX), not like its modern phonetic 馬 (maeX).
+    const r = mcSoundLink(['muX'], ['maeX'], '馬')!
+    expect(r.relation).toBe('related')
+    // honest: it may note the shared initial, but must NEVER claim they read the same / shared a rhyme
+    expect(r.note).toContain('only the initial')
+    expect(r.note).not.toMatch(/read the same|shared the same rhyme/)
+  })
+  it('reports full divergence when nothing lines up (different initial AND rhyme)', () => {
+    const r = mcSoundLink(['kaem'], ['duwng'], '同')!
+    expect(r.relation).toBe('diverged')
+    expect(r.note).toContain('modern')
+  })
+  it('ignores tone when comparing (洞 duwngH = 同 duwng toneless)', () => {
+    const r = mcSoundLink(['duwngH'], ['duwng'], '同')!
+    expect(r.relation).toBe('same')
+    expect(r.note).toContain('duwng')
+  })
+  it('matches when any one of several readings lines up (tone aside)', () => {
+    // 每 has two readings (mwojX / mwojH); toneless they equal the component's mwoj → a 'same' link
+    const r = mcSoundLink(['mwojX', 'mwojH'], ['mwoj'], '某')!
+    expect(r.relation).toBe('same')
+  })
+  it('related-by-rhyme when only one of several readings shares the rhyme', () => {
+    // first reading kaem shares nothing with duwng; second duwngX shares the uwng rhyme + d- initial
+    const r = mcSoundLink(['kaem', 'duwngX'], ['duwng'], '同')!
+    expect(r.relation).toBe('same') // duwngX toneless = duwng -> exact
   })
 })
