@@ -23,6 +23,7 @@ pub fn build_router(st: AppState) -> Router {
     Router::new()
         .route("/health", get(handlers::health))
         .route("/search", get(handlers::search_handler))
+        .route("/suggest", get(handlers::suggest_handler))
         .route("/entry/:id", get(handlers::entry_handler))
         .route("/recognize", post(recognize::recognize_handler))
         .route(

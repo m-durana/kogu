@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle, reformLabel, scriptChangeNote, scriptChangeFromForms } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle, reformLabel, scriptChangeNote, scriptChangeFromForms, SEARCH_PLACEHOLDERS, placeholderAt } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -429,6 +429,24 @@ describe('etymologyTokens - delineate merged statements + jargon tooltips + Han 
   })
   it('never flags the very first paragraph as alt, even when it opens with "From"', () => {
     expect(etymologyTokens('From Old Chinese root word.')[0].alt).toBe(false)
+  })
+})
+
+describe('placeholderAt - rotating search placeholder (item 1)', () => {
+  it('cycles through the list and wraps around', () => {
+    expect(placeholderAt(0)).toBe(SEARCH_PLACEHOLDERS[0])
+    expect(placeholderAt(SEARCH_PLACEHOLDERS.length)).toBe(SEARCH_PLACEHOLDERS[0])
+    expect(placeholderAt(SEARCH_PLACEHOLDERS.length + 2)).toBe(SEARCH_PLACEHOLDERS[2])
+  })
+  it('is safe for negative indices', () => {
+    expect(placeholderAt(-1)).toBe(SEARCH_PLACEHOLDERS[SEARCH_PLACEHOLDERS.length - 1])
+  })
+  it('every placeholder is a non-empty example, no em dashes', () => {
+    expect(SEARCH_PLACEHOLDERS.length).toBeGreaterThanOrEqual(4)
+    for (const p of SEARCH_PLACEHOLDERS) {
+      expect(p.length).toBeGreaterThan(0)
+      expect(p).not.toContain('—')
+    }
   })
 })
 

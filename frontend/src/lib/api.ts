@@ -35,6 +35,21 @@ export async function search(q: string, script?: string, signal?: AbortSignal): 
   return r.json()
 }
 
+export interface Suggestion {
+  headword: string
+  reading: string | null
+  variety: string
+}
+// Lightweight autocomplete (no retry: a stale keystroke is simply superseded by the next one).
+export async function suggest(q: string, signal?: AbortSignal): Promise<Suggestion[]> {
+  const u = new URL(BASE + '/suggest', location.origin)
+  u.searchParams.set('q', q)
+  const r = await fetch(u, { signal })
+  if (!r.ok) return []
+  const d = await r.json()
+  return d.suggestions ?? []
+}
+
 export async function entry(id: number, signal?: AbortSignal): Promise<Entry> {
   const r = await fetchRetry(`${BASE}/entry/${id}`, { signal }, 'entry')
   return r.json()

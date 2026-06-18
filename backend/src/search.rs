@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use rusqlite::Connection;
 
-use crate::model::{Form, Hit, SearchResponse};
+use crate::model::{Form, Hit, SearchResponse, SuggestItem, SuggestResponse};
 use crate::state::AppState;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -279,6 +279,114 @@ const W_READING_PREFIX: f64 = 0.55; // as-you-type prefix (たべ→たべる); 
 // frequent fringe word (freq→2× boost) outrank an exact match. Additive + small keeps the match tier
 // dominant (an exact reading always beats a prefix; an exact sense always beats an incidental one).
 const FREQ_BONUS: f64 = 0.15;
+
+/// Escape LIKE wildcards so a typed % or _ is matched literally (used with `ESCAPE '\'`).
+fn escape_like(s: &str) -> String {
+    let mut o = String::with_capacity(s.len());
+    for c in s.chars() {
+        if c == '%' || c == '_' || c == '\\' {
+            o.push('\\');
+        }
+        o.push(c);
+    }
+    o
+}
+
+/// Run one suggest query (`?1` = string param, `?2` = limit), appending deduped rows up to `cap`.
+fn collect_suggest(
+    conn: &Connection,
+    sql: &str,
+    param: &str,
+    cap: usize,
+    out: &mut Vec<SuggestItem>,
+    seen: &mut std::collections::HashSet<String>,
+) -> rusqlite::Result<()> {
+    if out.len() >= cap {
+        return Ok(());
+    }
+    let mut stmt = conn.prepare(sql)?;
+    let rows = stmt.query_map(rusqlite::params![param, cap as i64], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?, r.get::<_, String>(2)?))
+    })?;
+    for row in rows {
+        let (headword, reading, variety) = row?;
+        if seen.insert(headword.clone()) {
+            out.push(SuggestItem { headword, reading, variety });
+            if out.len() >= cap {
+                break;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Lightweight autocomplete: prefix matches on the written form (Han), the reading (kana /
+/// pinyin / jyutping), or an English gloss term — frequency-ranked, deduped by headword. No senses,
+/// so it is cheap to call on every keystroke.
+pub fn suggest(conn: &Connection, q: &str, limit: usize) -> rusqlite::Result<SuggestResponse> {
+    let q = q.trim();
+    let cap = limit.clamp(1, 20);
+    let mut out: Vec<SuggestItem> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    if q.is_empty() {
+        return Ok(SuggestResponse { query: q.to_string(), suggestions: out });
+    }
+
+    if q.chars().any(is_han) {
+        // prefix on the written form (shortest, most frequent first)
+        collect_suggest(
+            conn,
+            "SELECT l.headword, l.reading, l.variety FROM surface_form sf JOIN lexeme l ON l.id = sf.lexeme_id \
+             WHERE sf.form LIKE ?1 ESCAPE '\\' \
+             ORDER BY l.freq IS NULL, l.freq DESC, length(sf.form), l.id LIMIT ?2",
+            &format!("{}%", escape_like(q)),
+            cap,
+            &mut out,
+            &mut seen,
+        )?;
+    } else if q.chars().any(is_kana) {
+        let hira = escape_like(&to_hiragana(q));
+        collect_suggest(
+            conn,
+            "SELECT l.headword, l.reading, l.variety FROM lexeme_reading lr JOIN lexeme l ON l.id = lr.lexeme_id \
+             WHERE lr.kind = 'kana' AND lr.value LIKE ?1 ESCAPE '\\' \
+             ORDER BY l.freq IS NULL, l.freq DESC, l.id LIMIT ?2",
+            &format!("{hira}%"),
+            cap,
+            &mut out,
+            &mut seen,
+        )?;
+    } else if q.chars().any(|c| c.is_ascii_alphabetic()) {
+        // romanized reading prefix (pinyin / jyutping fold to the same plain key)
+        collect_suggest(
+            conn,
+            "SELECT l.headword, l.reading, l.variety FROM lexeme_reading lr JOIN lexeme l ON l.id = lr.lexeme_id \
+             WHERE lr.kind IN ('pinyin_plain','jyutping_plain') AND lr.value LIKE ?1 ESCAPE '\\' \
+             ORDER BY l.freq IS NULL, l.freq DESC, l.id LIMIT ?2",
+            &format!("{}%", escape_like(&pinyin_plain(q))),
+            cap,
+            &mut out,
+            &mut seen,
+        )?;
+        // then English gloss-term prefixes (FTS prefix query), if room remains
+        let term: String = q.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+        if out.len() < cap && !term.is_empty() {
+            collect_suggest(
+                conn,
+                // no GROUP BY (bm25() can't be used in that context); dedup by headword happens in
+                // collect_suggest. Relevance-ranked, frequency as a tiebreak.
+                "SELECT l.headword, l.reading, l.variety FROM gloss_fts \
+                 JOIN sense s ON s.id = gloss_fts.rowid JOIN lexeme l ON l.id = s.lexeme_id \
+                 WHERE gloss_fts MATCH ?1 ORDER BY bm25(gloss_fts), l.freq IS NULL, l.freq DESC LIMIT ?2",
+                &format!("{term}*"),
+                cap,
+                &mut out,
+                &mut seen,
+            )?;
+        }
+    }
+    Ok(SuggestResponse { query: q.to_string(), suggestions: out })
+}
 
 pub fn search(
     state: &AppState,

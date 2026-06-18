@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { search, entry as fetchEntry } from './lib/api'
+  import { search, entry as fetchEntry, suggest as fetchSuggest, type Suggestion } from './lib/api'
   import type { Entry, Hit, CharInfo } from './lib/types'
-  import { primaryForm, varietyLabel, regionsOf, shortGloss, cleanGloss, langTag, hanFont } from './lib/display'
+  import { primaryForm, varietyLabel, regionsOf, shortGloss, cleanGloss, langTag, hanFont, placeholderAt } from './lib/display'
   import Unified from './lib/Unified.svelte'
   import Pad from './lib/Pad.svelte'
   import Ocr from './lib/Ocr.svelte'
-  import { Search, X, Brush, Camera, Bookmark, Clock, Share2, Trash2 } from '@lucide/svelte'
+  import { Search, X, Brush, Camera, Bookmark, Clock, Share2, Trash2, ArrowRight } from '@lucide/svelte'
   import { onMount } from 'svelte'
   import { getSaved, getHistory, isSaved, toggleSaved, recordHistory, clearHistory, type SavedItem } from './lib/store'
 
@@ -142,6 +142,16 @@
   let timer: ReturnType<typeof setTimeout> | undefined
   let ctrl: AbortController | undefined
 
+  // ── search bar (item 1) ──────────────────────────────────────────────────────────────────────
+  let inputEl: HTMLInputElement
+  let focused = $state(false) // drives the focus-expand (field grows, draw/camera hide)
+  let suggestions = $state<Suggestion[]>([]) // Google-style autocomplete, updated per keystroke
+  let sugTimer: ReturnType<typeof setTimeout> | undefined
+  let sugCtrl: AbortController | undefined
+  // rotating placeholder: a different example every 2s while the field is empty and unfocused
+  let phIndex = $state(0)
+  const placeholder = $derived(placeholderAt(phIndex))
+
   type NavMode = 'push' | 'replace' | 'none'
   const resultsUrl = (t: string) => (t ? `?q=${encodeURIComponent(t)}` : location.pathname)
 
@@ -231,12 +241,61 @@
     }
   }
 
+  // typing shows autocomplete suggestions (Google-style); the actual search happens on commit
+  // (Enter, the search button, or tapping a suggestion), not on every keystroke.
   function onInput(e: Event) {
     const v = (e.target as HTMLInputElement).value
     q = v
     if (composing) return
-    clearTimeout(timer)
-    timer = setTimeout(() => doSearch(v, 'replace'), 180)
+    queueSuggest(v)
+  }
+  function queueSuggest(v: string) {
+    clearTimeout(sugTimer)
+    const term = v.trim()
+    if (!term) {
+      suggestions = []
+      return
+    }
+    sugTimer = setTimeout(async () => {
+      sugCtrl?.abort()
+      sugCtrl = new AbortController()
+      try {
+        const s = await fetchSuggest(term, sugCtrl.signal)
+        if (q.trim() === term) suggestions = s
+      } catch {
+        /* superseded keystroke; ignore */
+      }
+    }, 120)
+  }
+  // commit the current text as a search
+  function submitSearch() {
+    clearTimeout(sugTimer)
+    suggestions = []
+    focused = false
+    inputEl?.blur()
+    doSearch(q)
+  }
+  function pickSuggestion(s: Suggestion) {
+    q = s.headword
+    clearTimeout(sugTimer)
+    suggestions = []
+    focused = false
+    inputEl?.blur()
+    doSearch(s.headword)
+  }
+  function onFocus() {
+    focused = true
+    // caret to the very end when focusing a field that already holds a word (item 1)
+    const len = inputEl?.value.length ?? 0
+    if (len) requestAnimationFrame(() => inputEl?.setSelectionRange(len, len))
+    if (q.trim()) queueSuggest(q)
+  }
+  function onBlur() {
+    // delay so a tap on a suggestion (which blurs the field first) still registers
+    setTimeout(() => {
+      focused = false
+      suggestions = []
+    }, 150)
   }
 
   async function openEntry(id: number, mode: NavMode = 'push') {
@@ -283,7 +342,14 @@
     if (m) openEntry(Number(m[1]), 'replace')
     else if (term) doSearch(term, 'replace')
     else history.replaceState({ view: 'results', q: '' }, '', location.pathname)
-    return () => window.removeEventListener('popstate', onPop)
+    // rotate the placeholder every 2s (only matters while the field is empty); honour reduced-motion
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    let ph: ReturnType<typeof setInterval> | undefined
+    if (!reduce) ph = setInterval(() => (phIndex += 1), 2000)
+    return () => {
+      window.removeEventListener('popstate', onPop)
+      if (ph) clearInterval(ph)
+    }
   })
 
   // draw: toggle the inline pad. photo: trigger the OS-native picker (Photo Library / Camera /
@@ -317,6 +383,7 @@
     unified = false
     searched = false
     breakdown = []
+    suggestions = []
     err = ''
     history.replaceState({ view: 'results', q: '' }, '', location.pathname)
   }
@@ -330,11 +397,17 @@
     clearSearch()
   }
 
-  // a character was chosen from the pad or the photo selection — search it and close the panel
+  // a character was chosen from the photo selection — search it and close the panel
   function fromInput(text: string) {
     panel = 'none'
     ocrFile = null
     doSearch(text)
+  }
+  // a stroke-recognised character from the draw pad: APPEND it to the field (item 1), keep the pad
+  // open so the next character can be drawn; don't submit. Commit with Enter / the search button.
+  function fromDraw(ch: string) {
+    q = q + ch
+    queueSuggest(q)
   }
 </script>
 
@@ -349,39 +422,53 @@
     </nav>
   </header>
 
-  <div class="searchrow">
+  <div class="searchrow" class:focused>
     <div class="field">
       <span class="searchicon" aria-hidden="true"><Search size={17} /></span>
       <input
+        bind:this={inputEl}
         type="text"
         lang={langTag(queryLang)}
         style="font-family:{inputFont}"
         aria-label="Search by hanzi, kanji, pinyin, jyutping, kana, or English"
-        placeholder="character · reading · meaning"
+        placeholder={placeholder}
         value={q}
         oninput={onInput}
+        onfocus={onFocus}
+        onblur={onBlur}
         oncompositionstart={() => (composing = true)}
         oncompositionend={(e) => {
           composing = false
-          doSearch((e.target as HTMLInputElement).value, 'replace')
+          onInput(e)
         }}
-        onkeydown={(e) => e.key === 'Enter' && doSearch(q)}
+        onkeydown={(e) => { if (e.key === 'Enter') submitSearch(); else if (e.key === 'Escape') { suggestions = []; inputEl?.blur() } }}
         data-testid="search-input"
         autocomplete="off"
         autocapitalize="off"
         spellcheck="false"
       />
       {#if q}
-        <button class="clearbtn" aria-label="clear search" onclick={clearSearch} data-testid="clear"><X size={17} /></button>
+        <button class="clearbtn" aria-label="clear search" onmousedown={(e) => e.preventDefault()} onclick={clearSearch} data-testid="clear"><X size={17} /></button>
       {/if}
+      <button class="searchbtn" aria-label="search" title="search" onmousedown={(e) => e.preventDefault()} onclick={submitSearch} data-testid="search-go"><ArrowRight size={18} /></button>
     </div>
     <button class="rowbtn" class:on={panel === 'draw'} aria-label="draw a character" aria-pressed={panel === 'draw'} title="draw" onclick={toggleDraw} data-testid="draw-toggle"><Brush size={18} /></button>
     <button class="rowbtn" class:on={panel === 'photo'} aria-label="photo or image" title="photo / image" onclick={openPhoto} data-testid="scan-toggle"><Camera size={18} /></button>
     <input bind:this={fileInput} type="file" accept="image/*" onchange={onPhotoFile} hidden />
   </div>
 
+  {#if suggestions.length}
+    <!-- Google-Translate-style suggestions: plain text separated by vertical bars (item 1) -->
+    <div class="suggests" data-testid="suggests">
+      {#each suggestions as s, i (s.headword + i)}
+        {#if i}<span class="sgsep" aria-hidden="true">│</span>{/if}
+        <button class="sgitem" lang={langTag(s.variety)} style="font-family:{hanFont(s.variety)}" onmousedown={(e) => e.preventDefault()} onclick={() => pickSuggestion(s)}>{s.headword}</button>
+      {/each}
+    </div>
+  {/if}
+
   {#if panel === 'draw'}
-    <section class="inputpanel"><Pad onpick={fromInput} onclose={() => (panel = 'none')} /></section>
+    <section class="inputpanel"><Pad onpick={fromDraw} onclose={() => (panel = 'none')} /></section>
   {:else if panel === 'photo' && ocrFile}
     <section class="inputpanel"><Ocr file={ocrFile} onpick={fromInput} /></section>
   {/if}
@@ -478,18 +565,12 @@
       {/each}
     </ul>
     {#if searched && !loading && results.length === 0}
-      {#if isEasterEgg}
-        <!-- 古古 = "old old": there is no such word, but it is the app's name (checked before the
-             per-character breakdown, which would otherwise show 古) -->
-        <div class="egg">
-          <p class="eggh">No known word.</p>
-          <p class="eggp">But a rather cool app for reading one character across 中文, 粵語, and 日本語. 😎</p>
-        </div>
-      {:else if breakdown.length}
+      {#if breakdown.length}
         <section class="noword" data-testid="breakdown">
           <div class="nw-head">
             <span class="nw-q">{q}</span>
-            <span class="nw-note">no known word</span>
+            <!-- 古古 ("old old") is the app's name, not a real word: same page, just a cheekier note -->
+            <span class="nw-note">{isEasterEgg ? 'no known word, but a super cool app 😎' : 'no known word'}</span>
           </div>
           <ul class="nw-list">
             {#each breakdown as c (c.ch)}
@@ -515,12 +596,29 @@
       {/if}
     {/if}
     {#if !searched && !q && panel === 'none'}
-      <!-- "Quiet definition": frame what Kogu is as a dictionary entry in the app's own voice -->
-      <div class="intro">
+      <!-- About page: what Kogu is, what each section of an entry means, and where the data comes from -->
+      <div class="about">
         <p class="introhw"><span class="intromark">古古</span> <span class="introword">Kogu</span></p>
         <p class="intropos"><span class="intropron">/ko.gu/</span> <span class="introtag">noun</span></p>
-        <p class="introgloss">A dictionary that reads one Han character or word across <b>中文</b>, <b>粵語</b>, and <b>日本語</b> at once, with the readings and the meaning side by side.</p>
-        <p class="introfoot">中 pinyin · 粵 jyutping · 日 kana</p>
+        <p class="introgloss">A dictionary for the living Han script. One character or word is shown across <b>中文</b> (Mandarin), <b>粵語</b> (Cantonese), and <b>日本語</b> (Japanese) at once, so you can see how the same writing is read and used in each, and how the reforms pulled the forms apart.</p>
+
+        <h2 class="abh">On each page</h2>
+        <dl class="ablist">
+          <dt>Readings</dt><dd>How the word sounds in each language: <b>中</b> pinyin, <b>粵</b> jyutping, <b>日</b> kana (on and kun), with the meaning beside it.</dd>
+          <dt>Structure</dt><dd>What a character is built from (its parts, and which carries the meaning vs the sound), plus its forms across scripts: traditional, simplified, and Japanese shinjitai, with the reform that split them.</dd>
+          <dt>Origin</dt><dd>The character or word's etymology, kept per language since the Chinese and Japanese accounts of the same glyph can both be true.</dd>
+          <dt>Used in</dt><dd>Common words that contain the character, grouped by language.</dd>
+          <dt>Related</dt><dd>Other words that carry the same meaning, including cross-language equivalents, cognates, and false friends (same writing, different meaning).</dd>
+        </dl>
+
+        <h2 class="abh">Where the data comes from</h2>
+        <ul class="absrc">
+          <li><b>CC-CEDICT</b> and <b>CC-Canto</b>: Mandarin and Cantonese words and readings</li>
+          <li><b>JMdict</b> and <b>Kanjidic</b>: Japanese words and kanji readings</li>
+          <li><b>Unihan</b> and <b>cjkvi-ids</b>: characters, stroke data, and how they decompose</li>
+          <li><b>Wiktionary</b>: etymologies and phono-semantic component roles</li>
+        </ul>
+        <p class="abnote">Everything is passed through from these open datasets directly. Nothing here is written by an AI. Kogu is open source.</p>
       </div>
     {/if}
   {/if}
@@ -560,26 +658,45 @@
   .brand .mark { font-family: var(--han); font-weight: 500; font-size: 2rem; letter-spacing: -0.04em; color: var(--text); }
   .brand .word { font-family: var(--sans); font-size: 1.35rem; letter-spacing: 0.06em; color: var(--muted); }
 
-  .searchrow { display: flex; gap: 0.4rem; align-items: stretch; margin-bottom: 0.7rem; }
+  .searchrow { display: flex; align-items: stretch; margin-bottom: 0.7rem; }
   .field { position: relative; flex: 1; min-width: 0; display: flex; }
   .searchicon { position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; display: flex; }
   .field input {
-    width: 100%; padding: 0.6rem 2.4rem 0.6rem 2.4rem; font-size: 1.05rem; font-family: var(--sans);
+    width: 100%; height: 2.7rem; padding: 0 4.4rem 0 2.4rem; font-size: 1.05rem; line-height: 2.7rem;
+    font-family: var(--sans); color: var(--text);
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
   }
   .field input:focus { border-color: var(--border-strong); background: var(--surface-2); }
   .field input::placeholder { color: var(--faint); }
+  /* item 1: monochrome selection so highlighting typed text doesn't look odd */
+  .field input::selection { background: var(--muted); color: var(--bg); }
   .clearbtn {
-    position: absolute; right: 0.45rem; top: 50%; transform: translateY(-50%);
+    position: absolute; right: 2.5rem; top: 50%; transform: translateY(-50%);
     border: none; background: transparent; color: var(--muted); padding: 0.4rem; border-radius: var(--r); display: inline-flex;
   }
   .clearbtn:hover { color: #fff; background: var(--surface-2); }
+  /* item 1: search button to the right of the X */
+  .searchbtn {
+    position: absolute; right: 0.4rem; top: 50%; transform: translateY(-50%);
+    border: none; background: transparent; color: var(--muted); padding: 0.4rem; border-radius: var(--r); display: inline-flex;
+  }
+  .searchbtn:hover { color: var(--text); background: var(--surface-2); }
   .rowbtn {
-    flex: none; display: inline-flex; align-items: center; justify-content: center; padding: 0 0.75rem;
+    flex: none; display: inline-flex; align-items: center; justify-content: center; padding: 0 0.75rem; margin-left: 0.4rem;
     color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+    max-width: 4rem; overflow: hidden;
+    transition: max-width 0.22s ease, opacity 0.18s ease, margin 0.22s ease, padding 0.22s ease;
   }
   .rowbtn:hover { color: #fff; border-color: var(--border-strong); background: var(--surface-2); }
   .rowbtn.on { color: var(--bg); background: var(--text); border-color: var(--text); }
+  /* item 1: focusing the field expands it to full width; draw + camera slide away */
+  .searchrow.focused .rowbtn { max-width: 0; margin-left: 0; padding: 0; opacity: 0; border-width: 0; pointer-events: none; }
+  @media (prefers-reduced-motion: reduce) { .rowbtn { transition: none; } }
+  /* Google-Translate-style suggestions: plain text divided by vertical bars */
+  .suggests { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.1rem; margin: -0.3rem 0 0.7rem; padding: 0 0.2rem; }
+  .sgsep { color: var(--border-strong); padding: 0 0.15rem; }
+  .sgitem { background: none; border: none; padding: 0.15rem 0.25rem; font-size: 1.05rem; color: var(--muted); border-radius: var(--r); }
+  .sgitem:hover { color: var(--text); background: var(--surface); }
 
   /* inline draw pad / photo selection, shown directly under the search row */
   .inputpanel { margin-bottom: 1.2rem; }
@@ -622,17 +739,26 @@
   .nw-tags { display: flex; gap: 0.3rem; }
   .nw-tag { font-family: var(--han); font-size: 0.72rem; color: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 0 0.25rem; }
   .nw-mean { color: var(--muted); font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  /* "Quiet definition" home state (item 2): Kogu described as a dictionary entry in its own voice */
-  .intro { padding: 1.4rem 0.2rem; max-width: 34ch; }
+  /* About page (item 2): what Kogu is, what each section means, and the data sources */
+  .about { padding: 1rem 0.2rem 2rem; max-width: 40ch; }
   .introhw { margin: 0; display: flex; align-items: baseline; gap: 0.5rem; }
   .introhw .intromark { font-family: var(--han); font-weight: 500; font-size: 2.1rem; letter-spacing: -0.04em; color: var(--text); }
   .introhw .introword { font-family: var(--sans); font-size: 1.4rem; letter-spacing: 0.04em; color: var(--muted); }
   .intropos { margin: 0.35rem 0 1rem; display: flex; align-items: baseline; gap: 0.6rem; }
   .intropron { font-family: var(--mono); font-size: 0.95rem; color: var(--faint); }
   .introtag { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); }
-  .introgloss { font-family: var(--sans); font-size: 1.05rem; line-height: 1.7; color: var(--text); margin: 0 0 1rem; }
-  .introgloss b { font-family: var(--han); font-weight: 500; }
-  .introfoot { font-family: var(--han); font-size: 0.9rem; color: var(--faint); margin: 0; }
+  .introgloss { font-family: var(--sans); font-size: 1.05rem; line-height: 1.7; color: var(--text); margin: 0 0 1.6rem; }
+  .introgloss b, .ablist b, .absrc b { font-family: var(--han); font-weight: 500; }
+  .abh { font-family: var(--mono); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--faint); margin: 1.6rem 0 0.6rem; }
+  .ablist { margin: 0; }
+  .ablist dt { font-family: var(--sans); font-size: 0.98rem; color: var(--text); font-weight: 500; margin-top: 0.7rem; }
+  .ablist dd { margin: 0.1rem 0 0; font-size: 0.92rem; line-height: 1.6; color: var(--muted); }
+  .ablist b { font-weight: 500; }
+  .absrc { list-style: none; margin: 0; padding: 0; }
+  .absrc li { font-size: 0.92rem; line-height: 1.55; color: var(--muted); padding: 0.28rem 0; border-top: 1px solid var(--border); }
+  .absrc li:first-child { border-top: none; }
+  .absrc b { color: var(--text); font-family: var(--sans); font-weight: 500; }
+  .abnote { font-size: 0.88rem; line-height: 1.6; color: var(--faint); margin: 1.3rem 0 0; }
   /* easter egg (item 8) */
   /* whole-page loading skeleton (item 3): a quiet shimmer, monochrome */
   .pskel { padding: 0.6rem 0.2rem; }
@@ -644,7 +770,4 @@
   .ps-line.w70 { width: 70%; } .ps-line.w85 { width: 85%; }
   @keyframes psshimmer { to { transform: translateX(100%); } }
   @media (prefers-reduced-motion: reduce) { .ps-line::after { animation: none; } }
-  .egg { padding: 1.4rem 0.2rem; max-width: 34ch; }
-  .eggh { font-family: var(--sans); font-size: 1.25rem; color: var(--text); margin: 0 0 0.5rem; }
-  .eggp { font-family: var(--sans); font-size: 1rem; line-height: 1.6; color: var(--muted); margin: 0; }
 </style>

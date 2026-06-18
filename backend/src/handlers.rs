@@ -33,6 +33,22 @@ pub async fn search_handler(
     Ok(Json(resp))
 }
 
+#[derive(Deserialize)]
+pub struct SuggestParams {
+    pub q: String,
+    pub limit: Option<usize>,
+}
+
+pub async fn suggest_handler(
+    State(st): State<AppState>,
+    Query(p): Query<SuggestParams>,
+) -> Result<Json<SuggestResponse>, (StatusCode, Json<Value>)> {
+    let conn = st.pool.get().map_err(internal)?;
+    let limit = p.limit.unwrap_or(8).clamp(1, 20);
+    let resp = search::suggest(&conn, &p.q, limit).map_err(internal)?;
+    Ok(Json(resp))
+}
+
 pub async fn entry_handler(
     State(st): State<AppState>,
     Path(id): Path<i64>,

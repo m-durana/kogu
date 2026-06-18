@@ -67,9 +67,15 @@
     drawing = false
     if (current.length) strokes.push(current)
     current = []
-    // auto-recognise once the pen has rested for a moment
+    // re-recognise on every stroke (lightly debounced so a fast multi-stroke character doesn't spam
+    // /recognize); the candidate list refreshes as you add strokes instead of waiting a full second.
     clearTimeout(timer)
-    timer = setTimeout(run, 1000)
+    timer = setTimeout(run, 160)
+  }
+  // a candidate was chosen: hand it up (the field appends it) and reset the pad for the next character
+  function pick(ch: string) {
+    onpick(ch)
+    clear()
   }
   function clear() {
     // nothing drawn yet → the X doubles as "close the draw box"
@@ -119,7 +125,7 @@
   {#if candidates.length}
     <div class="cands" data-testid="pad-candidates">
       {#each candidates as ch}
-        <button class="cand" onclick={() => onpick(ch)}>{ch}</button>
+        <button class="cand" onclick={() => pick(ch)}>{ch}</button>
       {/each}
     </div>
   {:else if busy}

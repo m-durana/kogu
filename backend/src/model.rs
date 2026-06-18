@@ -9,6 +9,20 @@ pub struct SearchResponse {
     pub results: Vec<Hit>,
 }
 
+/// /suggest response: lightweight autocomplete candidates (no senses), fast per-keystroke.
+#[derive(Serialize)]
+pub struct SuggestResponse {
+    pub query: String,
+    pub suggestions: Vec<SuggestItem>,
+}
+
+#[derive(Serialize)]
+pub struct SuggestItem {
+    pub headword: String,
+    pub reading: Option<String>,
+    pub variety: String,
+}
+
 #[derive(Serialize)]
 pub struct Hit {
     pub lexeme_id: i64,

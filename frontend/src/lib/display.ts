@@ -158,6 +158,21 @@ export function formTag(script: string): string {
   return ({ trad: 'TC', simp: 'SC', shinjitai: 'JP' } as Record<string, string>)[script] ?? ''
 }
 
+// Rotating search-field placeholders (item 1): a different example of what you can type, every 2s.
+export const SEARCH_PLACEHOLDERS = [
+  'a character',
+  'a reading',
+  'an English word',
+  'pinyin',
+  'jyutping',
+  'kana',
+  'a kanji',
+]
+export function placeholderAt(index: number): string {
+  const n = SEARCH_PLACEHOLDERS.length
+  return SEARCH_PLACEHOLDERS[((index % n) + n) % n] // safe for negative / overflowing indices
+}
+
 // Plain-language name for the reform behind a script change (mirrors the backend reform_label).
 const REFORM_LABEL: Record<string, string> = {
   opencc: 'PRC simplification',

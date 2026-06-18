@@ -1238,3 +1238,59 @@ async fn traditional_glyph_origin_tagged_traditional() {
     assert_eq!(acc["script"], "traditional");
     assert!(acc["note"].is_null(), "這 merges nothing");
 }
+
+// ---- item 1: /suggest autocomplete ----
+fn suggestions(v: &Value) -> Vec<String> {
+    v["suggestions"].as_array().unwrap().iter().map(|s| s["headword"].as_str().unwrap().to_string()).collect()
+}
+
+#[tokio::test]
+async fn suggest_han_prefix() {
+    let (st, v) = get(&format!("/suggest?q={}", enc("學"))).await;
+    assert_eq!(st, StatusCode::OK);
+    let hw = suggestions(&v);
+    assert!(!hw.is_empty(), "學 prefix yields suggestions");
+    assert!(hw.iter().any(|h| h.contains('學') || h.contains('学')), "got {hw:?}");
+}
+
+#[tokio::test]
+async fn suggest_pinyin_prefix() {
+    let v = get(&format!("/suggest?q={}", enc("xue"))).await.1;
+    let arr = v["suggestions"].as_array().unwrap();
+    assert!(!arr.is_empty(), "pinyin prefix yields suggestions");
+    // every suggestion carries a reading and a variety
+    assert!(arr.iter().all(|s| s["variety"].is_string()));
+}
+
+#[tokio::test]
+async fn suggest_english_prefix() {
+    let v = get(&format!("/suggest?q={}", enc("airp"))).await.1;
+    let hw = suggestions(&v);
+    assert!(
+        hw.iter().any(|h| ["機場", "飛機", "空港", "飛機場"].contains(&h.as_str())),
+        "airp should surface an airport word, got {hw:?}"
+    );
+}
+
+#[tokio::test]
+async fn suggest_kana_prefix() {
+    let v = get(&format!("/suggest?q={}", enc("は"))).await.1;
+    let arr = v["suggestions"].as_array().unwrap();
+    assert!(!arr.is_empty(), "kana prefix yields suggestions");
+    assert!(arr.iter().all(|s| s["variety"] == "ja"), "は prefix is all Japanese");
+}
+
+#[tokio::test]
+async fn suggest_respects_limit_and_dedupes() {
+    let v = get(&format!("/suggest?q={}&limit=3", enc("學"))).await.1;
+    let hw = suggestions(&v);
+    assert!(hw.len() <= 3, "limit honoured, got {}", hw.len());
+    let uniq: std::collections::HashSet<_> = hw.iter().collect();
+    assert_eq!(uniq.len(), hw.len(), "headwords are deduped");
+}
+
+#[tokio::test]
+async fn suggest_empty_query_is_empty() {
+    let v = get("/suggest?q=").await.1;
+    assert_eq!(v["suggestions"].as_array().unwrap().len(), 0);
+}
