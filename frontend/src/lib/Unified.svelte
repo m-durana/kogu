@@ -941,11 +941,18 @@
         {#each wordGroups as wg (wg.variety)}
           <div class="wgroup">
             <div class="wglabel">{varietyLabel(wg.variety)}</div>
-            <div class="chips">
+            <!-- PLECO-style minimal list: word + reading + one-line meaning, not chips (item 128) -->
+            <ul class="usedlist">
               {#each wg.items as l (l.lexeme_id)}
-                <button class="chip" onclick={() => onsearch(l.headword)} title={glossLine(l.glosses, 1)}>{l.headword}</button>
+                <li>
+                  <button class="usedrow" onclick={() => onsearch(l.headword)}>
+                    <span class="uw" lang={langTag(l.variety)} style="font-family:{hanFont(l.variety)}">{l.headword}</span>
+                    {#if l.reading}<span class="urd">{l.variety === 'zh' ? pinyinMarks(l.reading) : l.reading}</span>{/if}
+                    {#if glossLine(l.glosses, 1)}<span class="ug">{glossLine(l.glosses, 1)}</span>{/if}
+                  </button>
+                </li>
               {/each}
-            </div>
+            </ul>
           </div>
         {/each}
       {/if}
@@ -1151,6 +1158,14 @@
   .words .count { color: var(--faint); }
   .wgroup { margin-top: 1rem; }
   .wglabel { font-family: var(--han); font-size: 0.9rem; color: var(--muted); margin: 0 0 0.5rem; letter-spacing: 0.02em; }
+  /* PLECO-style used-in list */
+  .usedlist { list-style: none; margin: 0; padding: 0; }
+  .usedlist li + li { border-top: 1px solid var(--border); }
+  .usedrow { display: flex; align-items: baseline; gap: 0.6rem; width: 100%; text-align: left; background: none; border: none; padding: 0.5rem 0.2rem; border-radius: var(--r); }
+  .usedrow:hover { background: var(--surface); }
+  .usedrow .uw { font-family: var(--han); font-size: 1.2rem; color: var(--text); flex: none; }
+  .usedrow .urd { font-family: var(--mono); font-size: 0.82rem; color: var(--muted); flex: none; }
+  .usedrow .ug { font-size: 0.88rem; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
   .chip { display: inline-flex; align-items: center; gap: 0.35rem; font-family: var(--han); font-size: 1.05rem; padding: 0.25rem 0.55rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); }
   .chip.rare { border-style: dashed; color: var(--muted); }
