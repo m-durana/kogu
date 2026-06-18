@@ -607,18 +607,13 @@
     return { trad: r.form, simp: r.form, same: true }
   }
 
-  // 熟語 grouped by language - the character is a morpheme in several languages, so the words that use
-  // it are shown per language (中 / 粵 / 日) rather than as one misleading single-language list.
-  const wordGroups = $derived(
-    VORDER.map((v) => ({
-      variety: v as Variety,
-      items: (entry?.compounds ?? []).filter((l) => l.variety === v).slice(0, 16),
-    })).filter((g) => g.items.length),
-  )
-
+  // 熟語 - one flat, frequency-ranked list (language tag per row, no per-variety sectioning). Words
+  // that use a CROSS-SCRIPT VARIANT of the character (relation 'compound-alt', e.g. 氷-words for 冰)
+  // come after the same-glyph words under a "written differently" divider, still frequency-ranked.
+  const compoundList = $derived(entry?.compounds ?? [])
   let showOrigin = $state(false)
   let showWords = $state(false)
-  const wordCount = $derived(wordGroups.reduce((n, g) => n + g.items.length, 0))
+  const wordCount = $derived(compoundList.length)
   // origin: one account per language for the same glyph (中 Sinitic + 日 Japonic, both true). Falls
   // back to the single legacy etymology field if the backend didn't supply per-variety accounts.
   const originAccounts = $derived.by(() => {
@@ -946,29 +941,29 @@
     </section>
   {/if}
 
-  {#if isGlyphSearch && entry && wordGroups.length}
+  {#if isGlyphSearch && entry && compoundList.length}
     <section class="words">
       <button class="oh" aria-expanded={showWords} onclick={() => setOpen('words', !showWords)}>
         used in <span class="count">{wordCount}</span> <span class="chev">{showWords ? '−' : '+'}</span>
       </button>
       {#if showWords}
-        {#each wordGroups as wg (wg.variety)}
-          <div class="wgroup">
-            <div class="wglabel">{varietyLabel(wg.variety)}</div>
-            <!-- PLECO-style minimal list: word + reading + one-line meaning, not chips (item 128) -->
-            <ul class="usedlist">
-              {#each wg.items as l (l.lexeme_id)}
-                <li>
-                  <button class="usedrow" onclick={() => onsearch(l.headword)}>
-                    <span class="uw" lang={langTag(l.variety)} style="font-family:{hanFont(l.variety)}">{l.headword}</span>
-                    {#if l.reading}<span class="urd">{dispReading(l.variety, l.reading)}</span>{/if}
-                    {#if glossLine(l.glosses, 1)}<span class="ug">{glossLine(l.glosses, 1)}</span>{/if}
-                  </button>
-                </li>
-              {/each}
-            </ul>
-          </div>
-        {/each}
+        <!-- one flat frequency-ranked list: language tag in front of each word; cross-script-variant
+             words (氷 for 冰) follow under a "written differently" divider (item 138). -->
+        <ul class="usedlist">
+          {#each compoundList as l, i (l.lexeme_id)}
+            {#if l.relation === 'compound-alt' && (i === 0 || compoundList[i - 1].relation !== 'compound-alt')}
+              <li class="wdiv">written differently</li>
+            {/if}
+            <li>
+              <button class="usedrow" onclick={() => onsearch(l.headword)}>
+                <span class="ulang">{varietyLabel(l.variety)}</span>
+                <span class="uw" lang={langTag(l.variety)} style="font-family:{hanFont(l.variety)}">{l.headword}</span>
+                {#if l.reading}<span class="urd">{dispReading(l.variety, l.reading)}</span>{/if}
+                {#if glossLine(l.glosses, 1)}<span class="ug">{glossLine(l.glosses, 1)}</span>{/if}
+              </button>
+            </li>
+          {/each}
+        </ul>
       {/if}
     </section>
   {:else if isGlyphSearch && entry && entry.appears_in.length}
@@ -1178,7 +1173,10 @@
   .usedlist li + li { border-top: 1px solid var(--border); }
   .usedrow { display: flex; align-items: baseline; gap: 0.6rem; width: 100%; text-align: left; background: none; border: none; padding: 0.5rem 0.2rem; border-radius: var(--r); }
   .usedrow:hover { background: var(--surface); }
+  .usedrow .ulang { font-family: var(--han); font-size: 0.8rem; color: var(--faint); flex: none; min-width: 1.1em; }
   .usedrow .uw { font-family: var(--han); font-size: 1.2rem; color: var(--text); flex: none; }
+  /* "written differently": divider before cross-script-variant words (氷 for 冰) */
+  .wdiv { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); margin: 0.7rem 0 0.3rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
   .usedrow .urd { font-family: var(--mono); font-size: 0.82rem; color: var(--muted); flex: none; }
   .usedrow .ug { font-size: 0.88rem; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }

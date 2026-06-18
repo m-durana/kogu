@@ -96,13 +96,20 @@
     toastTimer = setTimeout(() => (toast = ''), 1800)
   }
 
+  // tapping the active nav button again closes the view (back to the search/results)
+  function closePanelView() {
+    view = 'results'
+    history.replaceState({ view: 'results', q }, '', resultsUrl(q))
+  }
   function openSaved() {
+    if (view === 'saved') return closePanelView()
     savedList = getSaved()
     view = 'saved'
     panel = 'none'
     history.pushState({ view: 'saved' }, '', '#/saved')
   }
   function openHistory() {
+    if (view === 'history') return closePanelView()
     historyList = getHistory()
     view = 'history'
     panel = 'none'

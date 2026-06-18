@@ -246,7 +246,7 @@ fn build_entry(
     let mut compounds = Vec::new();
     if headword.chars().count() == 1 {
         if let Some(ch) = headword.chars().next() {
-            compounds = char_compounds(conn, ch, &variety, id)?;
+            compounds = char_compounds(conn, ch, id)?;
         }
     }
 
@@ -304,35 +304,75 @@ fn build_entry(
     }))
 }
 
-/// 熟語 - words containing a character, returned BALANCED across the varieties the character lives in
-/// (中 / 粵 / 日), shortest then most-frequent first within each. A multi-language character like 都 is
-/// a morpheme in both Chinese and Japanese, so a single-variety list would be inaccurate; the serving
-/// frontend groups these by language. `_variety` (the looked-up word's variety) is no longer a filter.
+/// Identity-variant glyphs of a character in either direction (the SAME character in another script:
+/// 冰 ⇄ 氷, 漢 ⇄ 汉). Used to find words "written differently" with the cross-script form.
+fn variant_glyphs(conn: &rusqlite::Connection, ch: char) -> Vec<char> {
+    let cp = ch as i64;
+    let sql = format!(
+        "SELECT p.cp FROM glyph_edge e JOIN character p ON p.cp = e.parent_cp \
+           WHERE e.child_cp = ?1 AND e.type IN {IDENTITY_TYPES} \
+         UNION SELECT c.cp FROM glyph_edge e JOIN character c ON c.cp = e.child_cp \
+           WHERE e.parent_cp = ?1 AND e.type IN {IDENTITY_TYPES}"
+    );
+    let mut out = Vec::new();
+    if let Ok(mut s) = conn.prepare(&sql) {
+        if let Ok(rows) = s.query_map([cp], |r| r.get::<_, i64>(0)) {
+            for r in rows.flatten() {
+                if let Some(c) = char::from_u32(r as u32) {
+                    if c != ch {
+                        out.push(c);
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Words containing a glyph, across ALL varieties, most-frequent first, appended with `relation` and
+/// deduped via `seen`.
+fn compounds_for_glyph(
+    conn: &rusqlite::Connection,
+    cp: i64,
+    exclude_id: i64,
+    relation: &str,
+    cap: i64,
+    seen: &mut std::collections::HashSet<i64>,
+    out: &mut Vec<LinkLite>,
+) -> rusqlite::Result<()> {
+    let mut cs = conn.prepare(
+        "SELECT l.id FROM form_char fc JOIN lexeme l ON l.id = fc.lexeme_id \
+         WHERE fc.cp = ?1 AND l.id <> ?2 GROUP BY l.id \
+         ORDER BY l.freq IS NULL, l.freq DESC, MIN(fc.flen) ASC, l.id ASC LIMIT ?3",
+    )?;
+    let ids: Vec<i64> = cs
+        .query_map(rusqlite::params![cp, exclude_id, cap], |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    for cid in ids {
+        if !seen.insert(cid) {
+            continue;
+        }
+        if let Some(l) = link_lite(conn, cid, relation, None)? {
+            out.push(l);
+        }
+    }
+    Ok(())
+}
+
+/// 熟語 - words that contain a character, as one frequency-ranked flat list across all languages
+/// (relation "compound"), followed by words that use a CROSS-SCRIPT VARIANT of it (relation
+/// "compound-alt", e.g. 氷-words for a 冰 lookup) — the frontend shows those under a "written
+/// differently" divider. The language is shown per-row, so there's no per-variety sectioning.
 fn char_compounds(
     conn: &rusqlite::Connection,
     ch: char,
-    _variety: &str,
     exclude_id: i64,
 ) -> rusqlite::Result<Vec<LinkLite>> {
-    let mut cs = conn.prepare(
-        // grouped by SCRIPT first (traditional words before simplified, so TC and SC don't interleave),
-        // then by USAGE: most-frequent first (NULL freq last), then shorter, then id.
-        "SELECT l.id, COALESCE((SELECT sf.script FROM surface_form sf \
-                                WHERE sf.lexeme_id = l.id AND sf.is_primary = 1 LIMIT 1), '') AS sc \
-         FROM form_char fc JOIN lexeme l ON l.id = fc.lexeme_id \
-         WHERE fc.cp = ?1 AND l.id <> ?2 AND l.variety = ?3 GROUP BY l.id \
-         ORDER BY (sc <> 'trad'), l.freq IS NULL, l.freq DESC, MIN(fc.flen) ASC, l.id ASC LIMIT 14",
-    )?;
     let mut out = Vec::new();
-    for v in ["zh", "yue", "ja"] {
-        let ids: Vec<i64> = cs
-            .query_map(rusqlite::params![ch as i64, exclude_id, v], |r| r.get(0))?
-            .collect::<Result<_, _>>()?;
-        for cid in ids {
-            if let Some(l) = link_lite(conn, cid, "compound", None)? {
-                out.push(l);
-            }
-        }
+    let mut seen = std::collections::HashSet::new();
+    compounds_for_glyph(conn, ch as i64, exclude_id, "compound", 30, &mut seen, &mut out)?;
+    for v in variant_glyphs(conn, ch) {
+        compounds_for_glyph(conn, v as i64, exclude_id, "compound-alt", 30, &mut seen, &mut out)?;
     }
     Ok(out)
 }
@@ -354,7 +394,7 @@ fn build_char_entry(conn: &rusqlite::Connection, cp: u32) -> rusqlite::Result<Op
         .ok()
         .flatten();
     let senses: Vec<Sense> = gloss.into_iter().map(|g| Sense { pos: None, gloss_en: g }).collect();
-    let compounds = char_compounds(conn, ch, &variety, 0)?;
+    let compounds = char_compounds(conn, ch, 0)?;
     let is_radical = ci.is_radical;
 
     // per-language origin accounts from ANY word-lexeme written with this glyph, so the char page is
