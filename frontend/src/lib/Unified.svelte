@@ -617,6 +617,23 @@
   // that use a CROSS-SCRIPT VARIANT of the character (relation 'compound-alt', e.g. 氷-words for 冰)
   // come after the same-glyph words under a "written differently" divider, still frequency-ranked.
   const compoundList = $derived(entry?.compounds ?? [])
+  // map the compound LinkLites onto the shared Row shape so the "used in" list renders with the SAME
+  // rowItem style as every other entry list (usually-written / written-differently / characters) —
+  // one singular row style across the app (item 155). The relation is kept for the variant divider.
+  const compoundRows = $derived(
+    compoundList.map((l) => ({
+      id: l.lexeme_id,
+      variety: l.variety as Variety,
+      form: l.headword,
+      alt: null,
+      formScript: '',
+      altScript: '',
+      reading: l.reading ?? '',
+      glosses: l.glosses,
+      relation: l.relation,
+      kind: 'form' as const,
+    })),
+  )
   let showOrigin = $state(false)
   let showWords = $state(false)
   const wordCount = $derived(compoundList.length)
@@ -726,7 +743,7 @@
         <span class="body">
           <span class="top">
             <span class="lvar"><span class="vh">{varietyLabel(r.variety)}</span></span>
-            <span class="form" lang={langTag(r.variety)} style="font-family:{hanFont(r.variety)}">{#if r.alt}<span class="ftag">{formTag(r.formScript)}</span>{r.form}<span class="fsep">·</span><span class="ftag">{formTag(r.altScript)}</span>{r.alt}{:else}{r.form}{/if}</span>
+            <span class="form" lang={langTag(r.variety)} style="font-family:{hanFont(r.variety)}">{#if r.alt}<span class="ftag">{formTag(r.formScript)}</span>{r.form}<span class="fsep">·</span><span class="ftag">{formTag(r.altScript)}</span>{r.alt}{:else}<Glyph ch={r.form} font={hanFont(r.variety)} lang={langTag(r.variety)} />{/if}</span>
             {#if r.reading}<span class="read">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>{/if}
           </span>
           {#if briefGloss(r.glosses)}<span class="gloss">{briefGloss(r.glosses)}</span>{/if}
@@ -967,21 +984,14 @@
         used in <span class="count">{wordCount}</span> <span class="chev">{showWords ? '−' : '+'}</span>
       </button>
       {#if showWords}
-        <!-- one flat frequency-ranked list: language tag in front of each word; cross-script-variant
-             words (氷 for 冰) follow under a "written differently" divider (item 138). -->
-        <ul class="usedlist">
-          {#each compoundList as l, i (l.lexeme_id)}
-            {#if l.relation === 'compound-alt' && (i === 0 || compoundList[i - 1].relation !== 'compound-alt')}
+        <!-- the SAME rowItem style as every other entry list (item 155). Cross-script-variant words
+             (氷 for 冰) follow under a "written with a variant character" divider. -->
+        <ul class="langs">
+          {#each compoundRows as r, i (r.id)}
+            {#if r.relation === 'compound-alt' && (i === 0 || compoundRows[i - 1].relation !== 'compound-alt')}
               <li class="wdiv">written with a variant character</li>
             {/if}
-            <li>
-              <button class="usedrow" onclick={() => onsearch(l.headword)}>
-                <span class="ulang">{varietyLabel(l.variety)}</span>
-                <span class="uw" lang={langTag(l.variety)} style="font-family:{hanFont(l.variety)}">{l.headword}</span>
-                {#if l.reading}<span class="urd">{dispReading(l.variety, l.reading)}</span>{/if}
-                {#if glossLine(l.glosses, 1)}<span class="ug">{glossLine(l.glosses, 1)}</span>{/if}
-              </button>
-            </li>
+            {@render rowItem(r)}
           {/each}
         </ul>
       {/if}
@@ -1191,7 +1201,6 @@
   .crole { color: var(--muted); font-size: 0.9rem; margin-left: 0.3rem; }
   /* phono-semantic role badge: meaning (filled) vs sound (outlined) — monochrome */
   .role { font-family: var(--mono); font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.06em; padding: 0.05rem 0.38rem; border-radius: 999px; line-height: 1.5; align-self: center; }
-  .role-semantic { color: var(--bg); background: var(--muted); }
   .role-phonetic { color: var(--muted); background: none; border: 1px solid var(--border-strong); }
 
   /* "written for sound" marker for transliteration / phonetic-loan words (沙發, 幽默) — reuses the
@@ -1202,19 +1211,8 @@
   /* words: collapsible (toggle header like origin), grouped by language with breathing room */
   .words { margin-top: 1.6rem; }
   .words .count { color: var(--faint); }
-  .wgroup { margin-top: 1rem; }
-  .wglabel { font-family: var(--han); font-size: 0.9rem; color: var(--muted); margin: 0 0 0.5rem; letter-spacing: 0.02em; }
-  /* PLECO-style used-in list */
-  .usedlist { list-style: none; margin: 0; padding: 0; }
-  .usedlist li + li { border-top: 1px solid var(--border); }
-  .usedrow { display: flex; justify-content: flex-start; align-items: baseline; gap: 0.6rem; width: 100%; text-align: left; background: none; border: none; padding: 0.5rem 0.2rem; border-radius: var(--r); }
-  .usedrow:hover { background: var(--surface); }
-  .usedrow .ulang { font-family: var(--han); font-size: 0.8rem; color: var(--faint); flex: none; min-width: 1.1em; }
-  .usedrow .uw { font-family: var(--han); font-size: 1.2rem; color: var(--text); flex: none; }
-  /* "written differently": divider before cross-script-variant words (氷 for 冰) */
-  .wdiv { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); margin: 0.7rem 0 0.3rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
-  .usedrow .urd { font-family: var(--mono); font-size: 0.82rem; color: var(--muted); flex: none; }
-  .usedrow .ug { font-size: 0.88rem; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  /* divider before the cross-script-variant words (氷 for 冰), inside the shared .langs list (item 155) */
+  .wdiv { list-style: none; font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); margin: 0.7rem 0 0.3rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
   .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
   .chip { display: inline-flex; align-items: center; gap: 0.35rem; font-family: var(--han); font-size: 1.05rem; padding: 0.25rem 0.55rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); }
   .chip.rare { border-style: dashed; color: var(--muted); }
