@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle, reformLabel, scriptChangeNote, scriptChangeFromForms } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -400,6 +400,84 @@ describe('etymologyTokens - delineate merged statements + jargon tooltips + Han 
   it('makes a kanji with a reading into ruby, not a plain link', () => {
     const toks = etymologyTokens('甘(あま)し')[0].tokens
     expect(toks[0]).toEqual({ t: 'ruby', base: '甘', rt: 'あま' })
+  })
+  // item 19: Wiktionary "#" ordered-list markers (天's four head theories) become 1,2,3… not literal #
+  it('numbers consecutive "#" list items and drops the raw marker', () => {
+    const segs = etymologyTokens('four head variants:\n# Square block.\n# Elongated neck.\n# Two lines.')
+    expect(segs[0].ordinal).toBeNull()
+    expect([segs[1].ordinal, segs[2].ordinal, segs[3].ordinal]).toEqual([1, 2, 3])
+    const flat = segs[1].tokens.map((t) => ('v' in t ? t.v : '')).join('')
+    expect(flat).not.toContain('#')
+    expect(flat).toContain('Square block.')
+  })
+  it('drops "#:" pronunciation-table rows like "*:"', () => {
+    const segs = etymologyTokens('A theory.\n#: ipa-table leak')
+    expect(segs.length).toBe(1)
+  })
+  // item 12: 六書 terms (指事…) are tappable Han links, not abbr tooltips; their English twin stays abbr
+  it('renders 指事 as a Han hyperlink, not an abbreviation tooltip', () => {
+    const toks = etymologyTokens('Ideogram (指事): points at an idea.')[0].tokens
+    expect(toks.some((t) => t.t === 'abbr' && t.v === '指事')).toBe(false)
+    expect(toks.some((t) => t.t === 'han' && t.v === '指事')).toBe(true)
+    expect(toks.some((t) => t.t === 'abbr' && t.v === 'Ideogram')).toBe(true)
+  })
+  // item 10: a stacked competing theory (古) is flagged so accounts don't read as one run-on
+  it('flags a stacked alternative theory as alt', () => {
+    const segs = etymologyTokens('A graphic theory of the glyph.\nFrom Proto-Sino-Tibetan *r-ga.')
+    expect(segs[0].alt).toBe(false)
+    expect(segs[1].alt).toBe(true)
+  })
+  it('never flags the very first paragraph as alt, even when it opens with "From"', () => {
+    expect(etymologyTokens('From Old Chinese root word.')[0].alt).toBe(false)
+  })
+})
+
+describe('reformLabel / scriptChangeNote - item 14 script-change explanation', () => {
+  it('maps reform ids to plain-language labels', () => {
+    expect(reformLabel('opencc')).toBe('PRC simplification')
+    expect(reformLabel('prc-1964')).toBe('PRC simplification')
+    expect(reformLabel('jp-toyo')).toBe('Tōyō shinjitai reform')
+    expect(reformLabel(null)).toBeNull()
+    expect(reformLabel('mystery')).toBeNull()
+  })
+  it('returns null when the glyph has no orthodox parent (nothing changed)', () => {
+    expect(scriptChangeNote('山', [])).toBeNull()
+  })
+  it('explains a simplification with the same-meaning clause and the reform reason', () => {
+    const s = scriptChangeNote('汉', [
+      { parent: '漢', edge_type: 'simplification', reform: 'opencc', reform_name: 'OpenCC', reform_year: null },
+    ])!
+    expect(s).toContain('carry the same meaning')
+    expect(s).toContain('simplified form of 漢')
+    expect(s).toContain('PRC simplification')
+    expect(s).not.toContain('—') // no em dashes
+  })
+  it('builds the change note from the forms strip for the orthodox glyph (no own variants)', () => {
+    const sf = {
+      orthodox: '漢',
+      is_kokuji: false,
+      branches: [
+        { form: '漢', script: 'traditional', reform_id: null, reform_label: null, is_orthodox: true },
+        { form: '汉', script: 'simplified', reform_id: 'opencc', reform_label: 'PRC simplification', is_orthodox: false },
+      ],
+    }
+    const s = scriptChangeFromForms(sf)!
+    expect(s).toContain('carry the same meaning')
+    expect(s).toContain('汉 is the simplified form')
+    expect(s).toContain('PRC simplification')
+  })
+  it('returns null from the forms strip for a kokuji or a lone orthodox form', () => {
+    expect(scriptChangeFromForms({ orthodox: '働', is_kokuji: true, branches: [] })).toBeNull()
+    expect(
+      scriptChangeFromForms({ orthodox: '山', is_kokuji: false, branches: [{ form: '山', script: 'traditional', reform_id: null, reform_label: null, is_orthodox: true }] }),
+    ).toBeNull()
+  })
+  it('explains a shinjitai change with the reform year', () => {
+    const s = scriptChangeNote('広', [
+      { parent: '廣', edge_type: 'shinjitai', reform: 'jp-toyo', reform_name: 'Tōyō', reform_year: 1946 },
+    ])!
+    expect(s).toContain('shinjitai (Japanese) form of 廣')
+    expect(s).toContain('(1946)')
   })
 })
 

@@ -79,10 +79,16 @@ export interface OriginAccount {
   variety: Variety
   headword: string
   text: string
+  /** "traditional" | "simplified" when the glyph diverges across scripts; null when identical. */
+  script?: string | null
+  /** clarifying note when the glyph doubles as the simplified form of a distinct character. */
+  note?: string | null
 }
 export interface CharLite {
   ch: string
   gloss: string | null
+  /** rare extension-plane glyph (cp ≥ U+20000) the device font likely renders as tofu. */
+  rare?: boolean
 }
 export interface Sense {
   pos: string | null

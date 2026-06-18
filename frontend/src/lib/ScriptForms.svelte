@@ -30,10 +30,11 @@
       {#each ordered as b, i}
         {#if i === 1}<span class="arrow" aria-hidden="true">→</span>{/if}
         <span class="branch">
+          <!-- the reform behind each change is explained as a full sentence below the strip (item 14),
+               so no bare "PRC simplification" caption hangs under the glyph here. -->
           <button class="b" class:cur={b.form === anchor} onclick={() => onsearch(b.form)} title="look up {b.form}">
             <span class="tag">{scriptShort(b.script)}</span><span class="g">{b.form}</span>
           </button>
-          {#if b.reform_label}<span class="cap">{b.reform_label}</span>{/if}
         </span>
       {/each}
     </div>
@@ -48,10 +49,9 @@
     padding: 0.1rem 0.2rem; border-radius: var(--r); border: 1px solid transparent;
   }
   .b:hover { background: var(--surface); }
-  /* the looked-up form used to get a boxed ring (border + fill) — it read as a stray outline,
-     especially on a simplified glyph. Mark "current" with a quiet underline on the glyph instead. */
+  /* the looked-up form is marked by a stronger tag colour only — no ring, no underline (item 14) */
   .b.cur { background: none; }
-  .b.cur .g { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--border-strong); }
+  .b.cur .tag { color: var(--text); font-weight: 600; }
   .tag { font-family: var(--mono); font-size: 0.62rem; color: var(--faint); }
   .g { font-family: var(--han); font-size: 1.7rem; line-height: 1; color: var(--text); }
   .arrow { color: var(--faint); align-self: center; }

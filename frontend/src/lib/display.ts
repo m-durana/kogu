@@ -4,7 +4,7 @@
 //  - region tags surfaced on forms
 // Kept framework-free so it can be unit-tested directly.
 
-import type { Form, Hit, PrefScript, Variety } from './types'
+import type { Form, Hit, PrefScript, Variety, VariantEdge } from './types'
 
 export interface DisplayForms {
   primary: Form
@@ -134,7 +134,7 @@ export function pinyinMarks(reading: string): string {
 /** Split etymology prose so the academic phonological reconstructions can be de-emphasised:
  * parentheticals like "(OC *n̥ˁar)" / "(*ʔɨts)" and slashed forms like "/*ʔɨts/". The narrative
  * stays prominent; the reconstructions render small + faint. */
-import type { FormBranch } from './types'
+import type { FormBranch, ScriptForms } from './types'
 
 // Short CJK tag(s) for a branch's script. The script may be "+"-joined (学 is both 简 and 日).
 // recognized script abbreviations (TC = Traditional Chinese, SC = Simplified Chinese), English until
@@ -156,6 +156,58 @@ export function scriptShort(script: string): string {
 // Tag for a surface_form's script (trad/simp/shinjitai) — used to label both Chinese forms equally.
 export function formTag(script: string): string {
   return ({ trad: 'TC', simp: 'SC', shinjitai: 'JP' } as Record<string, string>)[script] ?? ''
+}
+
+// Plain-language name for the reform behind a script change (mirrors the backend reform_label).
+const REFORM_LABEL: Record<string, string> = {
+  opencc: 'PRC simplification',
+  'prc-1956': 'PRC simplification',
+  'prc-1964': 'PRC simplification',
+  'jp-toyo': 'Tōyō shinjitai reform',
+  'jp-joyo': 'Jōyō kanji reform',
+  'hk-std': 'Hong Kong standard',
+  'tw-std': 'Taiwan standard',
+}
+export function reformLabel(id: string | null | undefined): string | null {
+  return id ? REFORM_LABEL[id] ?? null : null
+}
+
+// A full-sentence explanation of a script change for the structure section (item 14): the two forms
+// carry the same meaning, and the reason for the divergence (reform + year). Replaces the bare
+// "PRC simplification" caption. Returns null when the glyph has no orthodox parent (nothing changed).
+export function scriptChangeNote(head: string, variants: VariantEdge[]): string | null {
+  const v = variants[0]
+  if (!v) return null
+  const kind =
+    v.edge_type === 'shinjitai'
+      ? 'shinjitai (Japanese) form'
+      : v.edge_type === 'simplification'
+        ? 'simplified form'
+        : 'variant form'
+  const label = reformLabel(v.reform)
+  const year = v.reform_year ? ` (${v.reform_year})` : ''
+  const reason = label ? `, from the ${label}${year}` : ''
+  return `${v.parent} and ${head} carry the same meaning; ${head} is the ${kind} of ${v.parent}${reason}.`
+}
+
+const BRANCH_KIND: Record<string, string> = {
+  simplified: 'simplified form',
+  shinjitai: 'shinjitai (Japanese) form',
+  'z-variant': 'variant form',
+}
+// Same explanation as scriptChangeNote, but built from the forms strip so it also appears when the
+// ORTHODOX glyph is the one on screen (searching 汉 resolves to the traditional 漢 lexeme, whose own
+// variant-edges are empty; its simplified/shinjitai children live on the strip instead). Uses the
+// per-branch reform_label (no year) since branches don't carry the reform year.
+export function scriptChangeFromForms(sf: ScriptForms | null): string | null {
+  if (!sf || sf.is_kokuji) return null
+  const others = sf.branches.filter((b: FormBranch) => !b.is_orthodox)
+  if (!others.length) return null
+  const clauses = others.map((b) => {
+    const kind = BRANCH_KIND[b.script.split('+')[0]] ?? 'variant form'
+    return `${b.form} is the ${kind}${b.reform_label ? ` (${b.reform_label})` : ''}`
+  })
+  return `${sf.orthodox} and ${others.length > 1 ? 'its variants' : others[0].form} carry the same meaning; ${clauses.join('; ')}.`
 }
 
 // Stable display order for the forms strip: traditional → simplified → shinjitai → z-variant.
@@ -396,14 +448,11 @@ const ETY_GLOSSARY: GlossEntry[] = [
   { term: 'Old Japanese', title: 'The earliest written Japanese, 8th century.' },
   { term: 'Proto-Sino-Tibetan', title: 'The reconstructed common ancestor of Chinese, Tibetan, Burmese and related languages.' },
   { term: 'Proto-Indo-European', title: 'The reconstructed ancestor of most European and South-Asian languages.' },
-  { term: 'STEDT', title: 'Sino-Tibetan Etymological Dictionary and Thesaurus — a comparative reconstruction project.', word: true },
-  { term: '形聲', title: 'Phono-semantic compound: a meaning part plus a sound part.' },
-  { term: '形声', title: 'Phono-semantic compound: a meaning part plus a sound part.' },
-  { term: '會意', title: 'Ideogrammic compound: parts that combine to suggest the meaning.' },
-  { term: '会意', title: 'Ideogrammic compound: parts that combine to suggest the meaning.' },
-  { term: '象形', title: 'Pictogram: originally a picture of the thing it names.' },
-  { term: '指事', title: 'Simple ideogram: points at an abstract idea.' },
-  { term: '假借', title: 'Phonetic loan: a character borrowed for its sound.' },
+  { term: 'STEDT', title: 'Sino-Tibetan Etymological Dictionary and Thesaurus, a comparative reconstruction project.', word: true },
+  // The 六書 classification terms (形聲/會意/象形/指事/假借…) are deliberately NOT glossed here: they
+  // are real words with their own entries, so they fall through to the Han-linkify pass and become
+  // tappable hyperlinks (item 12) instead of tooltip pop-ups. Their English twins above (Pictogram,
+  // Ideogram…) still carry the plain-language tooltip for readers who don't tap through.
   { term: 'calque', title: 'A word translated piece by piece from another language.', word: true },
   { term: 'cognate', title: 'A word sharing a common ancestor with another.', word: true },
   { term: 'OC', title: 'Old Chinese (~1000 BCE).', word: true },
@@ -432,6 +481,14 @@ export interface EtySegment {
    * These are nested points under a lead-in ("…proposes two etymologies: * X ** if so… * Y"); the
    * raw "*" used to leak as an unexplained character, so we lift it to real indentation instead. */
   depth: number
+  /** 1-based position when the line is a numbered ("#") Wiktionary list item, else null. Wiktionary
+   * stores ordered alternatives with "#" markers (天's four head-shape theories); without this they
+   * leaked as a literal "#". A run of consecutive "#" lines numbers 1,2,3…; any other line resets it. */
+  ordinal: number | null
+  /** true when this is the first paragraph of an ALTERNATIVE account stacked after another (a line
+   * that opens a competing theory: "From …", "Alternatively…", "Author (YEAR)…"). The UI sets it off
+   * so three unrelated theories don't read as one run-on origin (item 10, e.g. 古). */
+  alt: boolean
   tokens: EtyInline[]
 }
 
@@ -482,32 +539,50 @@ function inlineEty(s: string): EtyInline[] {
 
 /** Split merged etymology prose into delineated segments (one per newline-separated statement),
  * lifting "Etymology N" markers to segment headings and stripping Wiktionary "; " list leaks. */
+const ALT_LEADIN = /^(From |Possibly |Perhaps |Alternatively\b|Compare\b|Cognate\b|[A-Z][a-zA-Z]+ \(\d{4}\))/
+
 export function etymologyTokens(text: string): EtySegment[] {
   const segs: EtySegment[] = []
   let heading: string | null = null
+  let ordCounter = 0 // running number for a run of consecutive "#" ordered-list items
+  let topLevelSeen = 0 // how many depth-0 paragraphs we've emitted (to detect stacked theories)
   for (const raw of text.split('\n')) {
     let line = raw.trim()
     if (!line) continue
     const hm = line.match(/^;?\s*(Etymology\s+\d+)\s*$/i)
     if (hm) {
       heading = hm[1]
+      ordCounter = 0
       continue
     }
     // drop a leading "; " definition-list marker, and an orphan "]" left when a [reference] tag was
     // stripped upstream (a few entries, e.g. 車, literally start "]\nPictogram…").
     line = line.replace(/^[;\]]\s*/, '').trim()
-    // Wiktionary bullet sub-points: a line led by one or more "*" (followed by space) is a nested
-    // point under a lead-in; "*:" is a leaked pronunciation/IPA-table row, not prose. Lift the "*"
-    // to a real indent depth and drop the raw marker; drop the "*:" pronunciation leaks entirely.
+    // Wiktionary list markers: "*"/"**" are bullet sub-points; "#"/"##" are NUMBERED sub-points
+    // (天's four head-shape theories). "*:" is a leaked pronunciation/IPA-table row, not prose. Lift
+    // the marker to a real indent depth; "#" runs get a 1,2,3… ordinal; drop "*:" leaks entirely.
     let depth = 0
-    const bm = line.match(/^(\*+)(:+)?[ \t]+/)
+    let ordinal: number | null = null
+    const bm = line.match(/^([*#]+)(:+)?[ \t]+/)
     if (bm) {
-      if (bm[2]) continue // "*: …" pronunciation table — not etymology
+      if (bm[2]) continue // "*: …" / "#: …" pronunciation table — not etymology
       depth = bm[1].length
+      if (bm[1][0] === '#') {
+        ordCounter += 1
+        ordinal = ordCounter
+      } else {
+        ordCounter = 0 // a bullet breaks an ordered run
+      }
       line = line.slice(bm[0].length).trim()
+    } else {
+      ordCounter = 0 // any non-list line ends an ordered run
     }
     if (!line) continue
-    segs.push({ heading, depth, tokens: inlineEty(line) })
+    // a competing theory stacked as a fresh top-level paragraph after the first (古: graphic theory,
+    // then 苦 theory, then the Sino-Tibetan word origin) is flagged so the UI separates them.
+    const alt = depth === 0 && topLevelSeen > 0 && ALT_LEADIN.test(line)
+    segs.push({ heading, depth, ordinal, alt, tokens: inlineEty(line) })
+    if (depth === 0) topLevelSeen += 1
     heading = null // a heading labels only its first following statement
   }
   return segs

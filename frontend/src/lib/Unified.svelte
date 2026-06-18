@@ -16,7 +16,7 @@
 
 <script lang="ts">
   import type { CharInfo, Entry, Hit, ReadingKV, Variety } from './types'
-  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle } from './display'
+  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle, scriptShort, scriptChangeNote, scriptChangeFromForms } from './display'
   import ScriptForms from './ScriptForms.svelte'
   import IdcBox from './IdcBox.svelte'
   import { AlertTriangle } from '@lucide/svelte'
@@ -299,6 +299,10 @@
       }),
   )
   const isGlyphSearch = $derived(defRows.length > 0)
+  // a component glyph that carries no dictionary sense of its own but appears inside other characters
+  const glossless = $derived(
+    isGlyphSearch && (entry?.senses?.length ?? 0) === 0 && (entry?.appears_in?.length ?? 0) > 0,
+  )
   // "written for sound" marker: a MULTI-character transliteration / phonetic loan (沙發, 幽默, 俱樂部)
   // whose characters were picked for their sound, not meaning. Driven by the entry's origin badges
   // (phono-semantic-matching). Single characters are excluded — they use the component role display.
@@ -531,6 +535,22 @@
   function usageLabel(n: number): string {
     return n === 0 ? 'rarely used' : n <= 10 ? 'uncommon' : ''
   }
+  // item 14: a full-sentence explanation of a script change (繁→简 / 旧→新), replacing the bare
+  // "PRC simplification" caption. Built from the head character's own variant edges.
+  const scriptNote = $derived(
+    headChar
+      ? scriptChangeNote(head, headChar.variants ?? []) ?? scriptChangeFromForms(headChar.script_forms)
+      : null,
+  )
+  // items 17/18: the radical and "rarely used" tags move OUT of the structure block to sit left of
+  // each language label in the definition rows. This is the per-character tag cluster shown there.
+  const headTags = $derived.by(() => {
+    const t: string[] = []
+    if (headChar?.is_radical) t.push('radical')
+    const u = headChar ? usageLabel(headChar.used_count) : ''
+    if (u) t.push(u)
+    return t
+  })
 
   // one compact reading for a component character in the breakdown row — primary pinyin (tone-marked),
   // else jyutping, else the first few kana on/kun. Keeps the row consistent with the word rows.
@@ -694,13 +714,14 @@
       <h2 class="glyph" lang={langTag(headVariety)} style="font-family:{hanFont(headVariety)}">{head}</h2>
       {#if soundLoan}
         <!-- transliteration / phonetic loan: the characters were chosen for their sound, not meaning -->
-        <p class="soundloan"><span class="role role-phonetic">written for sound</span> <span class="slnote" title={soundLoanTip}>loanword — characters chosen for sound, not meaning</span></p>
+        <p class="soundloan"><span class="role role-phonetic">written for sound</span> <span class="slnote" title={soundLoanTip}>loanword: characters chosen for sound, not meaning</span></p>
       {/if}
       <div class="defs">
         {#each defRows as r (r.id)}
           {@const ss = shownSenses(r)}
           <div class="dl">
             <div class="dlh">
+              {#if headTags.length}<span class="ltags">{#each headTags as t}<span class="ltag" class:rad={t === 'radical'}>{t}</span>{/each}</span>{/if}
               <span class="dvar">{varietyLabel(r.variety)}</span>
               {#if r.variety === 'zh'}
                 {@const zp = zhPair(r)}
@@ -720,7 +741,7 @@
                 <span class="dread">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>
               {/if}
               {#if r.variety === 'zh' && headJyut && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread">{headJyut}</span>{/if}
-              {#if isBoundForm(r.glosses) || r.synthetic}<button class="btag" onclick={() => openBound(r)} title="bound form — only used in compounds">bound</button>{/if}
+              {#if isBoundForm(r.glosses) || r.synthetic}<button class="btag" onclick={() => openBound(r)} title="bound form: only used in compounds">bound</button>{/if}
             </div>
             {#if ss.length}
               <ol class="senses" class:clamp={!expanded.has(r.id) && overflow.has(r.id)} use:clampProbe={{ id: r.id, rem: 2.9 }}>
@@ -735,6 +756,10 @@
       </div>
       {#if hasFalseFriend}
         <p class="note"><AlertTriangle size={14} /> {head} is written the same in {falseFriendLangs} but means different things.</p>
+      {/if}
+      {#if glossless}
+        <!-- item 17: a component glyph with no dictionary definition of its own (𦘒, 肀) -->
+        <p class="cnote">Only used as a component inside other characters, not as a word on its own.</p>
       {/if}
     </section>
 
@@ -773,18 +798,18 @@
          above — 中 pinyin / 粵 jyutping / 日 on·kun — so there's no duplicate "readings" block.) -->
     <section class="struct">
       <h3>structure</h3>
-      {#if headChar.is_radical}
-        <!-- this glyph is a Kangxi radical / bound component, not a standalone word -->
+      {#if headChar.is_radical && (headChar.radical_number || headChar.standalone)}
+        <!-- a radical's detail (Kangxi number, standalone form). The "radical" badge itself now sits
+             left of the language rows above (item 18); here we keep only the explanatory detail. -->
         <p class="radline">
-          <span class="rtag">radical</span>
-          {#if headChar.radical_number}<span class="dim">Kangxi {headChar.radical_number}</span>{/if}
+          {#if headChar.radical_number}<span class="dim">Kangxi radical {headChar.radical_number}</span>{/if}
           {#if headChar.standalone}<span class="dim">· written</span> <button class="part" onclick={() => onsearch(headChar.standalone!)} title="look up {headChar.standalone}">{headChar.standalone}</button> <span class="dim">when standalone</span>{/if}
         </p>
       {/if}
       {#if headChar.script_forms}
         <div class="strip">
           <ScriptForms forms={headChar.script_forms} anchor={head} {onsearch} />
-          {#if headChar.script_forms.branches.length > 1}<div class="stripcap">same character across scripts — tap a form</div>{/if}
+          {#if scriptNote}<p class="scriptnote">{scriptNote}</p>{/if}
         </div>
       {/if}
       {#if hasRoles}
@@ -806,10 +831,9 @@
           {#each comp.parts as p, i}{#if i}<span class="plus">+</span>{/if}<button class="part" onclick={() => onsearch(p.component)} title="look up {p.component}">{p.component}</button>{#if p.count > 1}<span class="dim">×{p.count}</span>{/if}{#if meaningOf(p.component)}<span class="cmean">{meaningOf(p.component)}</span>{/if}{/each}
         </p>
       {/if}
-      {#if headChar.strokes || usageLabel(headChar.used_count)}
+      {#if headChar.strokes}
         <div class="cln">
-          {#if headChar.strokes}<span class="dim">{headChar.strokes} strokes</span>{/if}
-          {#if usageLabel(headChar.used_count)}<span class="usetag">{usageLabel(headChar.used_count)}</span>{/if}
+          <span class="dim">{headChar.strokes} strokes</span>
         </div>
       {/if}
     </section>
@@ -853,9 +877,9 @@
          "*"/"**" lines become indented sub-points; a real "Etymology N" heading (rare) is kept. -->
     <div class="etylist">
       {#each etymologyTokens(text) as seg}
-        <div class="etyseg" class:sub={seg.depth > 0} style="--depth:{seg.depth}">
+        <div class="etyseg" class:sub={seg.depth > 0} class:alt={seg.alt} class:ord={seg.ordinal != null} style="--depth:{seg.depth}">
           {#if seg.heading}<div class="etyhead">{seg.heading}</div>{/if}
-          <p class="ety">{#each seg.tokens as s}{#if s.t === 'ruby'}<ruby><button class="kanji" onclick={() => onsearch(s.base)}>{s.base}</button><rt>{s.rt}</rt></ruby>{:else if s.t === 'recon'}<span class="recon" title={s.title}>{s.v}</span>{:else if s.t === 'abbr'}<button class="term" title={s.title} onclick={() => (openTerm = s.title)}>{s.v}</button>{:else if s.t === 'han'}<button class="kanji" onclick={() => onsearch(s.v)}>{s.v}</button>{:else}{s.v}{/if}{/each}</p>
+          <p class="ety">{#if seg.ordinal != null}<span class="etynum">{seg.ordinal}.</span> {/if}{#each seg.tokens as s}{#if s.t === 'ruby'}<ruby><button class="kanji etylink" onclick={() => onsearch(s.base)}>{s.base}</button><rt>{s.rt}</rt></ruby>{:else if s.t === 'recon'}<span class="recon" title={s.title}>{s.v}</span>{:else if s.t === 'abbr'}<button class="term" title={s.title} onclick={() => (openTerm = s.title)}>{s.v}</button>{:else if s.t === 'han'}<button class="kanji etylink" onclick={() => onsearch(s.v)}>{s.v}</button>{:else}{s.v}{/if}{/each}</p>
         </div>
       {/each}
     </div>
@@ -871,9 +895,10 @@
              true and complementary, so each is labelled by variety instead of showing only one. -->
         {#each originAccounts as acc (acc.variety)}
           <div class="oacc">
-            {#if originAccounts.length > 1}
-              <div class="olang"><span class="ovar" lang={langTag(acc.variety)} style="font-family:{hanFont(acc.variety)}">{varietyLabel(acc.variety)}</span> <span class="ohw" lang={langTag(acc.variety)} style="font-family:{hanFont(acc.variety)}">{acc.headword}</span></div>
+            {#if originAccounts.length > 1 || acc.script}
+              <div class="olang"><span class="ovar" lang={langTag(acc.variety)} style="font-family:{hanFont(acc.variety)}">{varietyLabel(acc.variety)}</span> <span class="ohw" lang={langTag(acc.variety)} style="font-family:{hanFont(acc.variety)}">{acc.headword}</span>{#if acc.script}<span class="oscript">{scriptShort(acc.script)}</span>{/if}</div>
             {/if}
+            {#if acc.note}<p class="onote">{acc.note}</p>{/if}
             {@render etyBody(acc.text)}
           </div>
         {/each}
@@ -939,7 +964,7 @@
     <div class="mbg" role="presentation" onclick={closeBound}>
       <div class="modal" role="dialog" aria-modal="true" aria-label="bound form" onclick={(e) => e.stopPropagation()}>
         <div class="mh"><span class="mglyph">{boundOpen.form}</span><span class="mtag">bound form</span></div>
-        <p class="mexp">Not used as a word on its own — it carries meaning only inside compounds.</p>
+        <p class="mexp">Not used as a word on its own; it carries meaning only inside compounds.</p>
         {#if bc.length}
           <div class="mlabel">appears in</div>
           <div class="chips">
@@ -990,8 +1015,9 @@
   .more:hover { color: var(--text); background: none; }
 
   /* "bound" tag — a bound morpheme (only used in compounds); taps open an explainer + its compounds */
-  .btag { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: 999px; padding: 0.06rem 0.42rem; line-height: 1.4; cursor: pointer; align-self: center; }
-  .btag:hover { color: var(--text); border-color: var(--border-strong); background: none; }
+  /* item 16: make the "bound" tag clearly visible (it marks a morpheme that only lives in compounds) */
+  .btag { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 999px; padding: 0.08rem 0.5rem; line-height: 1.4; cursor: pointer; align-self: center; }
+  .btag:hover { color: var(--bg); border-color: var(--text); background: var(--text); }
 
   /* bound-form popup — minimal monochrome dialog */
   .mbg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 50; }
@@ -1047,21 +1073,31 @@
   .dreads.faded { -webkit-mask-image: linear-gradient(to right, #000 80%, transparent); mask-image: linear-gradient(to right, #000 80%, transparent); }
   /* radical line (#16) + usage badge (#17) + script-strip caption (#7) */
   .radline { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 0.55rem; font-size: 0.9rem; }
-  .rtag { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 0.06rem 0.46rem; }
   .radline .part { font-size: 1.15rem; }
-  .usetag { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); border: 1px solid var(--border); border-radius: 999px; padding: 0.04rem 0.42rem; }
-  .stripcap { font-family: var(--mono); font-size: 0.6rem; color: var(--faint); letter-spacing: 0.02em; margin-top: 0.4rem; }
+  /* item 14: the script-change explanation sentence (replaces the bare "PRC simplification" caption) */
+  .scriptnote { font-size: 0.85rem; color: var(--muted); line-height: 1.55; margin: 0.5rem 0 0; }
+  .cnote { font-size: 0.9rem; color: var(--muted); font-style: italic; line-height: 1.55; margin: 0.6rem 0 0; }
+  /* items 17/18: radical / rarely-used tags shown left of each language label in the definition rows */
+  .ltags { display: inline-flex; gap: 0.3rem; align-self: center; }
+  .ltag { font-family: var(--mono); font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); border: 1px solid var(--border); border-radius: 999px; padding: 0.04rem 0.42rem; line-height: 1.5; }
+  .ltag.rad { color: var(--muted); border-color: var(--border-strong); }
   /* per-language origin account label (中 山 / 日 山) */
   .oacc { margin-top: 1rem; }
   .oacc:first-of-type { margin-top: 0; }
   .olang { display: flex; align-items: baseline; gap: 0.4rem; margin-bottom: 0.25rem; }
   .olang .ovar { font-size: 0.95rem; color: var(--muted); }
   .olang .ohw { font-size: 0.95rem; color: var(--faint); }
+  /* item 15: traditional/simplified tag + merge-clarifying note on an origin account */
+  .olang .oscript { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); border: 1px solid var(--border); border-radius: var(--r); padding: 0.05rem 0.3rem; }
+  .onote { font-size: 0.85rem; color: var(--faint); font-style: italic; margin: 0 0 0.4rem; line-height: 1.5; }
   /* structure block - composition (what parts make it up, e.g. 森 = three 木) + a quiet stroke count */
   .cln { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 0.5rem; font-size: 0.8rem; }
   /* English label + Chinese glyph kept close in size so the line reads as one phrase (was 0.82rem vs
      1.6rem — too far apart). The component glyph leads only slightly. */
-  .comp { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin: 0.6rem 0 0; }
+  /* item 11: align components to the text baseline so the (larger) kanji and their English meanings
+     sit on the same line, instead of the kanji hanging below the latin like before. */
+  .comp { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.35rem; margin: 0.6rem 0 0; }
+  .comp :global(svg) { align-self: center; }
   .part { font-family: var(--han); color: var(--text); background: none; border: none; padding: 0 0.1rem; font-size: 1.25rem; line-height: 1; }
   .part:hover { color: #fff; background: none; }
   .comp .dim { font-size: 0.95rem; }
@@ -1107,6 +1143,14 @@
   .ety rt { font-size: 0.55em; color: var(--faint); font-family: var(--han); }
   .ety .kanji { background: none; border: none; padding: 0; font: inherit; color: var(--text); font-family: var(--han); }
   .ety .kanji:hover { text-decoration: underline; }
+  /* item 12: mark hanzi that are hyperlinks in the origin prose with a persistent subtle underline */
+  .ety .etylink { text-decoration: underline; text-decoration-style: dotted; text-decoration-color: var(--faint); text-underline-offset: 3px; }
+  .ety .etylink:hover { text-decoration-style: solid; text-decoration-color: var(--text); }
+  /* item 19: numbered ("#") Wiktionary list items */
+  .etyseg.ord { margin-top: 0.3rem; }
+  .ety .etynum { font-family: var(--mono); font-size: 0.8em; color: var(--faint); }
+  /* item 10: a stacked alternative theory is set off so competing accounts don't read as one run-on */
+  .etyseg.alt { margin-top: 1.1rem; padding-top: 0.8rem; border-top: 1px solid var(--border); }
   /* jargon term: dotted-underline like a glossary word. Desktop gets the title= hover; tap opens the
      popup below (hover doesn't exist on touch, which is why the tooltip "didn't work on mobile"). */
   .ety .term { color: var(--text); text-decoration: underline dotted; text-underline-offset: 2px; cursor: help; background: none; border: none; padding: 0; font: inherit; }
