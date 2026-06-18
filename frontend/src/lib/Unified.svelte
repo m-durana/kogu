@@ -16,10 +16,19 @@
 
 <script lang="ts">
   import type { CharInfo, Entry, Hit, ReadingKV, Variety } from './types'
-  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, isAlwaysBound, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle, scriptShort, scriptChangeNote, scriptChangeFromForms } from './display'
+  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, isAlwaysBound, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle, scriptShort, scriptChangeNote, scriptChangeFromForms, jyutpingToYale } from './display'
+  import { speak, canSpeak } from './speech'
+  import { settings } from './settings.svelte'
   import ScriptForms from './ScriptForms.svelte'
   import IdcBox from './IdcBox.svelte'
-  import { AlertTriangle } from '@lucide/svelte'
+  import { AlertTriangle, Volume2 } from '@lucide/svelte'
+
+  // a reading shown in the user's chosen romanisation: pinyin tone-marks for 中, jyutping or Yale for 粵
+  function dispReading(variety: string, reading: string): string {
+    if (variety === 'zh') return pinyinMarks(reading)
+    if (variety === 'yue') return settings.romanization === 'yale' ? jyutpingToYale(reading) : reading
+    return reading
+  }
   import { readingRomaji } from './romaji'
 
   // The unified cross-language view - one Han word, seen across 中 / 粵 / 日 at once.
@@ -754,15 +763,16 @@
                      reading instead (so 日's ひ and にち rows don't both show the whole list). -->
                 <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe>{#each jaReadItems as it, i}{#if i}<span class="rsep">·</span>{/if}{it.main}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{jaReadOpen ? '−' : '+'}</button>{/if}
               {:else if r.reading}
-                <span class="dread">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>
+                <span class="dread">{dispReading(r.variety, r.reading)}</span>
               {/if}
-              {#if r.variety === 'zh' && headJyut && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread">{headJyut}</span>{/if}
+              {#if r.variety === 'zh' && headJyut && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread">{settings.romanization === 'yale' ? jyutpingToYale(headJyut) : headJyut}</span>{/if}
+              {#if canSpeak()}<button class="spk" onclick={() => speak(r.form, r.variety)} aria-label="listen" title="listen"><Volume2 size={15} /></button>{/if}
             </div>
             {#if boundKind(r) || (single && (isRadicalChar || rowUsage(r.variety)))}
               <!-- tags (bound, rarely-used, radical) on their own line, indented under the readings.
                    "rarely used" is for THIS row's language; "radical" is character-wide. -->
               <div class="rtagline">
-                {#if boundKind(r) === 'always'}<button class="btag" onclick={() => openBound(r)} title="bound form: only used in compounds">bound</button>{:else if boundKind(r) === 'often'}<button class="btag soft" onclick={() => openBound(r)} title="bound in some senses; often used in compounds">often in compounds</button>{/if}
+                {#if boundKind(r) === 'always'}<button class="ltag tappable" onclick={() => openBound(r)} title="only used in compounds, never as a word on its own">only in compounds</button>{:else if boundKind(r) === 'often'}<button class="ltag tappable" onclick={() => openBound(r)} title="bound in some senses; often used in compounds">often in compounds</button>{/if}
                 {#if single && isRadicalChar}<span class="ltag rad">radical</span>{/if}
                 {#if single && rowUsage(r.variety)}<span class="ltag">{rowUsage(r.variety)}</span>{/if}
               </div>
@@ -951,7 +961,7 @@
                 <li>
                   <button class="usedrow" onclick={() => onsearch(l.headword)}>
                     <span class="uw" lang={langTag(l.variety)} style="font-family:{hanFont(l.variety)}">{l.headword}</span>
-                    {#if l.reading}<span class="urd">{l.variety === 'zh' ? pinyinMarks(l.reading) : l.reading}</span>{/if}
+                    {#if l.reading}<span class="urd">{dispReading(l.variety, l.reading)}</span>{/if}
                     {#if glossLine(l.glosses, 1)}<span class="ug">{glossLine(l.glosses, 1)}</span>{/if}
                   </button>
                 </li>
@@ -1048,11 +1058,6 @@
 
   /* "bound" tag — a bound morpheme (only used in compounds); taps open an explainer + its compounds */
   /* item 16: make the "bound" tag clearly visible (it marks a morpheme that only lives in compounds) */
-  .btag { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 999px; padding: 0.08rem 0.5rem; line-height: 1.4; cursor: pointer; align-self: center; }
-  .btag:hover { color: var(--bg); border-color: var(--text); background: var(--text); }
-  /* "often in compounds" (bound in some senses only) reads softer than the absolute "bound" */
-  .btag.soft { color: var(--faint); background: none; border-color: var(--border); text-transform: none; letter-spacing: 0; }
-  .btag.soft:hover { color: var(--text); background: var(--surface); border-color: var(--border-strong); }
 
   /* bound-form popup — minimal monochrome dialog */
   .mbg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 50; }
@@ -1114,9 +1119,15 @@
   .cnote { font-size: 0.9rem; color: var(--muted); font-style: italic; line-height: 1.55; margin: 0.6rem 0 0; }
   /* items 17/18: radical / rarely-used / bound tags on their own line below the readings, indented one
      level so they sit under the language kanji rather than crowding the header row. */
+  /* speaker (Web Speech API) button on each definition row */
+  .spk { display: inline-flex; align-items: center; justify-content: center; background: none; border: none; color: var(--faint); padding: 0.1rem 0.2rem; border-radius: var(--r); align-self: center; }
+  .spk:hover { color: var(--text); background: var(--surface); }
   .rtagline { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; margin: 0.2rem 0 0; padding-left: 1.6rem; }
-  .ltag { font-family: var(--mono); font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); border: 1px solid var(--border); border-radius: var(--r); padding: 0.04rem 0.42rem; line-height: 1.5; }
+  /* one unified style for every small row tag: radical, rarely used, uncommon, only/often in compounds */
+  .ltag { font-family: var(--mono); font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); background: none; border: 1px solid var(--border); border-radius: var(--r); padding: 0.06rem 0.42rem; line-height: 1.5; }
   .ltag.rad { color: var(--muted); border-color: var(--border-strong); }
+  .ltag.tappable { cursor: pointer; }
+  .ltag.tappable:hover { color: var(--text); border-color: var(--border-strong); background: var(--surface); }
   /* per-language origin account label (中 山 / 日 山) */
   .oacc { margin-top: 1rem; }
   .oacc:first-of-type { margin-top: 0; }

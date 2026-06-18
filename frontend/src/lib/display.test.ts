@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle, reformLabel, scriptChangeNote, scriptChangeFromForms, SEARCH_PLACEHOLDERS, placeholderAt, isAlwaysBound } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle, reformLabel, scriptChangeNote, scriptChangeFromForms, SEARCH_PLACEHOLDERS, placeholderAt, isAlwaysBound, jyutpingToYale } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -453,6 +453,30 @@ describe('placeholderAt - rotating search placeholder (item 1)', () => {
       expect(p.length).toBeGreaterThan(0)
       expect(p).not.toContain('—')
     }
+  })
+})
+
+describe('jyutpingToYale - Cantonese romanization toggle', () => {
+  it('low tones get a vowel diacritic plus h', () => {
+    expect(jyutpingToYale('nei5')).toBe('néih')
+    expect(jyutpingToYale('hai6')).toBe('haih')
+    expect(jyutpingToYale('sik6')).toBe('sihk')
+    expect(jyutpingToYale('lou5')).toBe('lóuh')
+  })
+  it('high/rising tones get a diacritic, no h', () => {
+    expect(jyutpingToYale('si1')).toBe('sī')
+    expect(jyutpingToYale('hou2')).toBe('hóu')
+    expect(jyutpingToYale('gwong2')).toBe('gwóng')
+  })
+  it('converts initials and finals (j→y, jyu→yu, z→j, c→ch, oe→eu)', () => {
+    expect(jyutpingToYale('jyu4')).toBe('yùh')
+    expect(jyutpingToYale('ngo5')).toBe('ngóh')
+  })
+  it('handles a multi-syllable reading', () => {
+    expect(jyutpingToYale('nei5 hou2')).toBe('néih hóu')
+  })
+  it('passes through tokens with no tone digit', () => {
+    expect(jyutpingToYale('xyz')).toBe('xyz')
   })
 })
 

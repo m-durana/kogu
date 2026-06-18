@@ -137,6 +137,47 @@ export function pinyinMarks(reading: string): string {
 import type { FormBranch, ScriptForms } from './types'
 
 // Short CJK tag(s) for a branch's script. The script may be "+"-joined (学 is both 简 and 日).
+// Jyutping → Yale romanisation (deterministic). Yale marks tone with a vowel diacritic plus an 'h'
+// after the vowel for the low tones (4/5/6): nei5→néih, sik6→sihk, jyu4→yùh, gwong2→gwóng.
+const J_TONE_MARK: Record<string, string> = {
+  '1': '̄', // macron (high)
+  '2': '́', // acute (mid-rising)
+  '3': '',
+  '4': '̀', // grave + h (low-falling)
+  '5': '́', // acute + h (low-rising)
+  '6': '', // + h (low)
+}
+const J_LOW = new Set(['4', '5', '6'])
+function jyutpingSyllableToYale(syl: string): string {
+  const m = syl.match(/^([a-zA-Z]+)([1-6])$/)
+  if (!m) return syl
+  let body = m[1].toLowerCase()
+  const tone = m[2]
+  // initials: an INITIAL j (semivowel) merges into a following yu (jyu→yu); else j→y, z→j, c→ch
+  if (body.startsWith('jyu')) body = body.slice(1)
+  else if (body[0] === 'j') body = 'y' + body.slice(1)
+  else if (body[0] === 'z') body = 'j' + body.slice(1)
+  else if (body[0] === 'c') body = 'ch' + body.slice(1)
+  // finals: jyutping oe/eo → Yale eu (goek→geuk, deoi→deui)
+  body = body.replace(/oe/g, 'eu').replace(/eo/g, 'eu')
+  const vowels = 'aeiou'
+  const firstV = [...body].findIndex((c) => vowels.includes(c))
+  if (J_LOW.has(tone)) {
+    let lastV = -1
+    for (let i = 0; i < body.length; i++) if (vowels.includes(body[i])) lastV = i
+    body = lastV >= 0 ? body.slice(0, lastV + 1) + 'h' + body.slice(lastV + 1) : body + 'h'
+  }
+  const mark = J_TONE_MARK[tone]
+  if (mark) {
+    const at = firstV >= 0 ? firstV : 0
+    body = (body.slice(0, at + 1) + mark + body.slice(at + 1)).normalize('NFC')
+  }
+  return body
+}
+export function jyutpingToYale(reading: string): string {
+  return reading.split(/\s+/).map(jyutpingSyllableToYale).join(' ')
+}
+
 // recognized script abbreviations (TC = Traditional Chinese, SC = Simplified Chinese), English until
 // localization. JP = Japanese shinjitai, var = z-variant.
 const SCRIPT_TAG: Record<string, string> = {

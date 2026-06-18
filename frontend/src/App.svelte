@@ -5,7 +5,8 @@
   import Unified from './lib/Unified.svelte'
   import Pad from './lib/Pad.svelte'
   import Ocr from './lib/Ocr.svelte'
-  import { Search, X, Brush, Camera, Bookmark, Clock, Share2, Trash2, ArrowRight, Download } from '@lucide/svelte'
+  import { Search, X, Brush, Camera, Bookmark, Clock, Share2, Trash2, ArrowRight, Download, Settings } from '@lucide/svelte'
+  import { settings, setRomanization } from './lib/settings.svelte'
   import { onMount } from 'svelte'
   import { getSaved, getHistory, isSaved, toggleSaved, recordHistory, clearHistory, type SavedItem } from './lib/store'
 
@@ -156,6 +157,7 @@
   let isStandalone = $state(false)
   let isIOS = $state(false)
   let showIosHelp = $state(false)
+  let showSettings = $state(false)
   const canInstall = $derived(!isStandalone && (deferredPrompt !== null || isIOS))
 
   type NavMode = 'push' | 'replace' | 'none'
@@ -451,6 +453,7 @@
     <nav class="navbtns">
       <button class="navbtn" class:on={view === 'history'} onclick={openHistory} aria-label="history" title="history"><Clock size={24} /></button>
       <button class="navbtn" class:on={view === 'saved'} onclick={openSaved} aria-label="saved" title="saved"><Bookmark size={24} /></button>
+      <button class="navbtn" onclick={() => (showSettings = true)} aria-label="settings" title="settings"><Settings size={24} /></button>
     </nav>
   </header>
 
@@ -667,6 +670,22 @@
   {/if}
 
   {#if toast}<div class="toast" role="status">{toast}</div>{/if}
+
+  {#if showSettings}
+    <div class="setbg" role="presentation" onclick={() => (showSettings = false)}>
+      <div class="setcard" role="dialog" aria-modal="true" aria-label="settings" onclick={(e) => e.stopPropagation()}>
+        <h2 class="seth">Settings</h2>
+        <div class="setrow">
+          <span class="setlabel">Cantonese romanization</span>
+          <div class="seg">
+            <button class:on={settings.romanization === 'jyutping'} onclick={() => setRomanization('jyutping')}>Jyutping</button>
+            <button class:on={settings.romanization === 'yale'} onclick={() => setRomanization('yale')}>Yale</button>
+          </div>
+        </div>
+        <button class="setclose" onclick={() => (showSettings = false)}>close</button>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -694,6 +713,18 @@
   .lvclear:hover { color: var(--text); border-color: var(--border-strong); }
   /* transient "Link copied" toast for share fallback */
   .toast { position: fixed; left: 50%; bottom: calc(2rem + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--surface-2, #1c1c1f); color: var(--text); border: 1px solid var(--border-strong); border-radius: 999px; padding: 0.5rem 1rem; font-size: 0.85rem; z-index: 60; }
+  /* settings panel */
+  .setbg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 70; }
+  .setcard { width: min(22rem, 100%); background: var(--surface-2, #1c1c1f); border: 1px solid var(--border-strong); border-radius: var(--r-lg); padding: 1.1rem 1.1rem 0.9rem; }
+  .seth { font-family: var(--sans); font-size: 1.1rem; font-weight: 500; color: var(--text); margin: 0 0 0.9rem; }
+  .setrow { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
+  .setlabel { font-size: 0.9rem; color: var(--muted); }
+  .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--r); overflow: hidden; align-self: start; }
+  .seg button { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); background: none; border: none; padding: 0.35rem 0.8rem; }
+  .seg button + button { border-left: 1px solid var(--border-strong); }
+  .seg button.on { background: var(--text); color: var(--bg); }
+  .setclose { font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); background: none; border: 1px solid var(--border); border-radius: var(--r); padding: 0.3rem 0.7rem; }
+  .setclose:hover { color: var(--text); border-color: var(--border-strong); }
   .brand { margin: 0; font-weight: 400; }
   .brandbtn { display: inline-flex; align-items: baseline; gap: 0.45rem; background: none; border: none; padding: 0; }
   .brandbtn:hover { background: none; }
