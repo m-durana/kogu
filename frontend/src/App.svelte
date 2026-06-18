@@ -5,7 +5,7 @@
   import Unified from './lib/Unified.svelte'
   import Pad from './lib/Pad.svelte'
   import Ocr from './lib/Ocr.svelte'
-  import { Search, X, Brush, Camera, Bookmark, Clock, Share2, Trash2, ArrowRight, Download, Settings } from '@lucide/svelte'
+  import { Search, X, Brush, Camera, Bookmark, Clock, Share2, Trash2, ArrowRight, Download, Settings, SquarePlus } from '@lucide/svelte'
   import { settings, setRomanization } from './lib/settings.svelte'
   import { onMount } from 'svelte'
   import { getSaved, getHistory, isSaved, toggleSaved, recordHistory, clearHistory, type SavedItem } from './lib/store'
@@ -163,9 +163,11 @@
   let deferredPrompt = $state<any>(null)
   let isStandalone = $state(false)
   let isIOS = $state(false)
-  let showIosHelp = $state(false)
+  let isMobile = $state(false)
+  let showInstallHelp = $state(false)
   let showSettings = $state(false)
-  const canInstall = $derived(!isStandalone && (deferredPrompt !== null || isIOS))
+  // mobile-only: never offer "install" on desktop (item 139)
+  const canInstall = $derived(isMobile && !isStandalone && (deferredPrompt !== null || isIOS))
 
   type NavMode = 'push' | 'replace' | 'none'
   const resultsUrl = (t: string) => (t ? `?q=${encodeURIComponent(t)}` : location.pathname)
@@ -369,6 +371,7 @@
     isStandalone =
       window.matchMedia?.('(display-mode: standalone)').matches || (navigator as any).standalone === true
     isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream
+    isMobile = isIOS || /Android/i.test(navigator.userAgent) || (window.matchMedia?.('(pointer: coarse)').matches && window.matchMedia?.('(max-width: 860px)').matches)
     const onBip = (e: Event) => {
       e.preventDefault()
       deferredPrompt = e
@@ -383,6 +386,7 @@
 
   async function installApp() {
     if (deferredPrompt) {
+      // Android/Chrome: fire the native install dialog directly
       deferredPrompt.prompt()
       try {
         await deferredPrompt.userChoice
@@ -390,8 +394,9 @@
         /* dismissed */
       }
       deferredPrompt = null
-    } else if (isIOS) {
-      showIosHelp = !showIosHelp
+    } else {
+      // iOS (no install API): guide the user to Share → Add to Home Screen
+      showInstallHelp = true
     }
   }
 
@@ -649,12 +654,11 @@
     {#if !searched && !q && panel === 'none'}
       <!-- About page: what Kogu is, what each section of an entry means, and where the data comes from -->
       <div class="about">
-        <p class="introhw"><span class="intromark">古古</span> <span class="introword">Kogu</span></p>
+        <p class="introhw">
+          <span class="intromark">古古</span> <span class="introword">Kogu</span>
+          {#if canInstall}<button class="installbtn" onclick={installApp} aria-label="install as web app"><Download size={14} /> Install</button>{/if}
+        </p>
         <p class="intropos"><span class="intropron">/ko.gu/</span> <span class="introtag">noun</span></p>
-        {#if canInstall}
-          <button class="installbtn" onclick={installApp}><Download size={15} /> Install as Web App</button>
-          {#if showIosHelp && isIOS}<p class="ioshelp">Tap the Share icon in your browser, then choose "Add to Home Screen".</p>{/if}
-        {/if}
         <p class="introgloss">A dictionary for the living Han script. One character or word is shown across <b>中文</b> (Mandarin), <b>粵語</b> (Cantonese), and <b>日本語</b> (Japanese) at once, so you can see how the same writing is read and used in each, and how the reforms pulled the forms apart.</p>
 
         <h2 class="abh">On each page</h2>
@@ -676,6 +680,21 @@
         <p class="abnote">Everything is passed through from these open datasets directly. Nothing here is written by an AI. Kogu is open source.</p>
       </div>
     {/if}
+  {/if}
+
+  {#if showInstallHelp}
+    <!-- guided add-to-home-screen (iOS has no install API; Android uses the native prompt instead) -->
+    <div class="instbg" role="presentation" onclick={() => (showInstallHelp = false)}>
+      <div class="instcard" role="dialog" aria-modal="true" aria-label="install instructions" onclick={(e) => e.stopPropagation()}>
+        <p class="insth">Add Kogu to your Home Screen</p>
+        <ol class="inststeps">
+          <li><span class="instep"><Share2 size={18} /></span> Tap the <b>Share</b> button {isIOS ? 'in the toolbar below' : 'in your browser menu'}</li>
+          <li><span class="instep"><SquarePlus size={18} /></span> Choose <b>Add to Home Screen</b></li>
+        </ol>
+        <button class="setclose" onclick={() => (showInstallHelp = false)}>got it</button>
+      </div>
+      {#if isIOS}<div class="instpoint" aria-hidden="true">▾</div>{/if}
+    </div>
   {/if}
 
   {#if toast}<div class="toast" role="status">{toast}</div>{/if}
@@ -839,16 +858,27 @@
   .nw-mean { color: var(--muted); font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* About page (item 2): what Kogu is, what each section means, and the data sources */
   .about { padding: 1rem 0.2rem 2rem; max-width: 40ch; }
-  .introhw { margin: 0; display: flex; align-items: baseline; gap: 0.5rem; }
+  .introhw { margin: 0; display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
   .introhw .intromark { font-family: var(--han); font-weight: 500; font-size: 2.1rem; letter-spacing: -0.04em; color: var(--text); }
   .introhw .introword { font-family: var(--sans); font-size: 1.4rem; letter-spacing: 0.04em; color: var(--muted); }
   .intropos { margin: 0.35rem 0 1rem; display: flex; align-items: baseline; gap: 0.6rem; }
   .intropron { font-family: var(--mono); font-size: 0.95rem; color: var(--faint); }
   .introtag { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); }
   /* install-as-web-app button (item 2) */
-  .installbtn { display: inline-flex; align-items: center; gap: 0.4rem; margin: 0.2rem 0 1rem; font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text); background: none; border: 1px solid var(--border-strong); border-radius: var(--r); padding: 0.4rem 0.7rem; }
+  /* install button sits to the right of the 古古 Kogu wordmark (item 139) */
+  .installbtn { display: inline-flex; align-items: center; gap: 0.35rem; margin-left: auto; align-self: center; font-family: var(--mono); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text); background: none; border: 1px solid var(--border-strong); border-radius: var(--r); padding: 0.3rem 0.6rem; }
   .installbtn:hover { background: var(--surface); }
-  .ioshelp { font-size: 0.88rem; line-height: 1.5; color: var(--muted); margin: -0.6rem 0 1rem; }
+  /* guided add-to-home-screen overlay */
+  .instbg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.72); z-index: 80; display: flex; align-items: center; justify-content: center; padding: 1.2rem; }
+  .instcard { width: min(22rem, 100%); background: var(--surface-2, #1c1c1f); border: 1px solid var(--border-strong); border-radius: var(--r-lg); padding: 1.1rem; }
+  .insth { font-family: var(--sans); font-size: 1.1rem; font-weight: 500; color: var(--text); margin: 0 0 0.8rem; }
+  .inststeps { margin: 0 0 1rem; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.7rem; }
+  .inststeps li { display: flex; align-items: center; gap: 0.6rem; font-size: 0.95rem; line-height: 1.4; color: var(--muted); }
+  .inststeps b { color: var(--text); font-weight: 500; }
+  .instep { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; flex: none; border: 1px solid var(--border-strong); border-radius: var(--r); color: var(--text); }
+  .instpoint { position: fixed; left: 50%; bottom: calc(0.5rem + env(safe-area-inset-bottom)); transform: translateX(-50%); color: #fff; font-size: 2rem; animation: instbob 1.1s ease-in-out infinite; }
+  @keyframes instbob { 0%,100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, 0.4rem); } }
+  @media (prefers-reduced-motion: reduce) { .instpoint { animation: none; } }
   .introgloss { font-family: var(--sans); font-size: 1.05rem; line-height: 1.7; color: var(--text); margin: 0 0 1.6rem; }
   .introgloss b, .ablist b, .absrc b { font-family: var(--han); font-weight: 500; }
   .abh { font-family: var(--mono); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--faint); margin: 1.6rem 0 0.6rem; }
