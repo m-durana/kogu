@@ -245,9 +245,13 @@
     const kun = headChar.readings.filter((r) => r.kind === 'kunyomi' && isKana(r.value)).map((r) => r.value)
     if (!on.length && !kun.length) return null
     // Kanjidic lists readings for MANY Chinese-only kanji (媽 → はは) that aren't actually used in
-    // Japanese. A reliable "really used in Japanese" signal is: the kanji appears in at least one
-    // Japanese word. If it doesn't (媽 → 0 ja words), don't fabricate a Japanese definition row.
-    if (!(entry?.compounds ?? []).some((l) => l.variety === 'ja')) return null
+    // Japanese. Two reliable "really used in Japanese" signals: (a) the kanji appears in a Japanese
+    // word, or (b) it has an okurigana kun reading (よ.じる) — a native verb/adjective stem, so the
+    // kanji forms a real Japanese word like 攀じる even when JMdict lacks that rare entry. 媽 has
+    // neither (はは is a bare nominal reading, 0 ja words) → still suppressed.
+    const usedInJa = (entry?.compounds ?? []).some((l) => l.variety === 'ja')
+    const hasOkurigana = headChar.readings.some((r) => r.kind === 'kunyomi' && r.value.includes('.'))
+    if (!usedInJa && !hasOkurigana) return null
     const gloss = headChar.gloss_ja || headChar.gloss_en || ''
     if (!gloss) return null
     // the Japanese form is the shinjitai if one exists, else the orthodox (traditional) glyph - NOT
