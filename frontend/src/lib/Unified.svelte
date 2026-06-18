@@ -543,11 +543,6 @@
     return out
   }
 
-  // usage label from the per-character "used" count (how many words contain it). Only the rare end
-  // gets a badge — common glyphs need none. 0 words = archaic/unused; 1–10 = uncommon.
-  function usageLabel(n: number): string {
-    return n === 0 ? 'rarely used' : n <= 10 ? 'uncommon' : ''
-  }
   // item 14: a full-sentence explanation of a script change (繁→简 / 旧→新), replacing the bare
   // "PRC simplification" caption. Built from the head character's own variant edges.
   const scriptNote = $derived(
@@ -559,9 +554,17 @@
   // "radical" is a character property (bound in every language); "rarely used" is now PER-LANGUAGE,
   // from the per-variety containing-word count (巴 is common in 中 but rare in 日).
   const isRadicalChar = $derived(!!headChar?.is_radical)
+  // rarity tag from the MAX word-frequency of words containing this glyph in that language (a real
+  // frequency signal; the old containing-word count mislabelled common particles like 嗎/也).
+  // Cantonese borrows the Mandarin frequency corpus, so its scores understate core 粵字 — we suppress
+  // the tag for 粵 rather than emit wrong labels (until a real Cantonese char-frequency source).
   function rowUsage(variety: Variety): string {
-    const n = headChar?.used_by_variety?.[variety]
-    return n === undefined ? '' : usageLabel(n)
+    if (variety === 'yue') return ''
+    const f = headChar?.freq_by_variety?.[variety]
+    if (f === undefined) return 'rarely used' // no scored word in this language uses the glyph
+    if (f < 0.3) return 'rarely used'
+    if (f < 0.4) return 'uncommon'
+    return ''
   }
   // a single kanji that forms native words via okurigana (乗 → 乗る, 化 → 化ける) is a WORD STEM, not a
   // bound morpheme — its kun readings carry an okurigana split (の.る). Used to avoid mis-tagging the

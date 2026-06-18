@@ -1008,6 +1008,19 @@ fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<C
             }
         }
     }
+    // per-language MAX word-frequency among words containing this glyph — the real rarity signal
+    // (a type count mislabels common particles like 嗎/也). Drives the "rarely used" tag.
+    let mut freq_by_variety: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+    if let Ok(mut s) = conn.prepare(
+        "SELECT l.variety, MAX(l.freq) FROM form_char fc JOIN lexeme l ON l.id = fc.lexeme_id \
+         WHERE fc.cp = ?1 AND l.freq IS NOT NULL GROUP BY l.variety",
+    ) {
+        if let Ok(rows) = s.query_map([cp], |r| Ok((r.get::<_, String>(0)?, r.get::<_, f64>(1)?))) {
+            for row in rows.flatten() {
+                freq_by_variety.insert(row.0, row.1);
+            }
+        }
+    }
     let rad_gloss = is_radical_gloss(gloss_en.as_deref());
     // a genuine bound radical flags as a radical in its gloss AND appears in almost no words of its
     // own (彳: 3, 辵: 0). 山/木/水 carry a radical gloss too but head thousands of words → not radicals.
@@ -1038,6 +1051,7 @@ fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<C
         standalone,
         used_count,
         used_by_variety,
+        freq_by_variety,
     }))
 }
 

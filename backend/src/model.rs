@@ -146,6 +146,10 @@ pub struct CharInfo {
     /// per-language containing-word counts ({"zh":449,"yue":57,"ja":7}), so the "rarely used" tag can
     /// be language-specific (巴 is common in Chinese but rare in Japanese). Absent varieties = 0.
     pub used_by_variety: std::collections::HashMap<String, i64>,
+    /// per-language MAX word-frequency (wordfreq Zipf score, 0..1) among words containing this glyph.
+    /// The real rarity signal that drives the "rarely used"/"uncommon" tag; a count mislabels common
+    /// particles (嗎/也). Absent variety = no scored word in that language.
+    pub freq_by_variety: std::collections::HashMap<String, f64>,
 }
 
 #[derive(Serialize)]

@@ -75,6 +75,8 @@ export interface CharInfo {
   used_count: number
   /** per-language containing-word counts ({zh,yue,ja}) for a language-specific rarity tag */
   used_by_variety: Record<string, number>
+  /** per-language MAX word-frequency (0..1) among words containing this glyph; drives the rarity tag */
+  freq_by_variety: Record<string, number>
 }
 
 export interface OriginAccount {
