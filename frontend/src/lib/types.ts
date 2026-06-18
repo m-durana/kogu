@@ -71,8 +71,10 @@ export interface CharInfo {
   radical_number: number | null
   /** standalone character a radical-variant form stands for (氵→水), when it differs */
   standalone: string | null
-  /** how many lexemes contain this character — usage signal (0 = archaic, large = core) */
+  /** how many lexemes contain this character — global usage signal (0 = archaic, large = core) */
   used_count: number
+  /** per-language containing-word counts ({zh,yue,ja}) for a language-specific rarity tag */
+  used_by_variety: Record<string, number>
 }
 
 export interface OriginAccount {

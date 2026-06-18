@@ -1294,3 +1294,24 @@ async fn suggest_empty_query_is_empty() {
     let v = get("/suggest?q=").await.1;
     assert_eq!(v["suggestions"].as_array().unwrap().len(), 0);
 }
+
+// ---- per-language character rarity (used_by_variety) ----
+#[tokio::test]
+async fn char_usage_is_per_language() {
+    // 巴 is common in Chinese but rare in Japanese
+    let (_, e) = get(&format!("/entry/{}", -('巴' as i64))).await;
+    let u = &e["characters"][0]["used_by_variety"];
+    let zh = u["zh"].as_i64().unwrap_or(0);
+    let ja = u["ja"].as_i64().unwrap_or(0);
+    assert!(zh > ja, "巴: zh ({zh}) should exceed ja ({ja})");
+    assert!(zh > 50, "巴 is common in Chinese, got {zh}");
+}
+
+#[tokio::test]
+async fn kokuji_usage_is_japanese_only() {
+    // 働 is a Japanese-coined kanji: used in ja, not in zh
+    let (_, e) = get(&format!("/entry/{}", -('働' as i64))).await;
+    let u = &e["characters"][0]["used_by_variety"];
+    assert!(u["ja"].as_i64().unwrap_or(0) > 0, "働 used in Japanese");
+    assert_eq!(u["zh"].as_i64().unwrap_or(0), 0, "働 not used in Chinese");
+}

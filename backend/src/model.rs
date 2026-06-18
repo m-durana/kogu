@@ -141,7 +141,11 @@ pub struct CharInfo {
     /// the standalone character a radical-variant form stands for (氵→水, 辶→辵), when it differs.
     pub standalone: Option<String>,
     /// how many lexemes contain this character (a usage signal): 0 = archaic/unused, large = core.
+    /// Global across languages; used for radical detection (a radical is bound in every language).
     pub used_count: i64,
+    /// per-language containing-word counts ({"zh":449,"yue":57,"ja":7}), so the "rarely used" tag can
+    /// be language-specific (巴 is common in Chinese but rare in Japanese). Absent varieties = 0.
+    pub used_by_variety: std::collections::HashMap<String, i64>,
 }
 
 #[derive(Serialize)]

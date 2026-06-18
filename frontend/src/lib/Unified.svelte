@@ -542,15 +542,14 @@
       ? scriptChangeNote(head, headChar.variants ?? []) ?? scriptChangeFromForms(headChar.script_forms)
       : null,
   )
-  // items 17/18: the radical and "rarely used" tags move OUT of the structure block to sit left of
-  // each language label in the definition rows. This is the per-character tag cluster shown there.
-  const headTags = $derived.by(() => {
-    const t: string[] = []
-    if (headChar?.is_radical) t.push('radical')
-    const u = headChar ? usageLabel(headChar.used_count) : ''
-    if (u) t.push(u)
-    return t
-  })
+  // items 17/18: the radical and "rarely used" tags sit on their own line under each language row.
+  // "radical" is a character property (bound in every language); "rarely used" is now PER-LANGUAGE,
+  // from the per-variety containing-word count (巴 is common in 中 but rare in 日).
+  const isRadicalChar = $derived(!!headChar?.is_radical)
+  function rowUsage(variety: Variety): string {
+    const n = headChar?.used_by_variety?.[variety]
+    return n === undefined ? '' : usageLabel(n)
+  }
 
   // one compact reading for a component character in the breakdown row — primary pinyin (tone-marked),
   // else jyutping, else the first few kana on/kun. Keeps the row consistent with the word rows.
@@ -741,11 +740,13 @@
               {/if}
               {#if r.variety === 'zh' && headJyut && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread">{headJyut}</span>{/if}
             </div>
-            {#if (isBoundForm(r.glosses) || r.synthetic) || (single && headTags.length)}
-              <!-- tags (bound, rarely-used, radical) on their own line, indented under the readings -->
+            {#if (isBoundForm(r.glosses) || r.synthetic) || (single && (isRadicalChar || rowUsage(r.variety)))}
+              <!-- tags (bound, rarely-used, radical) on their own line, indented under the readings.
+                   "rarely used" is for THIS row's language; "radical" is character-wide. -->
               <div class="rtagline">
                 {#if isBoundForm(r.glosses) || r.synthetic}<button class="btag" onclick={() => openBound(r)} title="bound form: only used in compounds">bound</button>{/if}
-                {#if single}{#each headTags as t}<span class="ltag" class:rad={t === 'radical'}>{t}</span>{/each}{/if}
+                {#if single && isRadicalChar}<span class="ltag rad">radical</span>{/if}
+                {#if single && rowUsage(r.variety)}<span class="ltag">{rowUsage(r.variety)}</span>{/if}
               </div>
             {/if}
             {#if ss.length}

@@ -956,6 +956,18 @@ fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<C
     // usage signal + radical detection — both keyed on how many lexemes contain this glyph.
     let used_count: i64 =
         conn.query_row("SELECT count(*) FROM form_char WHERE cp=?1", [cp], |r| r.get(0)).unwrap_or(0);
+    // per-language counts (for a language-specific "rarely used" tag): 巴 = zh many, ja few.
+    let mut used_by_variety: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
+    if let Ok(mut s) = conn.prepare(
+        "SELECT l.variety, count(*) FROM form_char fc JOIN lexeme l ON l.id = fc.lexeme_id \
+         WHERE fc.cp = ?1 GROUP BY l.variety",
+    ) {
+        if let Ok(rows) = s.query_map([cp], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))) {
+            for row in rows.flatten() {
+                used_by_variety.insert(row.0, row.1);
+            }
+        }
+    }
     let rad_gloss = is_radical_gloss(gloss_en.as_deref());
     // a genuine bound radical flags as a radical in its gloss AND appears in almost no words of its
     // own (彳: 3, 辵: 0). 山/木/水 carry a radical gloss too but head thousands of words → not radicals.
@@ -985,6 +997,7 @@ fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<C
         radical_number,
         standalone,
         used_count,
+        used_by_variety,
     }))
 }
 
