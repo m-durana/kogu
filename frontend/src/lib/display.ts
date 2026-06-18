@@ -454,7 +454,12 @@ export type GlossPart = { v: string; link?: boolean }
 // pairs (high D840–D8BF, low DC00–DFFF). The SIP range is why 辵's 𣥆 (U+23946) and ~830 other origin
 // glyphs were rendering as plain unlinked tofu. Explicit ranges + a surrogate alternation, not
 // \p{Han}/the `u` flag: the build-time regex parser rejects Unicode script-name escapes.
-const HAN_RUN = /(?:[㐀-鿿豈-﫿々]|[\uD840-\uD8BF][\uDC00-\uDFFF])+/g
+// Use \u escapes, not literal chars: the literal lead of the compat-ideograph range was mis-typed as
+// 豈 U+8C48 (a UNIFIED ideograph) instead of U+F900, so the class spanned U+8C48–U+FAFF and swallowed
+// the entire Hangul Syllables block — Korean 말 was being turned into a (dead) link. Ranges: CJK Ext A
+// + Unified (3400–9FFF), iteration marks 々〆 (3005–3006), CJK Compat Ideographs (F900–FAFF), and the
+// Supplementary Ideographic Plane via surrogate pairs (item 159).
+const HAN_RUN = /(?:[\u3400-\u9FFF\u3005\u3006\uF900-\uFAFF]|[\uD840-\uD8BF][\uDC00-\uDFFF])+/g
 /** Split a string so every Han run becomes a tappable link and the rest stays plain text — used in
  * glosses ("variant of 著" → 著 links; "ear; handle 耳" → 耳 links) and origin prose. */
 export function linkifyHan(s: string): GlossPart[] {
@@ -516,7 +521,11 @@ export function soundLoanTitle(badges: string[] | null | undefined): string {
 
 // Plain-English glossary for the jargon. Longest keys first so phrases beat their abbreviations and
 // CJK terms match before single chars. `word: true` adds \b boundaries (so "OC" ≠ inside "OCt").
-type GlossEntry = { term: string; title: string; word?: boolean }
+// `abbr`: a short form to DISPLAY in place of a long term (the full term stays in the tooltip), e.g.
+// "Nihon Shoki of 720 CE" → shows "Nihon Shoki". `cs`: match case-sensitively (for all-caps
+// initialisms like OC/MC, so a lowercase "oc" in prose isn't wrongly tagged). Everything else matches
+// case-insensitively with an optional trailing plural "s" (item 158).
+type GlossEntry = { term: string; title: string; word?: boolean; abbr?: string; cs?: boolean }
 const ETY_GLOSSARY: GlossEntry[] = [
   { term: 'Phono-semantic compound', title: 'A character that pairs a meaning part with a sound part.' },
   { term: 'Phono-semantic matching', title: 'A foreign word borrowed with characters picked to fit both its sound and meaning.' },
@@ -621,18 +630,55 @@ const ETY_GLOSSARY: GlossEntry[] = [
   // Ideogram…) still carry the plain-language tooltip for readers who don't tap through.
   { term: 'calque', title: 'A word translated piece by piece from another language.', word: true },
   { term: 'cognate', title: 'A word sharing a common ancestor with another.', word: true },
-  { term: 'OC', title: 'Old Chinese (~1000 BCE).', word: true },
-  { term: 'MC', title: 'Middle Chinese (~600 CE).', word: true },
-  { term: 'OJ', title: 'Old Japanese (8th century).', word: true },
-  { term: 'PST', title: 'Proto-Sino-Tibetan.', word: true },
-  { term: 'PIE', title: 'Proto-Indo-European.', word: true },
+  { term: 'OC', title: 'Old Chinese (~1000 BCE).', word: true, cs: true },
+  { term: 'MC', title: 'Middle Chinese (~600 CE).', word: true, cs: true },
+  { term: 'OJ', title: 'Old Japanese (8th century).', word: true, cs: true },
+  { term: 'PST', title: 'Proto-Sino-Tibetan.', word: true, cs: true },
+  { term: 'PIE', title: 'Proto-Indo-European.', word: true, cs: true },
+  // Historical sources & script stages (item 158). Listed longest-variant first so the dated forms
+  // ("… of 720 CE") match and collapse to the work name before the bare name is tried.
+  { term: 'Nihon Shoki of 720 CE', abbr: 'Nihon Shoki', title: 'Nihon Shoki — Japan’s oldest official chronicle, compiled 720 CE.', word: true },
+  { term: 'Kojiki of 712 CE', abbr: 'Kojiki', title: 'Kojiki — Japan’s oldest extant chronicle, compiled 712 CE.', word: true },
+  { term: "Man'yōshū of 759 CE", abbr: "Man'yōshū", title: 'Man’yōshū — the oldest Japanese poetry anthology, compiled after 759 CE.', word: true },
+  { term: 'Shuowen Jiezi', title: 'The first Chinese character dictionary, ~100 CE.', word: true },
+  { term: 'Classic of Poetry', title: 'China’s oldest poetry collection (~1000-600 BCE), the Shijing.', word: true },
+  { term: 'Kangxi dictionary', title: 'The imperial Chinese character dictionary of 1716.', word: true },
+  { term: 'oracle bone script', title: 'The earliest Chinese writing, carved on bone and shell (~1200 BCE).', word: true },
+  { term: 'bronze inscriptions', title: 'Chinese writing cast on ritual bronzes (Shang–Zhou).', word: true },
+  { term: 'bronze inscription', title: 'Chinese writing cast on ritual bronzes (Shang–Zhou).', word: true },
+  { term: 'clerical script', title: 'The Han-era Chinese script that turned seal curves into flat strokes.', word: true },
+  { term: 'seal script', title: 'The formal Chinese script standardised under the Qin (~3rd c. BCE).', word: true },
+  { term: 'Nihon Shoki', title: 'Japan’s oldest official chronicle, 720 CE.', word: true },
+  { term: 'Nihongi', title: 'Alternative name for the Nihon Shoki, Japan’s oldest official chronicle (720 CE).', word: true },
+  { term: 'Kojiki', title: 'Japan’s oldest extant chronicle, 712 CE.', word: true },
+  { term: "Man'yōshū", title: 'The oldest Japanese poetry anthology (after 759 CE).', word: true },
+  { term: 'Shuowen', title: 'The Shuowen Jiezi, the first Chinese character dictionary (~100 CE).', word: true },
+  { term: 'Guangyun', title: 'A 1008 CE Chinese rhyme dictionary, a key source for Middle Chinese.', word: true },
+  { term: 'Guangya', title: 'A 3rd-c. CE Chinese dictionary expanding the Erya.', word: true },
+  { term: 'Fangyan', title: 'Yang Xiong’s ~1st-c. BCE dictionary of regional Chinese words.', word: true },
+  { term: 'Jiyun', title: 'An expanded 1037 CE Chinese rhyme dictionary.', word: true },
+  { term: 'Shijing', title: 'The Classic of Poetry, China’s oldest poetry collection (~1000-600 BCE).', word: true },
+  { term: 'Erya', title: 'The oldest Chinese dictionary/thesaurus, ~3rd c. BCE.', word: true },
 ]
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-const ETY_GLOSS_RE = new RegExp(
-  ETY_GLOSSARY.map((e) => (e.word ? `\\b${esc(e.term)}\\b` : esc(e.term))).join('|'),
-  'g',
-)
+// Two passes: all-caps initialisms (cs) stay case-sensitive; everything else matches case-insensitively
+// with an optional plural "s" so "Cognate"/"cognate"/"cognates" are treated identically (item 158).
+const CI_ENTRIES = ETY_GLOSSARY.filter((e) => !e.cs)
+const CS_ENTRIES = ETY_GLOSSARY.filter((e) => e.cs)
+const glossSrc = (es: GlossEntry[], plural: boolean) =>
+  es.map((e) => (e.word ? `\\b${esc(e.term)}${plural ? 's?' : ''}\\b` : esc(e.term))).join('|')
+const ETY_GLOSS_RE_CI = new RegExp(glossSrc(CI_ENTRIES, true), 'gi')
+const ETY_GLOSS_RE_CS = new RegExp(glossSrc(CS_ENTRIES, false), 'g')
+// exact-keyed (used by the reconstruction register lookup, e.g. "(OC *…)" → OC's plain-English note)
 const ETY_GLOSS_TITLE = new Map(ETY_GLOSSARY.map((e) => [e.term, e.title]))
+const CI_BY_KEY = new Map(CI_ENTRIES.map((e) => [e.term.toLowerCase(), e]))
+const CS_BY_KEY = new Map(CS_ENTRIES.map((e) => [e.term, e]))
+// resolve a matched surface form → {display, title}: case/plural-insensitive, applying any abbr.
+function ciGloss(v: string): { v: string; title: string } {
+  const k = v.toLowerCase()
+  const e = CI_BY_KEY.get(k) ?? CI_BY_KEY.get(k.replace(/s$/, ''))
+  return e ? { v: e.abbr ?? v, title: e.title } : { v, title: '' }
+}
 
 export type EtyInline =
   | { t: 'ruby'; base: string; rt: string }
@@ -692,9 +738,19 @@ function inlineEty(s: string): EtyInline[] {
       return { t: 'recon', v, title }
     }),
   )
-  // 3. jargon → plain-English tooltips
+  // 3. jargon → plain-English tooltips (and short forms for long historical-source names). Case-
+  //    sensitive initialisms first, then the case-insensitive prose terms.
   toks = expandText(toks, (x) =>
-    tokenizeBy(x, ETY_GLOSS_RE, (v) => ({ t: 'abbr', v, title: ETY_GLOSS_TITLE.get(v) ?? '' })),
+    tokenizeBy(x, ETY_GLOSS_RE_CS, (v) => {
+      const e = CS_BY_KEY.get(v)
+      return { t: 'abbr', v: e?.abbr ?? v, title: e?.title ?? '' }
+    }),
+  )
+  toks = expandText(toks, (x) =>
+    tokenizeBy(x, ETY_GLOSS_RE_CI, (v) => {
+      const r = ciGloss(v)
+      return { t: 'abbr', v: r.v, title: r.title }
+    }),
   )
   // 4. remaining Han runs → tappable
   toks = expandText(toks, (x) =>
@@ -743,6 +799,14 @@ export function etymologyTokens(text: string): EtySegment[] {
     } else {
       ordCounter = 0 // any non-list line ends an ordered run
     }
+    if (!line) continue
+    // a line that is now just ONE stray ASCII char (":", "*", ".", "]", "+", "#", "-" or a lone
+    // laryngeal "h"/letter left over from a wiki template) is upstream markup noise, never prose —
+    // skip it. Single-codepoint CJK lines are kept (a character can legitimately stand alone). (153)
+    if ([...line].length === 1 && /^[\x21-\x7e▲]$/.test(line)) continue
+    // "More at *márkos." is Wiktionary's cross-reference to a fuller (proto-form) entry that Kogu does
+    // not have — a dead link. Drop the trailing "More at …." sentence. (item 159)
+    line = line.replace(/\s*\bMore at [^.]*\.\s*$/i, '').trim()
     if (!line) continue
     // a competing theory stacked as a fresh top-level paragraph after the first (古: graphic theory,
     // then 苦 theory, then the Sino-Tibetan word origin) is flagged so the UI separates them.

@@ -352,8 +352,6 @@
   // "made of" parts. Only when at least one role is known.
   const roleParts = $derived(single && headChar ? headChar.components : [])
   const hasRoles = $derived(roleParts.some((c) => c.role === 'semantic' || c.role === 'phonetic'))
-  const roleBadge = (role: string | null) =>
-    role === 'semantic' ? 'meaning' : role === 'phonetic' ? 'sound' : ''
 
   // Block B - the bridge: how the same meaning is written DIFFERENTLY in another language (a different
   // glyph or the cross-script form). Everything that isn't a same-glyph definition. Only meaningful
@@ -772,13 +770,16 @@
                 {#if r.variety === 'zh' && headJyut && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread">{settings.romanization === 'yale' ? jyutpingToYale(headJyut) : headJyut}</span>{#if canSpeak()}<button class="spk" onclick={() => speakReading(headJyut, 'yue', r.form)} aria-label="listen, Cantonese" title="listen (Cantonese)"><Volume2 size={15} /></button>{/if}{/if}
               </span>
             </div>
-            {#if boundKind(r) || (single && (isRadicalChar || rowUsage(r.variety)))}
+            {#if boundKind(r) || (single && headChar && (isRadicalChar || rowUsage(r.variety)))}
               <!-- tags (bound, rarely-used, radical) on their own line, indented under the readings.
-                   "rarely used" is for THIS row's language; "radical" is character-wide. -->
+                   "rarely used" is for THIS row's language; "radical" is character-wide. The character
+                   badges are gated on headChar so they don't FLASH: before the entry enriches, headChar
+                   is undefined and rowUsage would otherwise return a false "rarely used" that vanishes a
+                   beat later. Gated, they appear once with the rest of the enriched content and stay. -->
               <div class="rtagline">
                 {#if boundKind(r) === 'always'}<button class="ltag tappable" onclick={() => openBound(r)} title="only used in compounds, never as a word on its own">only in compounds</button>{:else if boundKind(r) === 'often'}<button class="ltag tappable" onclick={() => openBound(r)} title="bound in some senses; often used in compounds">often in compounds</button>{/if}
-                {#if single && isRadicalChar}<span class="ltag rad">radical</span>{/if}
-                {#if single && rowUsage(r.variety)}<span class="ltag">{rowUsage(r.variety)}</span>{/if}
+                {#if single && headChar && isRadicalChar}<span class="ltag rad">radical</span>{/if}
+                {#if single && headChar && rowUsage(r.variety)}<span class="ltag">{rowUsage(r.variety)}</span>{/if}
               </div>
             {/if}
             {#if ss.length}
@@ -854,7 +855,7 @@
         <!-- phono-semantic: which part carries the meaning vs the sound (媽 = 女 meaning + 馬 sound) -->
         <p class="comp">
           {#if comp?.idc}<IdcBox idc={comp.idc} /><span class="dim idcsep">:</span>{/if}
-          {#each roleParts as c, i}{#if i}<span class="plus">+</span>{/if}<span class="cpart"><button class="part" onclick={() => onsearch(c.ch)} title="look up {c.ch}">{c.ch}</button>{#if c.role === 'phonetic' && c.sound}<span class="cmean">sound: {pinyinMarks(c.sound)}</span>{:else if meaningOf(c.ch)}<span class="cmean">{meaningOf(c.ch)}</span>{/if}{#if roleBadge(c.role) && !(c.role === 'phonetic' && c.sound)}<span class="role role-{c.role}">{roleBadge(c.role)}</span>{/if}</span>{/each}
+          {#each roleParts as c, i}{#if i}<span class="plus">+</span>{/if}<span class="cpart"><button class="part" onclick={() => onsearch(c.ch)} title="look up {c.ch}">{c.ch}</button>{#if c.role === 'phonetic' && c.sound}<span class="crole">sound: {pinyinMarks(c.sound)}</span>{:else if c.role === 'semantic' && meaningOf(c.ch)}<span class="crole">meaning: {meaningOf(c.ch)}</span>{:else if meaningOf(c.ch)}<span class="cmean">{meaningOf(c.ch)}</span>{/if}</span>{/each}
         </p>
       {:else if decomp}
         <p class="comp">
@@ -932,7 +933,7 @@
         {#each originAccounts as acc (acc.variety)}
           <div class="oacc">
             {#if originAccounts.length > 1 || acc.script}
-              <div class="olang"><span class="ovar" lang={langTag(acc.variety)} style="font-family:{hanFont(acc.variety)}">{varietyLabel(acc.variety)}</span> <span class="ohw" lang={langTag(acc.variety)} style="font-family:{hanFont(acc.variety)}">{acc.headword}</span>{#if acc.script}<span class="oscript">{scriptShort(acc.script)}</span>{/if}</div>
+              <div class="olang"><span class="ovar" lang={langTag(acc.variety)} style="font-family:{hanFont(acc.variety)}">{varietyLabel(acc.variety)}</span> <span class="ohw" lang={langTag(acc.variety)} style="font-family:{hanFont(acc.variety)}">{#if acc.script}<span class="ftag">{scriptShort(acc.script)}</span>{/if}{acc.headword}</span></div>
             {/if}
             {#if acc.note}<p class="onote">{acc.note}</p>{/if}
             {@render etyBody(acc.text)}
@@ -1146,7 +1147,8 @@
   .olang .ovar { font-size: 0.95rem; color: var(--muted); }
   .olang .ohw { font-size: 0.95rem; color: var(--faint); }
   /* item 15: traditional/simplified tag + merge-clarifying note on an origin account */
-  .olang .oscript { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); border: 1px solid var(--border); border-radius: var(--r); padding: 0.05rem 0.3rem; }
+  /* same TC/SC tag the definition rows use, reused before the origin headword (item 152) */
+  .olang .ohw .ftag { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); margin-right: 0.18rem; vertical-align: 0.2em; }
   .onote { font-size: 0.85rem; color: var(--faint); font-style: italic; margin: 0 0 0.4rem; line-height: 1.5; }
   /* structure block - composition (what parts make it up, e.g. 森 = three 木) + a quiet stroke count */
   .cln { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 0.5rem; font-size: 0.8rem; }
@@ -1155,7 +1157,9 @@
   /* item 11 + wrap fix: flow components as inline text so each glyph stays with its own gloss and
      wraps as a unit (the gloss never drops to its own line right after the kanji). Inline flow also
      baseline-aligns the larger kanji with their latin meanings. */
-  .comp { display: block; line-height: 2; margin: 0.6rem 0 0; }
+  /* flex + align-items:center so the IDC box, the colon, and the part glosses sit on one vertical
+     centre line — the latin gloss text no longer rides high above the boxes. */
+  .comp { display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.1rem; line-height: 1.6; margin: 0.6rem 0 0; }
   .comp :global(svg) { vertical-align: middle; }
   /* each component (glyph + its gloss + role) flows as one inline unit, so the gloss never drops to a
      line of its own straight after the glyph; the unit only wraps when the line is genuinely full. */
@@ -1164,11 +1168,13 @@
   .part { font-family: var(--han); color: var(--text); background: none; border: none; padding: 0 0.1rem; font-size: 1.25rem; line-height: 1; }
   .part:hover { color: #fff; background: none; }
   .comp .dim { font-size: 0.95rem; }
-  .plus { color: var(--faint); font-family: var(--mono); }
+  .plus { color: var(--faint); font-family: var(--mono); margin: 0 0.35rem; }
   /* a component's meaning, e.g. 木 (tree) — the "explain the parts" layer */
   .cmean { color: var(--muted); font-size: 0.9rem; margin-left: -0.05rem; }
   .cmean::before { content: '('; }
   .cmean::after { content: ')'; }
+  /* role-labelled part gloss: "meaning: woman, girl" / "sound: mǎ" as plain text (no chip, no parens) */
+  .crole { color: var(--muted); font-size: 0.9rem; margin-left: 0.3rem; }
   /* phono-semantic role badge: meaning (filled) vs sound (outlined) — monochrome */
   .role { font-family: var(--mono); font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.06em; padding: 0.05rem 0.38rem; border-radius: 999px; line-height: 1.5; align-self: center; }
   .role-semantic { color: var(--bg); background: var(--muted); }
@@ -1218,9 +1224,10 @@
   .ety rt { font-size: 0.55em; color: var(--faint); font-family: var(--han); }
   .ety .kanji { background: none; border: none; padding: 0; font: inherit; color: var(--text); font-family: var(--han); }
   .ety .kanji:hover { text-decoration: underline; }
-  /* item 12: mark hanzi that are hyperlinks in the origin prose with a persistent subtle underline */
-  .ety .etylink { text-decoration: underline; text-decoration-style: dotted; text-decoration-color: var(--faint); text-underline-offset: 3px; }
-  .ety .etylink:hover { text-decoration-style: solid; text-decoration-color: var(--text); }
+  /* clickable hanzi in origin prose: a subtle chip background, NOT an underline — the dotted underline
+     is reserved for abbreviation terms (.term) and the two were too easy to confuse (item 156). */
+  .ety .etylink { text-decoration: none; background: var(--surface); border-radius: 3px; padding: 0 0.18em; }
+  .ety .etylink:hover { text-decoration: none; background: var(--border-strong); color: var(--text); }
   /* item 19: numbered ("#") Wiktionary list items */
   .etyseg.ord { margin-top: 0.3rem; }
   .ety .etynum { font-family: var(--mono); font-size: 0.8em; color: var(--faint); }

@@ -762,3 +762,61 @@ describe('soundLoanSource + soundLoanTitle - name the source language when known
     expect(t).not.toContain('from ')
   })
 })
+
+describe('linkifyHan - link Han, never Hangul (item 159)', () => {
+  it('links a Han character', () => {
+    const parts = linkifyHan('變 from 馬')
+    expect(parts.some((p) => p.v === '變' && p.link)).toBe(true)
+    expect(parts.some((p) => p.v === '馬' && p.link)).toBe(true)
+  })
+  it('does NOT link Korean Hangul (말)', () => {
+    const parts = linkifyHan('Korean 말 (mal)')
+    expect(parts.some((p) => p.link)).toBe(false)
+    expect(parts.map((p) => p.v).join('')).toBe('Korean 말 (mal)')
+  })
+  it('still links a Supplementary-plane ideograph', () => {
+    const parts = linkifyHan('component 𣥆 here') // U+23946
+    expect(parts.some((p) => p.v === '𣥆' && p.link)).toBe(true)
+  })
+})
+
+describe('etymologyTokens - residual lines + dead cross-refs (items 153, 159)', () => {
+  const flat = (text: string) =>
+    etymologyTokens(text).map((s) => s.tokens.map((t: any) => t.v ?? '').join('')).join('\n')
+  it('drops a line that is a lone marker char', () => {
+    expect(flat('From 馬\n:\nmeaning horse')).toBe('From 馬\nmeaning horse')
+  })
+  it('drops a lone stray letter line ("h")', () => {
+    expect(flat('Pictogram of a horse\nh\nmore prose')).toBe('Pictogram of a horse\nmore prose')
+  })
+  it('keeps a single CJK character line', () => {
+    expect(flat('compare\n馬\nhorse')).toBe('compare\n馬\nhorse')
+  })
+  it('strips a trailing "More at *márkos." cross-reference', () => {
+    const out = flat('From PIE *márkos. More at *márkos.')
+    expect(out).not.toContain('More at')
+    expect(out).toContain('*márkos')
+  })
+})
+
+describe('etymology abbreviations - consistent + short historical names (item 158)', () => {
+  const abbrs = (text: string) =>
+    etymologyTokens(text)
+      .flatMap((s) => s.tokens)
+      .filter((t: any) => t.t === 'abbr')
+  it('tags cognate regardless of case (Cognate / cognate / cognates)', () => {
+    expect(abbrs('Cognate with 牛').some((t: any) => t.v === 'Cognate')).toBe(true)
+    expect(abbrs('a cognate of X').some((t: any) => t.v === 'cognate')).toBe(true)
+    expect(abbrs('these cognates').some((t: any) => t.v === 'cognates')).toBe(true)
+  })
+  it('shortens "Nihon Shoki of 720 CE" to "Nihon Shoki" with a tooltip', () => {
+    const t: any = abbrs('Attested in the Nihon Shoki of 720 CE.').find((x: any) => x.title.includes('Nihon Shoki'))
+    expect(t).toBeTruthy()
+    expect(t.v).toBe('Nihon Shoki')
+    expect(t.title).toContain('720')
+  })
+  it('keeps all-caps initialisms case-sensitive (OC tagged, lowercase oc not)', () => {
+    expect(abbrs('From OC *mraːʔ').some((t: any) => t.v === 'OC')).toBe(true)
+    expect(abbrs('the oc shop').some((t: any) => t.v === 'oc')).toBe(false)
+  })
+})
