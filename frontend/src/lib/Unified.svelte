@@ -21,6 +21,7 @@
   import { settings } from './settings.svelte'
   import ScriptForms from './ScriptForms.svelte'
   import IdcBox from './IdcBox.svelte'
+  import Glyph from './Glyph.svelte'
   import { AlertTriangle, Volume2, ArrowLeftRight } from '@lucide/svelte'
 
   // a reading shown in the user's chosen romanisation: pinyin tone-marks for 中, jyutping or Yale for 粵
@@ -738,7 +739,7 @@
     <!-- Block A - the definition: the typed glyph across every language that writes it, co-equally -->
     <section class="def">
       <div class="glyphrow">
-        <h2 class="glyph" lang={langTag(headVariety)} style="font-family:{hanFont(headVariety)}">{head}</h2>
+        <h2 class="glyph"><Glyph ch={head} font={hanFont(headVariety)} lang={langTag(headVariety)} /></h2>
         {#if scCounterpart}
           <button class="scswitch" onclick={() => onsearch(scCounterpart.to)} title="switch to the {scCounterpart.label} form ({scCounterpart.to})" aria-label="switch to the {scCounterpart.label} form"><ArrowLeftRight size={17} /></button>
         {/if}
@@ -756,12 +757,12 @@
               <span class="dvar">{varietyLabel(r.variety)}</span>
               {#if r.variety === 'zh'}
                 {@const zp = zhPair(r)}
-                {#if zp.same}<span class="dform" lang={langTag(r.variety)} style="font-family:{hanFont(r.variety)}"><span class="ftag">TC/SC</span>{zp.trad}</span>{:else}<span class="dform"><span class="ftag">TC</span><span lang="zh-Hant" style="font-family:var(--han-tc)">{zp.trad}</span><span class="fsep">·</span><span class="ftag">SC</span><span lang="zh-Hans" style="font-family:var(--han)">{zp.simp}</span></span>{/if}
+                {#if zp.same}<span class="dform"><span class="ftag">TC/SC</span><Glyph ch={zp.trad} font={hanFont(r.variety)} lang={langTag(r.variety)} /></span>{:else}<span class="dform"><span class="ftag">TC</span><Glyph ch={zp.trad} font="var(--han-tc)" lang="zh-Hant" /><span class="fsep">·</span><span class="ftag">SC</span><Glyph ch={zp.simp} font="var(--han)" lang="zh-Hans" /></span>{/if}
               {:else if r.alt}
-                <span class="dform" lang={langTag(r.variety)} style="font-family:{hanFont(r.variety)}"><span class="ftag">{formTag(r.formScript)}</span>{r.form}<span class="fsep">·</span><span class="ftag">{formTag(r.altScript)}</span>{r.alt}</span>
+                <span class="dform"><span class="ftag">{formTag(r.formScript)}</span><Glyph ch={r.form} font={hanFont(r.variety)} lang={langTag(r.variety)} /><span class="fsep">·</span><span class="ftag">{formTag(r.altScript)}</span><Glyph ch={r.alt} font={hanFont(r.variety)} lang={langTag(r.variety)} /></span>
               {:else if r.form !== head}
                 <!-- the language writes the same character with a different glyph (Japan: 电 → 電) -->
-                <span class="dform" lang={langTag(r.variety)} style="font-family:{hanFont(r.variety)}">{r.form}</span>
+                <span class="dform"><Glyph ch={r.form} font={hanFont(r.variety)} lang={langTag(r.variety)} /></span>
               {/if}
               <!-- the readings (+ Cantonese + speaker) ride on their own full-width line for long
                    forms so a wide idiom can't squish the romanisation down to a sliver (item 147). -->
@@ -897,7 +898,7 @@
               <span class="body">
                 <span class="top">
                   <span class="lvar"><span class="vh">{charLangs(c).join(' ')}</span></span>
-                  <span class="form" lang={langTag(headVariety)} style="font-family:{hanFont(headVariety)}">{glyph}</span>
+                  <span class="form"><Glyph ch={glyph} font={hanFont(headVariety)} lang={langTag(headVariety)} /></span>
                   {#if charReading(c)}<span class="read">{charReading(c)}</span>{/if}
                 </span>
                 {#if firstSense(c.gloss_en)}<span class="gloss">{firstSense(c.gloss_en)}</span>{/if}

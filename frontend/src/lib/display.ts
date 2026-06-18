@@ -194,6 +194,15 @@ export function scriptShort(script: string): string {
     .join(' ')
 }
 
+// GlyphWiki vector URL for a single codepoint (item 148): GlyphWiki names a glyph "u" + lowercase
+// hex. Returns null for empty / multi-codepoint input. Used as the tofu fallback for rare ideographs.
+export function glyphWikiUrl(ch: string): string | null {
+  if (!ch || [...ch].length !== 1) return null
+  const cp = ch.codePointAt(0)
+  if (!cp) return null
+  return `https://glyphwiki.org/glyph/u${cp.toString(16)}.svg`
+}
+
 // The traditional/simplified counterpart to jump to from the header glyph (item 161): given the
 // character's script family and the viewed form, return the OTHER Chinese script's form, or null when
 // there is no genuine TC/SC pair (identical forms, kokuji, shinjitai-only, z-variants).

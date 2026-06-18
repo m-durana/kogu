@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle, reformLabel, scriptChangeNote, scriptChangeFromForms, scSwitchTarget, SEARCH_PLACEHOLDERS, placeholderAt, isAlwaysBound, jyutpingToYale } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle, reformLabel, scriptChangeNote, scriptChangeFromForms, scSwitchTarget, glyphWikiUrl, SEARCH_PLACEHOLDERS, placeholderAt, isAlwaysBound, jyutpingToYale } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -850,5 +850,23 @@ describe('scSwitchTarget - TC/SC header switch (item 161)', () => {
       { form: '広', script: 'shinjitai', reform_id: 'jp-toyo', reform_label: 'Tōyō shinjitai', is_orthodox: false },
     ])
     expect(scSwitchTarget(ja, '広')).toBeNull()
+  })
+})
+
+describe('glyphWikiUrl - tofu fallback target (item 148)', () => {
+  it('builds the u<hex> SVG url for a BMP char', () => {
+    expect(glyphWikiUrl('馬')).toBe('https://glyphwiki.org/glyph/u99ac.svg')
+  })
+  it('builds it for a Supplementary-plane (Ext-G) char', () => {
+    expect(glyphWikiUrl('𰀁')).toBe('https://glyphwiki.org/glyph/u30001.svg') // U+30001
+  })
+  it('uses lowercase hex', () => {
+    expect(glyphWikiUrl('𣥆')).toBe('https://glyphwiki.org/glyph/u23946.svg') // U+23946
+  })
+  it('returns null for a multi-codepoint string', () => {
+    expect(glyphWikiUrl('馬上')).toBeNull()
+  })
+  it('returns null for empty input', () => {
+    expect(glyphWikiUrl('')).toBeNull()
   })
 })
