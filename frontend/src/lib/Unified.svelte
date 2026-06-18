@@ -17,7 +17,7 @@
 <script lang="ts">
   import type { CharInfo, Entry, Hit, ReadingKV, Variety } from './types'
   import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, isAlwaysBound, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle, scriptShort, scriptChangeNote, scriptChangeFromForms, jyutpingToYale } from './display'
-  import { speak, canSpeak } from './speech'
+  import { speakReading, canSpeak } from './speech'
   import { settings } from './settings.svelte'
   import ScriptForms from './ScriptForms.svelte'
   import IdcBox from './IdcBox.svelte'
@@ -762,13 +762,14 @@
                 {#if r.variety === 'ja' && r.synthetic && jaReadItems.length}
                   <!-- a SYNTHETIC ja row (kanji used only in compounds) shows the character's full on/kun
                        (kana + romaji), clamped to one line with a "+". A REAL ja word-row shows its OWN
-                       reading instead (so 日's ひ and にち rows don't both show the whole list). -->
-                  <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe>{#each jaReadItems as it, i}{#if i}<span class="rsep">·</span>{/if}{it.main}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{jaReadOpen ? '−' : '+'}</button>{/if}
+                       reading instead (so 日's ひ and にち rows don't both show the whole list). Each
+                       reading is tappable so every on/kun can be heard, not just the default one. -->
+                  <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe>{#each jaReadItems as it, i}{#if i}<span class="rsep">·</span>{/if}<button class="rtap" onclick={() => speakReading(it.main, 'ja')} title="listen to this reading">{it.main}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}</button>{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{jaReadOpen ? '−' : '+'}</button>{/if}
                 {:else if r.reading}
                   <span class="dread">{dispReading(r.variety, r.reading)}</span>
+                  {#if canSpeak()}<button class="spk" onclick={() => speakReading(r.reading, r.variety, r.form)} aria-label="listen" title="listen"><Volume2 size={15} /></button>{/if}
                 {/if}
-                {#if r.variety === 'zh' && headJyut && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread">{settings.romanization === 'yale' ? jyutpingToYale(headJyut) : headJyut}</span>{/if}
-                {#if canSpeak()}<button class="spk" onclick={() => speak(r.form, r.variety)} aria-label="listen" title="listen"><Volume2 size={15} /></button>{/if}
+                {#if r.variety === 'zh' && headJyut && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread">{settings.romanization === 'yale' ? jyutpingToYale(headJyut) : headJyut}</span>{#if canSpeak()}<button class="spk" onclick={() => speakReading(headJyut, 'yue', r.form)} aria-label="listen, Cantonese" title="listen (Cantonese)"><Volume2 size={15} /></button>{/if}{/if}
               </span>
             </div>
             {#if boundKind(r) || (single && (isRadicalChar || rowUsage(r.variety)))}
@@ -1045,6 +1046,9 @@
   .drow2 { display: inline-flex; align-items: baseline; gap: 0.7rem; min-width: 0; }
   .drow2.wide { flex-basis: 100%; margin-top: 0.1rem; }
   .dread { font-family: var(--mono); font-size: 0.9rem; color: var(--muted); }
+  /* a tappable reading (each ja on/kun): looks like the surrounding reading text, plays on tap. */
+  .rtap { font: inherit; color: inherit; background: none; border: none; padding: 0; cursor: pointer; }
+  .rtap:hover { color: var(--text); text-decoration: underline; text-underline-offset: 0.18em; }
   /* tight reading separator (the old "  ·  " ate too much space) + romaji gloss + "+N more" toggle */
   .dread .rsep { color: var(--faint); margin: 0 0.28rem; }
   /* "+" / "−" toggle, sized to match the readings so it reads as part of the line, not a tiny tag */
