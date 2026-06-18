@@ -392,6 +392,12 @@ describe('etymologyTokens - delineate merged statements + jargon tooltips + Han 
     expect(abbr).toBeTruthy()
     expect((abbr as { v: string }).v).toBe('Phono-semantic compound')
   })
+  it('glosses newly-added technical terms (Tocharian, rendaku)', () => {
+    const t1 = etymologyTokens('Borrowed from Tocharian B wänt-.')[0].tokens
+    expect(t1.some((t) => t.t === 'abbr' && t.v === 'Tocharian B')).toBe(true)
+    const t2 = etymologyTokens('shows rendaku here')[0].tokens
+    expect(t2.some((t) => t.t === 'abbr' && t.v === 'rendaku')).toBe(true)
+  })
   it('keeps reconstructions faint and Han runs tappable', () => {
     const toks = etymologyTokens('semantic 亻 (OC *maŋ) here')[0].tokens
     expect(toks.some((t) => t.t === 'recon')).toBe(true)
@@ -605,9 +611,9 @@ describe('linkifyHan - Ext-B (SIP) glyphs link instead of falling through as tof
 // ── #14 / #86: origin sectioning — bullet depth, no fake numbering, marker cleanup ──
 describe('etymologyTokens - Wiktionary bullet sub-points + leaked-marker cleanup', () => {
   it('a line led by "*" becomes depth 1 with the marker stripped', () => {
-    const segs = etymologyTokens('Two theories:\n* Same etymon as 仁')
+    const segs = etymologyTokens('Two theories:\n* Same source as 仁')
     expect(segs[1].depth).toBe(1)
-    expect(segs[1].tokens[0]).toEqual({ t: 'text', v: 'Same etymon as ' })
+    expect(segs[1].tokens[0]).toEqual({ t: 'text', v: 'Same source as ' })
   })
   it('"**" becomes depth 2', () => {
     const segs = etymologyTokens('lead\n** deeply nested point')
