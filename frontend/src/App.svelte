@@ -5,7 +5,7 @@
   import Unified from './lib/Unified.svelte'
   import Pad from './lib/Pad.svelte'
   import Ocr from './lib/Ocr.svelte'
-  import { Search, X, Brush, Camera, Bookmark, Clock, Share2, Trash2, ArrowRight } from '@lucide/svelte'
+  import { Search, X, Brush, Camera, Bookmark, Clock, Share2, Trash2, ArrowRight, Download } from '@lucide/svelte'
   import { onMount } from 'svelte'
   import { getSaved, getHistory, isSaved, toggleSaved, recordHistory, clearHistory, type SavedItem } from './lib/store'
 
@@ -151,6 +151,12 @@
   // rotating placeholder: a different example every 2s while the field is empty and unfocused
   let phIndex = $state(0)
   const placeholder = $derived(placeholderAt(phIndex))
+  // install-as-web-app
+  let deferredPrompt = $state<any>(null)
+  let isStandalone = $state(false)
+  let isIOS = $state(false)
+  let showIosHelp = $state(false)
+  const canInstall = $derived(!isStandalone && (deferredPrompt !== null || isIOS))
 
   type NavMode = 'push' | 'replace' | 'none'
   const resultsUrl = (t: string) => (t ? `?q=${encodeURIComponent(t)}` : location.pathname)
@@ -270,6 +276,8 @@
     clearTimeout(sugTimer)
     suggestions = []
     focused = false
+    panel = 'none' // close the draw pad / photo panel when committing the search (item 1)
+    ocrFile = null
     inputEl?.blur()
     doSearch(q)
   }
@@ -344,11 +352,35 @@
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
     let ph: ReturnType<typeof setInterval> | undefined
     if (!reduce) ph = setInterval(() => (phIndex += 1), 2000)
+    // install-as-web-app (item 2): Android/Chrome fire beforeinstallprompt; iOS has no API (instruct).
+    isStandalone =
+      window.matchMedia?.('(display-mode: standalone)').matches || (navigator as any).standalone === true
+    isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream
+    const onBip = (e: Event) => {
+      e.preventDefault()
+      deferredPrompt = e
+    }
+    window.addEventListener('beforeinstallprompt', onBip)
     return () => {
       window.removeEventListener('popstate', onPop)
+      window.removeEventListener('beforeinstallprompt', onBip)
       if (ph) clearInterval(ph)
     }
   })
+
+  async function installApp() {
+    if (deferredPrompt) {
+      deferredPrompt.prompt()
+      try {
+        await deferredPrompt.userChoice
+      } catch {
+        /* dismissed */
+      }
+      deferredPrompt = null
+    } else if (isIOS) {
+      showIosHelp = !showIosHelp
+    }
+  }
 
   // draw: toggle the inline pad. photo: trigger the OS-native picker (Photo Library / Camera /
   // Files menu on iOS) right here — no separate page. The image opens in an inline panel.
@@ -605,6 +637,10 @@
       <div class="about">
         <p class="introhw"><span class="intromark">古古</span> <span class="introword">Kogu</span></p>
         <p class="intropos"><span class="intropron">/ko.gu/</span> <span class="introtag">noun</span></p>
+        {#if canInstall}
+          <button class="installbtn" onclick={installApp}><Download size={15} /> Install as Web App</button>
+          {#if showIosHelp && isIOS}<p class="ioshelp">Tap the Share icon in your browser, then choose "Add to Home Screen".</p>{/if}
+        {/if}
         <p class="introgloss">A dictionary for the living Han script. One character or word is shown across <b>中文</b> (Mandarin), <b>粵語</b> (Cantonese), and <b>日本語</b> (Japanese) at once, so you can see how the same writing is read and used in each, and how the reforms pulled the forms apart.</p>
 
         <h2 class="abh">On each page</h2>
@@ -767,6 +803,10 @@
   .intropos { margin: 0.35rem 0 1rem; display: flex; align-items: baseline; gap: 0.6rem; }
   .intropron { font-family: var(--mono); font-size: 0.95rem; color: var(--faint); }
   .introtag { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); }
+  /* install-as-web-app button (item 2) */
+  .installbtn { display: inline-flex; align-items: center; gap: 0.4rem; margin: 0.2rem 0 1rem; font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text); background: none; border: 1px solid var(--border-strong); border-radius: var(--r); padding: 0.4rem 0.7rem; }
+  .installbtn:hover { background: var(--surface); }
+  .ioshelp { font-size: 0.88rem; line-height: 1.5; color: var(--muted); margin: -0.6rem 0 1rem; }
   .introgloss { font-family: var(--sans); font-size: 1.05rem; line-height: 1.7; color: var(--text); margin: 0 0 1.6rem; }
   .introgloss b, .ablist b, .absrc b { font-family: var(--han); font-weight: 500; }
   .abh { font-family: var(--mono); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--faint); margin: 1.6rem 0 0.6rem; }

@@ -289,13 +289,20 @@ const ARRANGEMENT: Record<string, string> = {
   '⿻': 'overlapping',
 }
 const IDC_RE = /[⿰-⿿]/
+// a real component leaf is a Han glyph or a CJK radical; cjkvi-ids also uses placeholder symbols
+// (circled numbers ①-⑩ U+2460-24FF, etc.) for components it can't encode (華 = ⿱艹⑦). Those must
+// not render as "⑦".
+const COMPONENT_LEAF = /\p{Script=Han}|[⺀-⻿⼀-⿟々〇]/u
 export function describeIds(ids: string | null, self = ''): IdsInfo | null {
   if (!ids) return null
   const clean = ids.replace(/\[[A-Z]+\]/g, '')
   const firstIdc = [...clean].find((c) => IDC_RE.test(c))
   const arrangement = firstIdc ? ARRANGEMENT[firstIdc] ?? null : null
   // leaf components = everything that isn't an IDC operator or whitespace
-  const leaves = [...clean].filter((c) => c.trim() && !IDC_RE.test(c))
+  const rawLeaves = [...clean].filter((c) => c.trim() && !IDC_RE.test(c))
+  const leaves = rawLeaves.filter((c) => COMPONENT_LEAF.test(c))
+  // a placeholder leaf was dropped → the decomposition is incomplete; don't show a misleading partial
+  if (leaves.length < rawLeaves.length) return null
   // atomic / undecomposable (ids is just the character itself or empty) → nothing to explain
   if (!leaves.length || (leaves.length === 1 && leaves[0] === self)) return null
   const counts = new Map<string, number>()
@@ -379,6 +386,12 @@ export function meaningfulGlossCount(glosses: string[]): number {
 const BOUND_FORM_RE = /\(\s*(?:meaningless\s+)?bound form\s*\)/i
 export function isBoundForm(glosses: string[]): boolean {
   return glosses.some((g) => BOUND_FORM_RE.test(g))
+}
+/** True only when EVERY meaningful sense is bound — a genuinely always-bound morpheme. 日 has both
+ * bound senses ("(bound form) sun") and free senses ("day"), so it is NOT always-bound; 的/號 are. */
+export function isAlwaysBound(glosses: string[]): boolean {
+  const real = glosses.filter(Boolean)
+  return real.length > 0 && real.every((g) => BOUND_FORM_RE.test(g))
 }
 
 export type GlossPart = { v: string; link?: boolean }

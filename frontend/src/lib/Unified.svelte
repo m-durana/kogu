@@ -16,7 +16,7 @@
 
 <script lang="ts">
   import type { CharInfo, Entry, Hit, ReadingKV, Variety } from './types'
-  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle, scriptShort, scriptChangeNote, scriptChangeFromForms } from './display'
+  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, isAlwaysBound, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle, scriptShort, scriptChangeNote, scriptChangeFromForms } from './display'
   import ScriptForms from './ScriptForms.svelte'
   import IdcBox from './IdcBox.svelte'
   import { AlertTriangle } from '@lucide/svelte'
@@ -550,6 +550,20 @@
     const n = headChar?.used_by_variety?.[variety]
     return n === undefined ? '' : usageLabel(n)
   }
+  // a single kanji that forms native words via okurigana (乗 → 乗る, 化 → 化ける) is a WORD STEM, not a
+  // bound morpheme — its kun readings carry an okurigana split (の.る). Used to avoid mis-tagging the
+  // synthetic Japanese row "bound" (item 4: 乗 is effectively a word, unlike 津 which is truly bound).
+  const headHasOkurigana = $derived(
+    (headChar?.readings ?? []).some((r) => r.kind === 'kunyomi' && r.value.includes('.')),
+  )
+  // bound classification for a row: 'always' (only ever in compounds), 'often' (bound in some senses
+  // but free in others, e.g. 日), or null (not bound / a word stem).
+  function boundKind(r: Row): 'always' | 'often' | null {
+    if (r.synthetic) return headHasOkurigana ? null : 'always'
+    if (isAlwaysBound(r.glosses)) return 'always'
+    if (isBoundForm(r.glosses)) return 'often'
+    return null
+  }
 
   // one compact reading for a component character in the breakdown row — primary pinyin (tone-marked),
   // else jyutping, else the first few kana on/kun. Keeps the row consistent with the word rows.
@@ -740,11 +754,11 @@
               {/if}
               {#if r.variety === 'zh' && headJyut && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread">{headJyut}</span>{/if}
             </div>
-            {#if (isBoundForm(r.glosses) || r.synthetic) || (single && (isRadicalChar || rowUsage(r.variety)))}
+            {#if boundKind(r) || (single && (isRadicalChar || rowUsage(r.variety)))}
               <!-- tags (bound, rarely-used, radical) on their own line, indented under the readings.
                    "rarely used" is for THIS row's language; "radical" is character-wide. -->
               <div class="rtagline">
-                {#if isBoundForm(r.glosses) || r.synthetic}<button class="btag" onclick={() => openBound(r)} title="bound form: only used in compounds">bound</button>{/if}
+                {#if boundKind(r) === 'always'}<button class="btag" onclick={() => openBound(r)} title="bound form: only used in compounds">bound</button>{:else if boundKind(r) === 'often'}<button class="btag soft" onclick={() => openBound(r)} title="bound in some senses; often used in compounds">often in compounds</button>{/if}
                 {#if single && isRadicalChar}<span class="ltag rad">radical</span>{/if}
                 {#if single && rowUsage(r.variety)}<span class="ltag">{rowUsage(r.variety)}</span>{/if}
               </div>
@@ -945,7 +959,9 @@
       {#if showWords}
         <div class="chips">
           {#each entry.appears_in as c (c.ch)}
-            <button class="chip" onclick={() => onsearch(c.ch)} title={c.gloss ?? ''} lang={langTag(headVariety)} style="font-family:{hanFont(headVariety)}">{c.ch}</button>
+            <!-- rare ext-plane glyphs may render as tofu on devices without the font; the codepoint in
+                 the tooltip + a subtle marker keep them identifiable instead of a blank box (item 5) -->
+            <button class="chip" class:rare={c.rare} onclick={() => onsearch(c.ch)} title={c.rare ? `${c.gloss ?? ''} (U+${c.ch.codePointAt(0)?.toString(16).toUpperCase()})` : (c.gloss ?? '')} lang={langTag(headVariety)} style="font-family:{hanFont(headVariety)}">{c.ch}</button>
           {/each}
         </div>
       {/if}
@@ -1022,6 +1038,9 @@
   /* item 16: make the "bound" tag clearly visible (it marks a morpheme that only lives in compounds) */
   .btag { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 999px; padding: 0.08rem 0.5rem; line-height: 1.4; cursor: pointer; align-self: center; }
   .btag:hover { color: var(--bg); border-color: var(--text); background: var(--text); }
+  /* "often in compounds" (bound in some senses only) reads softer than the absolute "bound" */
+  .btag.soft { color: var(--faint); background: none; border-color: var(--border); text-transform: none; letter-spacing: 0; }
+  .btag.soft:hover { color: var(--text); background: var(--surface); border-color: var(--border-strong); }
 
   /* bound-form popup — minimal monochrome dialog */
   .mbg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 50; }
@@ -1133,6 +1152,7 @@
   .wglabel { font-family: var(--han); font-size: 0.9rem; color: var(--muted); margin: 0 0 0.5rem; letter-spacing: 0.02em; }
   .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
   .chip { display: inline-flex; align-items: center; gap: 0.35rem; font-family: var(--han); font-size: 1.05rem; padding: 0.25rem 0.55rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); }
+  .chip.rare { border-style: dashed; color: var(--muted); }
   .chip:hover { border-color: var(--border-strong); }
 
   .origin { margin-top: 1.2rem; }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle, reformLabel, scriptChangeNote, scriptChangeFromForms, SEARCH_PLACEHOLDERS, placeholderAt } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle, reformLabel, scriptChangeNote, scriptChangeFromForms, SEARCH_PLACEHOLDERS, placeholderAt, isAlwaysBound } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -509,6 +509,23 @@ describe('isBoundForm - detect a bound-morpheme marker across a row\'s glosses',
     expect(isBoundForm(['dragon', 'surname Long'])).toBe(false)
     expect(isBoundForm([])).toBe(false)
     expect(isBoundForm(['the bound copy of a book'])).toBe(false) // "bound" but not the marker
+  })
+  // item 4: only "always bound" when EVERY sense is bound (日 is bound + free, so not always-bound)
+  it('isAlwaysBound: true only when every sense is bound', () => {
+    expect(isAlwaysBound(['(bound form) X', '(bound form) Y'])).toBe(true)
+    expect(isAlwaysBound(['(bound form) sun', 'day', 'day of the month'])).toBe(false) // 日
+    expect(isAlwaysBound(['mountain'])).toBe(false)
+    expect(isAlwaysBound([])).toBe(false)
+  })
+})
+
+describe('describeIds - drops cjkvi-ids placeholder leaves (item 3)', () => {
+  it('returns null when the IDS has an unencodable placeholder (華 = ⿱艹⑦)', () => {
+    expect(describeIds('⿱艹⑦', '華')).toBeNull()
+  })
+  it('still decomposes a normal IDS', () => {
+    const r = describeIds('⿰木木', '林')
+    expect(r?.parts).toEqual([{ component: '木', count: 2 }])
   })
 })
 
