@@ -228,40 +228,53 @@ export function reformLabel(id: string | null | undefined): string | null {
   return id ? REFORM_LABEL[id] ?? null : null
 }
 
+const EDGE_KIND: Record<string, string> = {
+  shinjitai: 'Japanese shinjitai',
+  simplification: 'simplified Chinese form',
+  'z-variant': 'variant form',
+}
 // A full-sentence explanation of a script change for the structure section (item 14): the two forms
-// carry the same meaning, and the reason for the divergence (reform + year). Replaces the bare
-// "PRC simplification" caption. Returns null when the glyph has no orthodox parent (nothing changed).
+// carry the same meaning, and the reason for the divergence (reform + year). A glyph can be BOTH a
+// Japanese shinjitai AND a PRC simplification of the same parent (萬 → 万) — say it's both, so it never
+// reads as if Chinese took the form from Japanese. Returns null when there's no orthodox parent.
 export function scriptChangeNote(head: string, variants: VariantEdge[]): string | null {
-  const v = variants[0]
-  if (!v) return null
-  const kind =
-    v.edge_type === 'shinjitai'
-      ? 'shinjitai (Japanese) form'
-      : v.edge_type === 'simplification'
-        ? 'simplified form'
-        : 'variant form'
-  const label = reformLabel(v.reform)
-  const year = v.reform_year ? ` (${v.reform_year})` : ''
-  const reason = label ? `, from the ${label}${year}` : ''
-  return `${v.parent} and ${head} carry the same meaning; ${head} is the ${kind} of ${v.parent}${reason}.`
+  if (!variants.length) return null
+  const parent = variants[0].parent
+  const same = variants.filter((v) => v.parent === parent)
+  const kinds = [...new Set(same.map((v) => EDGE_KIND[v.edge_type] ?? 'variant form'))]
+  const reforms = [
+    ...new Set(
+      same
+        .map((v) => {
+          const l = reformLabel(v.reform)
+          return l ? `${l}${v.reform_year ? ` (${v.reform_year})` : ''}` : null
+        })
+        .filter((x): x is string => !!x),
+    ),
+  ]
+  const which = kinds.length > 1 ? `both the ${kinds.join(' and the ')}` : `the ${kinds[0]}`
+  const reason = reforms.length ? `, from the ${reforms.join(' and the ')}` : ''
+  return `${parent} and ${head} carry the same meaning; ${head} is ${which} of ${parent}${reason}.`
 }
 
 const BRANCH_KIND: Record<string, string> = {
-  simplified: 'simplified form',
-  shinjitai: 'shinjitai (Japanese) form',
+  simplified: 'simplified Chinese form',
+  shinjitai: 'Japanese shinjitai',
   'z-variant': 'variant form',
 }
 // Same explanation as scriptChangeNote, but built from the forms strip so it also appears when the
 // ORTHODOX glyph is the one on screen (searching 汉 resolves to the traditional 漢 lexeme, whose own
-// variant-edges are empty; its simplified/shinjitai children live on the strip instead). Uses the
-// per-branch reform_label (no year) since branches don't carry the reform year.
+// variant-edges are empty; its simplified/shinjitai children live on the strip instead).
 export function scriptChangeFromForms(sf: ScriptForms | null): string | null {
   if (!sf || sf.is_kokuji) return null
   const others = sf.branches.filter((b: FormBranch) => !b.is_orthodox)
   if (!others.length) return null
   const clauses = others.map((b) => {
-    const kind = BRANCH_KIND[b.script.split('+')[0]] ?? 'variant form'
-    return `${b.form} is the ${kind}${b.reform_label ? ` (${b.reform_label})` : ''}`
+    // a glyph can be BOTH a shinjitai AND a PRC simplification of the same parent (萬 → 万). Say it's
+    // both, so it never reads as if one script borrowed the form from the other.
+    const kinds = b.script.split('+').map((s) => BRANCH_KIND[s] ?? 'variant form')
+    const which = kinds.length > 1 ? `both the ${kinds.join(' and the ')}` : `the ${kinds[0]}`
+    return `${b.form} is ${which}${b.reform_label ? ` (${b.reform_label})` : ''}`
   })
   return `${sf.orthodox} and ${others.length > 1 ? 'its variants' : others[0].form} carry the same meaning; ${clauses.join('; ')}.`
 }

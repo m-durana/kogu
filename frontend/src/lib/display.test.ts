@@ -496,7 +496,7 @@ describe('reformLabel / scriptChangeNote - item 14 script-change explanation', (
       { parent: '漢', edge_type: 'simplification', reform: 'opencc', reform_name: 'OpenCC', reform_year: null },
     ])!
     expect(s).toContain('carry the same meaning')
-    expect(s).toContain('simplified form of 漢')
+    expect(s).toContain('simplified Chinese form of 漢')
     expect(s).toContain('PRC simplification')
     expect(s).not.toContain('—') // no em dashes
   })
@@ -511,8 +511,22 @@ describe('reformLabel / scriptChangeNote - item 14 script-change explanation', (
     }
     const s = scriptChangeFromForms(sf)!
     expect(s).toContain('carry the same meaning')
-    expect(s).toContain('汉 is the simplified form')
+    expect(s).toContain('汉 is the simplified Chinese form')
     expect(s).toContain('PRC simplification')
+  })
+  it('says a dual shinjitai+simplified glyph is BOTH (萬 → 万), not one from the other', () => {
+    const sf = {
+      orthodox: '萬',
+      is_kokuji: false,
+      branches: [
+        { form: '萬', script: 'traditional', reform_id: null, reform_label: null, is_orthodox: true },
+        { form: '万', script: 'shinjitai+simplified', reform_id: null, reform_label: 'Tōyō shinjitai · PRC simplification', is_orthodox: false },
+      ],
+    }
+    const s = scriptChangeFromForms(sf)!
+    expect(s).toContain('万 is both the')
+    expect(s).toContain('Japanese shinjitai')
+    expect(s).toContain('simplified Chinese form')
   })
   it('returns null from the forms strip for a kokuji or a lone orthodox form', () => {
     expect(scriptChangeFromForms({ orthodox: '働', is_kokuji: true, branches: [] })).toBeNull()
@@ -524,7 +538,7 @@ describe('reformLabel / scriptChangeNote - item 14 script-change explanation', (
     const s = scriptChangeNote('広', [
       { parent: '廣', edge_type: 'shinjitai', reform: 'jp-toyo', reform_name: 'Tōyō', reform_year: 1946 },
     ])!
-    expect(s).toContain('shinjitai (Japanese) form of 廣')
+    expect(s).toContain('Japanese shinjitai of 廣')
     expect(s).toContain('(1946)')
   })
 })
