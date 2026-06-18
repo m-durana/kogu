@@ -276,6 +276,7 @@ const W_VARIANT: f64 = 0.85;
 const W_READING: f64 = 0.72;
 const W_READING_PREFIX: f64 = 0.55; // as-you-type prefix (たべ→たべる); below an exact reading
 const W_PARTIAL: f64 = 0.45; // a dictionary word found as a substring of an unresolved query (scaled by coverage)
+const W_WILDCARD: f64 = 0.5; // flat base weight for a wildcard hit; the freq factor orders the tier
 // frequency is a gentle ADDITIVE tiebreak, never a multiplier: the old `weight * (1 + freq)` let a
 // frequent fringe word (freq→2× boost) outrank an exact match. Additive + small keeps the match tier
 // dominant (an exact reading always beats a prefix; an exact sense always beats an incidental one).
@@ -329,7 +330,8 @@ pub fn suggest(conn: &Connection, q: &str, limit: usize) -> rusqlite::Result<Sug
     let cap = limit.clamp(1, 20);
     let mut out: Vec<SuggestItem> = Vec::new();
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
-    if q.is_empty() {
+    // don't run scans for a half-typed wildcard; the user commits it with Enter (→ search()).
+    if q.is_empty() || is_wildcard(q) {
         return Ok(SuggestResponse { query: q.to_string(), suggestions: out });
     }
 
@@ -389,6 +391,63 @@ pub fn suggest(conn: &Connection, q: &str, limit: usize) -> rusqlite::Result<Sug
     Ok(SuggestResponse { query: q.to_string(), suggestions: out })
 }
 
+/// True if the query carries a wildcard token (`*` / `?`, incl. the fullwidth IME variants).
+pub fn is_wildcard(q: &str) -> bool {
+    q.chars().any(|c| matches!(c, '*' | '?' | '＊' | '？'))
+}
+
+/// Wildcard search over the written form: `*` = any run of characters, `?` = exactly one. Uses GLOB
+/// (case-sensitive, so leading-literal patterns like 你* use the surface_form.form index; LIKE is
+/// case-insensitive and would full-scan). Frequency-ranked, returned as a flat list.
+fn wildcard_search(
+    conn: &Connection,
+    q: &str,
+    pref_script: Option<&str>,
+    limit: usize,
+) -> rusqlite::Result<SearchResponse> {
+    // normalise fullwidth ＊／？ → ASCII; wrap a literal '[' as GLOB's [[] (GLOB has no ESCAPE clause)
+    let mut pat = String::with_capacity(q.len() + 2);
+    let mut literals = 0usize;
+    for c in q.chars() {
+        match c {
+            '*' | '＊' => pat.push('*'),
+            '?' | '？' => pat.push('?'),
+            '[' => pat.push_str("[[]"),
+            _ => {
+                pat.push(c);
+                literals += 1;
+            }
+        }
+    }
+    // a pattern with no literal characters (just * / ?) would dump the corpus — refuse it.
+    if literals == 0 {
+        return Ok(SearchResponse {
+            query: q.to_string(),
+            classified_as: "wildcard".to_string(),
+            results: vec![],
+        });
+    }
+    let mut stmt =
+        conn.prepare("SELECT DISTINCT lexeme_id FROM surface_form WHERE form GLOB ?1 LIMIT 800")?;
+    let ids: Vec<i64> = stmt.query_map([&pat], |r| r.get(0))?.collect::<Result<_, _>>()?;
+    let mut hits: Vec<Hit> = Vec::new();
+    for id in ids {
+        if let Some(hit) = build_hit(conn, id, "wildcard", W_WILDCARD, pref_script)? {
+            hits.push(hit);
+        }
+    }
+    // frequency-first (score embeds the freq factor), then deterministic tiebreaks
+    hits.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(meaningful_gloss_count(&b.glosses).cmp(&meaningful_gloss_count(&a.glosses)))
+            .then(a.lexeme_id.cmp(&b.lexeme_id))
+    });
+    hits.truncate(limit);
+    Ok(SearchResponse { query: q.to_string(), classified_as: "wildcard".to_string(), results: hits })
+}
+
 pub fn search(
     state: &AppState,
     conn: &Connection,
@@ -397,6 +456,11 @@ pub fn search(
     limit: usize,
 ) -> rusqlite::Result<SearchResponse> {
     let q = q.trim();
+    // wildcard search (你* / *場 / 機?場): detected before classification since '*'/'?' aren't
+    // Han/Kana/Latin. Always returns a plain list (no single headword to unify).
+    if is_wildcard(q) {
+        return wildcard_search(conn, q, pref_script, limit);
+    }
     let kind = classify(q);
     // best base weight per lexeme + how it matched
     let mut cand: HashMap<i64, (&'static str, f64)> = HashMap::new();

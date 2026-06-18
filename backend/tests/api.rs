@@ -1354,3 +1354,50 @@ async fn single_char_query_has_no_partial() {
     let any_partial = v["results"].as_array().unwrap().iter().any(|r| r["match_type"] == "partial");
     assert!(!any_partial);
 }
+
+// ---- wildcard search (item 136) ----
+#[tokio::test]
+async fn wildcard_prefix() {
+    let v = search("你*").await;
+    assert_eq!(v["classified_as"], "wildcard");
+    let hw = headwords(&v);
+    // matches a 你-prefixed surface form (the displayed headword may be a variant like 妳)
+    assert!(hw.iter().any(|h| h == "你們"), "expected 你們 in {hw:?}");
+    assert!(hw.len() >= 3);
+}
+
+#[tokio::test]
+async fn wildcard_suffix() {
+    let v = search("*場").await;
+    let hw = headwords(&v);
+    assert!(hw.iter().any(|h| h == "機場"), "*場 finds 機場: {hw:?}");
+    assert!(hw.iter().all(|h| h.ends_with('場')));
+}
+
+#[tokio::test]
+async fn wildcard_single_char_question() {
+    let v = search("日?").await;
+    let hw = headwords(&v);
+    // a 2-char word starting 日 (日本); the bare single char 日 must NOT match (? needs one more char)
+    assert!(hw.iter().any(|h| h == "日本"), "expected 日本 in {hw:?}");
+    assert!(!hw.iter().any(|h| h == "日"), "single 日 excluded by ?");
+}
+
+#[tokio::test]
+async fn wildcard_bare_star_is_empty() {
+    let v = search("*").await;
+    assert_eq!(v["results"].as_array().unwrap().len(), 0, "bare * must not dump the corpus");
+}
+
+#[tokio::test]
+async fn wildcard_no_match_is_clean_empty() {
+    let v = search("機?場").await; // no 3-char 機X場 word exists
+    assert_eq!(v["classified_as"], "wildcard");
+    assert_eq!(v["results"].as_array().unwrap().len(), 0);
+}
+
+#[tokio::test]
+async fn suggest_skips_wildcards() {
+    let v = get(&format!("/suggest?q={}", enc("你*"))).await.1;
+    assert_eq!(v["suggestions"].as_array().unwrap().len(), 0);
+}

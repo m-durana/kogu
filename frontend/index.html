@@ -60,14 +60,15 @@
          in main.ts the moment the real app is ready. Inline critical CSS keeps the bg black (no flash). -->
     <style>
       html, body { margin: 0; background: #0b0b0c; color: #ededeb; -webkit-font-smoothing: antialiased; }
-      #shell { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
-        justify-content: center; gap: 1.2rem; }
-      /* Match the native iOS launch splash (gen-splash.py: Noto Serif CJK Bold at 20% of the smaller
-         viewport side) so the HTML loader and the 3-second launch image look identical, just with a
-         progress bar added below. */
-      #shell .bm { font-family: "Noto Serif SC", "Noto Serif CJK SC", "Songti SC", "Hiragino Mincho ProN", serif;
+      #shell { position: fixed; inset: 0; }
+      /* The 古古 mark sits at the EXACT viewport centre, identical to the native iOS launch splash
+         (gen-splash.py: Noto Serif CJK Bold at 20% of the smaller side), so it does not shift when the
+         HTML loader takes over. The progress bar is absolutely positioned just below it, seamlessly. */
+      #shell .bm { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        font-family: "Noto Serif SC", "Noto Serif CJK SC", "Songti SC", "Hiragino Mincho ProN", serif;
         font-weight: 700; font-size: 20vmin; letter-spacing: -0.02em; color: #ededeb; line-height: 1; }
-      #shell .bb { width: 116px; height: 2px; background: #2a2a2e; border-radius: 2px; overflow: hidden; }
+      #shell .bb { position: absolute; left: 50%; top: calc(50% + 14vmin); transform: translateX(-50%);
+        width: 116px; height: 2px; background: #2a2a2e; border-radius: 2px; overflow: hidden; }
       #shell .bb span { display: block; height: 100%; width: 45%; background: #b4b4ba; border-radius: 2px;
         animation: kogubar 1.1s ease-in-out infinite; }
       @keyframes kogubar { 0% { transform: translateX(-110%); } 100% { transform: translateX(360%); } }

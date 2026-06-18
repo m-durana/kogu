@@ -199,9 +199,11 @@
       // pinyin/jyutping, or English — stay a plain list; they're lookups, not "this exact word", so
       // they get no word card, no character breakdown, and no save/share (the user drills in to get
       // those). Enrich the lexeme whose form is EXACTLY what was typed, falling back to the top hit.
+      // a wildcard query (你* / *場) is a browse/filter with no single headword — always a list.
       // a "partial" top hit means the query didn't resolve to a whole word (a name glued to a common
       // word) — show the contained words as a LIST, not a unified card for one of them.
-      const queryHasHan = HAN.test(term)
+      const isWildcard = /[*?＊？]/.test(term)
+      const queryHasHan = HAN.test(term) && !isWildcard
       if (queryHasHan && results.length && results[0].match_type !== 'partial') {
         unified = true
         enriching = true
@@ -221,7 +223,7 @@
           .finally(() => {
             if (q.trim() === term) enriching = false
           })
-      } else if (!results.length && HAN.test(term)) {
+      } else if (!results.length && HAN.test(term) && !isWildcard) {
         // No word matched, but the query is Han - break it into its component characters so the
         // user still gets per-character meanings and can drill into any one. Char-only entries live
         // at /entry/{-codepoint}. Fetch the unique Han chars in parallel; ignore any that fail.
