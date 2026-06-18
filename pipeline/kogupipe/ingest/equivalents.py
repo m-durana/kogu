@@ -53,6 +53,10 @@ def _resolver(conn):
         row = conn.execute(
             "SELECT l.id FROM lexeme l JOIN surface_form sf ON sf.lexeme_id = l.id "
             "WHERE l.variety = ?2 AND sf.form = ?1 "
+            # a kana surface form is a READING alias of a kanji word (蛇 carries form じゃ) unless it IS
+            # the headword (a genuine kana word). Resolving foreign targets to a reading produced false
+            # bridges (bye → じゃ → 蛇 'snake'), so only accept a kana form when it is the headword.
+            "  AND (sf.script <> 'kana' OR l.headword = ?1) "
             "GROUP BY l.id "
             "ORDER BY (l.headword = ?1) DESC, MAX(sf.is_primary) DESC, "
             "         (SELECT COUNT(*) FROM sense s WHERE s.lexeme_id = l.id) DESC, "
