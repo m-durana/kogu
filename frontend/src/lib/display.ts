@@ -194,6 +194,19 @@ export function scriptShort(script: string): string {
     .join(' ')
 }
 
+// The traditional/simplified counterpart to jump to from the header glyph (item 161): given the
+// character's script family and the viewed form, return the OTHER Chinese script's form, or null when
+// there is no genuine TC/SC pair (identical forms, kokuji, shinjitai-only, z-variants).
+export function scSwitchTarget(sf: ScriptForms | null, head: string): { to: string; label: string } | null {
+  if (!sf || sf.is_kokuji) return null
+  const trad = sf.branches.find((b) => b.script.split('+').includes('traditional'))?.form ?? sf.orthodox
+  const simp = sf.branches.find((b) => b.script.split('+').includes('simplified'))?.form
+  if (!simp || !trad || trad === simp) return null
+  if (head === simp) return { to: trad, label: 'traditional' }
+  if (head === trad) return { to: simp, label: 'simplified' }
+  return null
+}
+
 // Tag for a surface_form's script (trad/simp/shinjitai) — used to label both Chinese forms equally.
 export function formTag(script: string): string {
   return ({ trad: 'TC', simp: 'SC', shinjitai: 'JP' } as Record<string, string>)[script] ?? ''

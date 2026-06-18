@@ -16,12 +16,12 @@
 
 <script lang="ts">
   import type { CharInfo, Entry, Hit, ReadingKV, Variety } from './types'
-  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, isAlwaysBound, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle, scriptShort, scriptChangeNote, scriptChangeFromForms, jyutpingToYale } from './display'
+  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, isAlwaysBound, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle, scriptShort, scSwitchTarget, scriptChangeNote, scriptChangeFromForms, jyutpingToYale } from './display'
   import { speakReading, canSpeak } from './speech'
   import { settings } from './settings.svelte'
   import ScriptForms from './ScriptForms.svelte'
   import IdcBox from './IdcBox.svelte'
-  import { AlertTriangle, Volume2 } from '@lucide/svelte'
+  import { AlertTriangle, Volume2, ArrowLeftRight } from '@lucide/svelte'
 
   // a reading shown in the user's chosen romanisation: pinyin tone-marks for 中, jyutping or Yale for 粵
   function dispReading(variety: string, reading: string): string {
@@ -548,6 +548,10 @@
       ? scriptChangeNote(head, headChar.variants ?? []) ?? scriptChangeFromForms(headChar.script_forms)
       : null,
   )
+  // item 161: the traditional/simplified counterpart of the viewed glyph, if one exists — drives the
+  // small two-arrow switch button at the top-right of the header glyph. Tap it to jump to the other
+  // script's form (馬 ⇄ 马). Only for a genuine TC/SC pair (not shinjitai-only or z-variants).
+  const scCounterpart = $derived(scSwitchTarget(headChar?.script_forms ?? null, head))
   // items 17/18: the radical and "rarely used" tags sit on their own line under each language row.
   // "radical" is a character property (bound in every language); "rarely used" is now PER-LANGUAGE,
   // from the per-variety containing-word count (巴 is common in 中 but rare in 日).
@@ -733,7 +737,12 @@
   {#if isGlyphSearch}
     <!-- Block A - the definition: the typed glyph across every language that writes it, co-equally -->
     <section class="def">
-      <h2 class="glyph" lang={langTag(headVariety)} style="font-family:{hanFont(headVariety)}">{head}</h2>
+      <div class="glyphrow">
+        <h2 class="glyph" lang={langTag(headVariety)} style="font-family:{hanFont(headVariety)}">{head}</h2>
+        {#if scCounterpart}
+          <button class="scswitch" onclick={() => onsearch(scCounterpart.to)} title="switch to the {scCounterpart.label} form ({scCounterpart.to})" aria-label="switch to the {scCounterpart.label} form"><ArrowLeftRight size={17} /></button>
+        {/if}
+      </div>
       {#if soundLoan}
         <!-- transliteration / phonetic loan: the characters were chosen for their sound, not meaning -->
         <p class="soundloan"><span class="role role-phonetic">written for sound</span> <span class="slnote" title={soundLoanTip}>loanword: characters chosen for sound, not meaning</span></p>
@@ -1032,7 +1041,11 @@
   /* matches .bridge so def→next-heading spacing is identical whether a bridge band follows or not
      (margins don't collapse inside the flex column, so keep both sides small + let h3's top margin lead) */
   .def { margin-bottom: 0.6rem; }
+  .glyphrow { display: flex; align-items: flex-start; gap: 0.5rem; }
   .glyph { font-family: var(--han); font-size: clamp(3rem, 16vw, 4.5rem); line-height: 1; margin: 0 0 1.1rem; font-weight: 500; }
+  /* tiny two-arrow switch to the TC/SC counterpart, top-right of the header glyph (item 161) */
+  .scswitch { display: inline-flex; align-items: center; justify-content: center; margin-top: 0.3rem; padding: 0.3rem; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: var(--r); }
+  .scswitch:hover { color: var(--text); border-color: var(--border-strong); }
   .defs { display: flex; flex-direction: column; gap: 0.8rem; }
   .dlh { display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap; }
   /* the language leads (it's the heading of the definition); the reading is secondary */

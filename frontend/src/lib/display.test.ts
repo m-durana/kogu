@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle, reformLabel, scriptChangeNote, scriptChangeFromForms, SEARCH_PLACEHOLDERS, placeholderAt, isAlwaysBound, jyutpingToYale } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle, reformLabel, scriptChangeNote, scriptChangeFromForms, scSwitchTarget, SEARCH_PLACEHOLDERS, placeholderAt, isAlwaysBound, jyutpingToYale } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -818,5 +818,37 @@ describe('etymology abbreviations - consistent + short historical names (item 15
   it('keeps all-caps initialisms case-sensitive (OC tagged, lowercase oc not)', () => {
     expect(abbrs('From OC *mraːʔ').some((t: any) => t.v === 'OC')).toBe(true)
     expect(abbrs('the oc shop').some((t: any) => t.v === 'oc')).toBe(false)
+  })
+})
+
+describe('scSwitchTarget - TC/SC header switch (item 161)', () => {
+  const sf = (orthodox: string, branches: any[], is_kokuji = false) => ({ orthodox, is_kokuji, branches })
+  const horse = sf('馬', [
+    { form: '馬', script: 'traditional', reform_id: null, reform_label: null, is_orthodox: true },
+    { form: '马', script: 'simplified', reform_id: 'opencc', reform_label: 'PRC simplification', is_orthodox: false },
+  ])
+  it('from traditional, points to the simplified form', () => {
+    expect(scSwitchTarget(horse, '馬')).toEqual({ to: '马', label: 'simplified' })
+  })
+  it('from simplified, points to the traditional form', () => {
+    expect(scSwitchTarget(horse, '马')).toEqual({ to: '馬', label: 'traditional' })
+  })
+  it('returns null when there is no script_forms', () => {
+    expect(scSwitchTarget(null, '馬')).toBeNull()
+  })
+  it('returns null when trad and simp are identical (山)', () => {
+    const same = sf('山', [{ form: '山', script: 'traditional', reform_id: null, reform_label: null, is_orthodox: true }])
+    expect(scSwitchTarget(same, '山')).toBeNull()
+  })
+  it('returns null for a kokuji (no Chinese counterpart)', () => {
+    const k = sf('働', [], true)
+    expect(scSwitchTarget(k, '働')).toBeNull()
+  })
+  it('returns null for a shinjitai-only family (no simplified branch)', () => {
+    const ja = sf('廣', [
+      { form: '廣', script: 'traditional', reform_id: null, reform_label: null, is_orthodox: true },
+      { form: '広', script: 'shinjitai', reform_id: 'jp-toyo', reform_label: 'Tōyō shinjitai', is_orthodox: false },
+    ])
+    expect(scSwitchTarget(ja, '広')).toBeNull()
   })
 })
