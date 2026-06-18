@@ -197,8 +197,10 @@
       // pinyin/jyutping, or English — stay a plain list; they're lookups, not "this exact word", so
       // they get no word card, no character breakdown, and no save/share (the user drills in to get
       // those). Enrich the lexeme whose form is EXACTLY what was typed, falling back to the top hit.
+      // a "partial" top hit means the query didn't resolve to a whole word (a name glued to a common
+      // word) — show the contained words as a LIST, not a unified card for one of them.
       const queryHasHan = HAN.test(term)
-      if (queryHasHan && results.length) {
+      if (queryHasHan && results.length && results[0].match_type !== 'partial') {
         unified = true
         enriching = true
         const exact =

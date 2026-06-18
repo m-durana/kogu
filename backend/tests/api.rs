@@ -1315,3 +1315,42 @@ async fn kokuji_usage_is_japanese_only() {
     assert!(u["ja"].as_i64().unwrap_or(0) > 0, "働 used in Japanese");
     assert_eq!(u["zh"].as_i64().unwrap_or(0), 0, "働 not used in Chinese");
 }
+
+// ---- partial / substring word lookup (item 127) ----
+#[tokio::test]
+async fn partial_lookup_finds_contained_word() {
+    // 犬ホテル is not a word, but contains ホテル
+    let v = search("犬ホテル").await;
+    let hw = headwords(&v);
+    assert!(hw.contains(&"ホテル".to_string()), "expected ホテル in {hw:?}");
+    let mt = v["results"][0]["match_type"].as_str().unwrap();
+    assert_eq!(mt, "partial");
+}
+
+#[tokio::test]
+async fn partial_lookup_ranks_longer_substrings_first() {
+    let v = search("東京ホテル").await;
+    let hw = headwords(&v);
+    let i_hotel = hw.iter().position(|h| h == "ホテル");
+    let i_tokyo = hw.iter().position(|h| h == "東京");
+    if let (Some(a), Some(b)) = (i_hotel, i_tokyo) {
+        assert!(a < b, "longer ホテル (#{a}) should rank before 東京 (#{b})");
+    } else {
+        panic!("expected both ホテル and 東京 in {hw:?}");
+    }
+}
+
+#[tokio::test]
+async fn whole_word_query_has_no_partial_pollution() {
+    // a query that resolves to a real word must NOT also list its sub-words as partial hits
+    let v = search("機場").await;
+    let any_partial = v["results"].as_array().unwrap().iter().any(|r| r["match_type"] == "partial");
+    assert!(!any_partial, "機場 resolves wholly; no partial matches expected");
+}
+
+#[tokio::test]
+async fn single_char_query_has_no_partial() {
+    let v = search("山").await;
+    let any_partial = v["results"].as_array().unwrap().iter().any(|r| r["match_type"] == "partial");
+    assert!(!any_partial);
+}

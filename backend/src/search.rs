@@ -275,6 +275,7 @@ const W_EXACT: f64 = 1.0;
 const W_VARIANT: f64 = 0.85;
 const W_READING: f64 = 0.72;
 const W_READING_PREFIX: f64 = 0.55; // as-you-type prefix (たべ→たべる); below an exact reading
+const W_PARTIAL: f64 = 0.45; // a dictionary word found as a substring of an unresolved query (scaled by coverage)
 // frequency is a gentle ADDITIVE tiebreak, never a multiplier: the old `weight * (1 + freq)` let a
 // frequent fringe word (freq→2× boost) outrank an exact match. Additive + small keeps the match tier
 // dominant (an exact reading always beats a prefix; an exact sense always beats an incidental one).
@@ -521,6 +522,27 @@ pub fn search(
             }
         }
         _ => {}
+    }
+
+    // partial / substring fallback: a query that didn't resolve to a whole word (a name glued to a
+    // common word, e.g. 山田ホテル / 東京ホテル) still surfaces the dictionary words CONTAINED in it
+    // (ホテル, 東京). Only for Han/kana queries of length ≥3, and only when there's no whole-word hit,
+    // so ordinary lookups aren't polluted with their own sub-words. Longest substrings rank highest.
+    let has_whole = cand.values().any(|(mt, _)| *mt == "exact" || *mt == "variant");
+    let qchars: Vec<char> = q.chars().collect();
+    if !has_whole && qchars.len() >= 3 && matches!(kind, Kind::Han | Kind::Kana) {
+        let n = qchars.len();
+        let mut stmt = conn.prepare("SELECT lexeme_id FROM surface_form WHERE form = ?1")?;
+        for len in (2..n).rev() {
+            for start in 0..=(n - len) {
+                let sub: String = qchars[start..start + len].iter().collect();
+                let ids: Vec<i64> =
+                    stmt.query_map([&sub], |r| r.get(0))?.collect::<Result<_, _>>()?;
+                for id in ids {
+                    bump(&mut cand, id, "partial", W_PARTIAL * (len as f64 / n as f64));
+                }
+            }
+        }
     }
 
     // assemble + rank
