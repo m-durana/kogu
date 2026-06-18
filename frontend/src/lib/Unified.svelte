@@ -1174,7 +1174,7 @@
   /* PLECO-style used-in list */
   .usedlist { list-style: none; margin: 0; padding: 0; }
   .usedlist li + li { border-top: 1px solid var(--border); }
-  .usedrow { display: flex; align-items: baseline; gap: 0.6rem; width: 100%; text-align: left; background: none; border: none; padding: 0.5rem 0.2rem; border-radius: var(--r); }
+  .usedrow { display: flex; justify-content: flex-start; align-items: baseline; gap: 0.6rem; width: 100%; text-align: left; background: none; border: none; padding: 0.5rem 0.2rem; border-radius: var(--r); }
   .usedrow:hover { background: var(--surface); }
   .usedrow .ulang { font-family: var(--han); font-size: 0.8rem; color: var(--faint); flex: none; min-width: 1.1em; }
   .usedrow .uw { font-family: var(--han); font-size: 1.2rem; color: var(--text); flex: none; }

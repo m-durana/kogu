@@ -156,8 +156,16 @@ fn clean_segment(seg: &str) -> String {
             _ => {}
         }
     }
-    let s = out.trim().trim_end_matches(['.', ',', '!', '…']).to_lowercase();
-    s.strip_prefix("to ").map(str::to_string).unwrap_or(s).trim().to_string()
+    let mut s = out.trim().trim_end_matches(['.', ',', '!', '…']).to_lowercase();
+    // strip a leading function word so an article/infinitive-only difference is still an exact match:
+    // "the Great Wall" vs query "great wall" → exact (so 長城 beats 長城飯店 "Great Wall Hotel").
+    for p in ["to ", "the ", "an ", "a "] {
+        if let Some(rest) = s.strip_prefix(p) {
+            s = rest.to_string();
+            break;
+        }
+    }
+    s.trim().to_string()
 }
 
 /// Does `hay` contain `needle` as a whole word / phrase (boundary-aware)?

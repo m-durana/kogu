@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { search, entry as fetchEntry, suggest as fetchSuggest, type Suggestion } from './lib/api'
+  import { search, entry as fetchEntry } from './lib/api'
   import type { Entry, Hit, CharInfo } from './lib/types'
-  import { primaryForm, varietyLabel, regionsOf, shortGloss, cleanGloss, langTag, hanFont, placeholderAt, pinyinMarks } from './lib/display'
+  import { primaryForm, varietyLabel, regionsOf, shortGloss, cleanGloss, langTag, hanFont, placeholderAt } from './lib/display'
   import Unified from './lib/Unified.svelte'
   import Pad from './lib/Pad.svelte'
   import Ocr from './lib/Ocr.svelte'
@@ -153,9 +153,6 @@
   // ── search bar (item 1) ──────────────────────────────────────────────────────────────────────
   let inputEl: HTMLInputElement
   let focused = $state(false) // drives the focus-expand (field grows, draw/camera hide)
-  let suggestions = $state<Suggestion[]>([]) // Google-style autocomplete, updated per keystroke
-  let sugTimer: ReturnType<typeof setTimeout> | undefined
-  let sugCtrl: AbortController | undefined
   // rotating placeholder: a different example every 2s while the field is empty and unfocused
   let phIndex = $state(0)
   const placeholder = $derived(placeholderAt(phIndex))
@@ -260,75 +257,49 @@
     }
   }
 
-  // typing shows autocomplete suggestions (Google-style); the actual search happens on commit
-  // (Enter, the search button, or tapping a suggestion), not on every keystroke.
+  // live search: each keystroke updates the results list on the page directly (debounced), like
+  // hitting Enter after every character. No autocomplete dropdown.
   function onInput(e: Event) {
     const v = (e.target as HTMLInputElement).value
     q = v
     if (composing) return
-    queueSuggest(v)
+    clearTimeout(timer)
+    timer = setTimeout(() => doSearch(v, 'replace'), 160)
   }
-  function queueSuggest(v: string) {
-    clearTimeout(sugTimer)
-    const term = v.trim()
-    if (!term) {
-      suggestions = []
-      return
-    }
-    sugTimer = setTimeout(async () => {
-      sugCtrl?.abort()
-      sugCtrl = new AbortController()
-      try {
-        const s = await fetchSuggest(term, sugCtrl.signal)
-        if (q.trim() === term) suggestions = s
-      } catch {
-        /* superseded keystroke; ignore */
-      }
-    }, 120)
-  }
-  // commit the current text as a search
+  // commit immediately (Enter / search button): also close the draw / photo panel
   function submitSearch() {
-    clearTimeout(sugTimer)
-    suggestions = []
+    clearTimeout(timer)
     focused = false
-    panel = 'none' // close the draw pad / photo panel when committing the search (item 1)
+    panel = 'none'
     ocrFile = null
     inputEl?.blur()
     doSearch(q)
   }
-  function pickSuggestion(s: Suggestion) {
-    q = s.headword
-    clearTimeout(sugTimer)
-    suggestions = []
-    focused = false
-    inputEl?.blur()
-    doSearch(s.headword)
-  }
   function onFocus() {
     focused = true
-    // caret to the very end when focusing a field that already holds a word (item 1)
+    // caret to the very end when focusing a field that already holds a word
     const len = inputEl?.value.length ?? 0
     if (len) requestAnimationFrame(() => inputEl?.setSelectionRange(len, len))
-    if (q.trim()) queueSuggest(q)
   }
   function onBlur() {
-    // delay so a tap on a suggestion (which blurs the field first) still registers
-    setTimeout(() => {
-      focused = false
-      suggestions = []
-    }, 150)
+    setTimeout(() => (focused = false), 150)
   }
 
   async function openEntry(id: number, mode: NavMode = 'push') {
+    if (view === 'entry' && entry?.lexeme_id === id) return // already on this entry (before loading!)
     loading = true
     err = ''
-    if (view === 'entry' && entry?.lexeme_id === id) return // already on this entry
+    // reached not via the search bar (saved/history/link/character tap): clear the stale query so the
+    // search field empties and the headword/glyph come from the ENTRY, not a leftover search term.
+    q = ''
+    results = []
+    unified = false
+    searched = false
     try {
       entry = await fetchEntry(id)
       enriching = false
-      unified = false
       view = 'entry'
-      if (mode === 'push') history.pushState({ view: 'entry', id, q }, '', `#/entry/${id}`)
+      if (mode === 'push') history.pushState({ view: 'entry', id }, '', `#/entry/${id}`)
     } catch {
       err = 'could not load entry'
     } finally {
@@ -431,7 +402,6 @@
     unified = false
     searched = false
     breakdown = []
-    suggestions = []
     err = ''
     history.replaceState({ view: 'results', q: '' }, '', location.pathname)
   }
@@ -451,11 +421,12 @@
     ocrFile = null
     doSearch(text)
   }
-  // a stroke-recognised character from the draw pad: APPEND it to the field (item 1), keep the pad
-  // open so the next character can be drawn; don't submit. Commit with Enter / the search button.
+  // a stroke-recognised character from the draw pad: APPEND it to the field, live-update the results
+  // behind the floating pad (= Enter after each character), and keep the pad open for the next one.
   function fromDraw(ch: string) {
     q = q + ch
-    queueSuggest(q)
+    clearTimeout(timer)
+    doSearch(q, 'replace')
   }
 </script>
 
@@ -492,7 +463,7 @@
           composing = false
           onInput(e)
         }}
-        onkeydown={(e) => { if (e.key === 'Escape') { suggestions = []; inputEl?.blur() } }}
+        onkeydown={(e) => { if (e.key === 'Escape') inputEl?.blur() }}
         data-testid="search-input"
         autocomplete="off"
         autocapitalize="off"
@@ -502,31 +473,22 @@
         <button type="button" class="clearbtn" aria-label="clear search" onmousedown={(e) => e.preventDefault()} onclick={clearSearch} data-testid="clear"><X size={17} /></button>
       {/if}
       <button type="submit" class="searchbtn" aria-label="search" title="search" data-testid="search-go"><ArrowRight size={18} /></button>
-
-      {#if focused && suggestions.length}
-        <!-- autocomplete dropdown menu (item 6) -->
-        <ul class="sgmenu" data-testid="suggests">
-          {#each suggestions as s, i (s.headword + i)}
-            <li>
-              <button type="button" class="sgrow" onmousedown={(e) => e.preventDefault()} onclick={() => pickSuggestion(s)}>
-                <span class="sghw" lang={langTag(s.variety)} style="font-family:{hanFont(s.variety)}">{s.headword}</span>
-                {#if s.reading}<span class="sgread">{s.variety === 'zh' ? pinyinMarks(s.reading) : s.reading}</span>{/if}
-                <span class="sgvar">{varietyLabel(s.variety)}</span>
-              </button>
-            </li>
-          {/each}
-        </ul>
-      {/if}
+      {#if loading}<span class="loadbar" aria-hidden="true"></span>{/if}
     </form>
     <button class="rowbtn" class:on={panel === 'draw'} aria-label="draw a character" aria-pressed={panel === 'draw'} title="draw" onclick={toggleDraw} data-testid="draw-toggle"><Brush size={18} /></button>
     <button class="rowbtn" class:on={panel === 'photo'} aria-label="photo or image" title="photo / image" onclick={openPhoto} data-testid="scan-toggle"><Camera size={18} /></button>
     <input bind:this={fileInput} type="file" accept="image/*" onchange={onPhotoFile} hidden />
   </div>
 
-  {#if panel === 'draw'}
-    <section class="inputpanel"><Pad onpick={fromDraw} onclose={() => (panel = 'none')} /></section>
-  {:else if panel === 'photo' && ocrFile}
+  {#if panel === 'photo' && ocrFile}
     <section class="inputpanel"><Ocr file={ocrFile} onpick={fromInput} /></section>
+  {/if}
+
+  {#if panel === 'draw'}
+    <!-- floating draw pad: overlays the page so the results behind it live-update as you draw -->
+    <div class="drawfloat">
+      <Pad onpick={fromDraw} onclose={() => (panel = 'none')} />
+    </div>
   {/if}
 
   {#if err}<div class="err">{err}</div>{/if}
@@ -764,15 +726,18 @@
   .field { position: relative; flex: 1; min-width: 0; display: flex; }
   .searchicon { position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; display: flex; }
   .field input {
-    width: 100%; padding: 0.65rem 4.4rem 0.65rem 2.4rem; font-size: 1.05rem; line-height: 1.4;
+    width: 100%; padding: 0.72rem 4.4rem 0.72rem 2.4rem; font-size: 1.05rem; line-height: 1.15;
     font-family: var(--sans); color: var(--text); -webkit-appearance: none; appearance: none;
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
   }
   .field input::-webkit-search-decoration, .field input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
   .field input:focus { border-color: var(--border-strong); background: var(--surface-2); }
-  /* when the dropdown is open, square the input's bottom so the two read as one connected surface */
-  .field:has(.sgmenu) input { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
   .field input::placeholder { color: var(--faint); }
+  /* loading indicator: a thin sliding bar along the bottom of the field while a search is in flight */
+  .loadbar { position: absolute; left: 1px; right: 1px; bottom: 1px; height: 2px; overflow: hidden; border-radius: 0 0 var(--r-lg) var(--r-lg); pointer-events: none; }
+  .loadbar::after { content: ''; position: absolute; inset: 0; width: 40%; background: var(--muted); border-radius: 2px; animation: loadslide 0.9s ease-in-out infinite; }
+  @keyframes loadslide { 0% { transform: translateX(-110%); } 100% { transform: translateX(360%); } }
+  @media (prefers-reduced-motion: reduce) { .loadbar::after { animation-duration: 2s; } }
   /* item 1: monochrome selection so highlighting typed text doesn't look odd */
   .field input::selection { background: var(--muted); color: var(--bg); }
   .clearbtn {
@@ -797,25 +762,18 @@
   /* item 1: focusing the field expands it to full width; draw + camera slide away */
   .searchrow.focused .rowbtn { max-width: 0; margin-left: 0; padding: 0; opacity: 0; border-width: 0; pointer-events: none; }
   @media (prefers-reduced-motion: reduce) { .rowbtn { transition: none; } }
-  /* autocomplete dropdown menu (item 6) */
-  .sgmenu {
-    position: absolute; top: 100%; left: 0; right: 0; z-index: 40;
-    list-style: none; margin: 0; padding: 0.3rem; max-height: 60vh; overflow-y: auto;
-    background: var(--surface-2); border: 1px solid var(--border-strong); border-top: none;
-    /* square top so it reads as coming straight out of the search field; only the bottom is rounded */
-    border-radius: 0 0 var(--r-lg) var(--r-lg);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  /* floating draw pad: overlays the page (fixed) so the results behind live-update as you draw */
+  .drawfloat {
+    position: fixed; z-index: 45;
+    left: 50%; transform: translateX(-50%);
+    bottom: calc(1rem + env(safe-area-inset-bottom));
+    width: min(20rem, calc(100vw - 2rem));
+    background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--r);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    padding: 0.7rem;
   }
-  .sgrow {
-    display: flex; align-items: baseline; gap: 0.6rem; width: 100%; text-align: left;
-    background: none; border: none; padding: 0.55rem 0.6rem; border-radius: var(--r);
-  }
-  .sgrow:hover { background: var(--surface); }
-  .sghw { font-size: 1.15rem; color: var(--text); }
-  .sgread { font-size: 0.85rem; color: var(--muted); font-family: var(--mono); }
-  .sgvar { margin-left: auto; font-family: var(--han); font-size: 0.85rem; color: var(--faint); }
 
-  /* inline draw pad / photo selection, shown directly under the search row */
+  /* inline photo selection, shown directly under the search row */
   .inputpanel { margin-bottom: 1.2rem; }
 
   .meta { color: var(--faint); font-size: 0.7rem; margin-bottom: 0.6rem; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.1em; }

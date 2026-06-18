@@ -153,7 +153,7 @@
     aspect-ratio: 1 / 1;
     background: var(--surface);
     border: 1px solid var(--border-strong);
-    border-radius: var(--r-lg);
+    border-radius: 3px; /* less prominent rounding in the drawing window */
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
