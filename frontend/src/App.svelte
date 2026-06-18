@@ -1,7 +1,7 @@
 <script lang="ts">
   import { search, entry as fetchEntry, suggest as fetchSuggest, type Suggestion } from './lib/api'
   import type { Entry, Hit, CharInfo } from './lib/types'
-  import { primaryForm, varietyLabel, regionsOf, shortGloss, cleanGloss, langTag, hanFont, placeholderAt } from './lib/display'
+  import { primaryForm, varietyLabel, regionsOf, shortGloss, cleanGloss, langTag, hanFont, placeholderAt, pinyinMarks } from './lib/display'
   import Unified from './lib/Unified.svelte'
   import Pad from './lib/Pad.svelte'
   import Ocr from './lib/Ocr.svelte'
@@ -186,15 +186,13 @@
       results = res.results
       classified = res.classified_as
       searched = true
-      // Han queries resolve to one word seen across languages - show the unified view directly,
-      // no list step. Enrich the lexeme whose form is EXACTLY what was typed (so 氣 enriches the
-      // Chinese 氣, not the Japanese 気 that may rank first) - this is the word shown in the field, so
-      // its senses / words / origin must come from the same lexeme. Falls back to the top hit.
-      // Show the unified word view for Han-script words — INCLUDING mixed kanji+kana words like 入り口
-      // (which classify as 'kana' because of the り but are real Han-script words), and for ANY single
-      // result (no point making the user click a one-item list — "just show me").
-      const hanLike = res.classified_as === 'han' || results.some((r) => HAN.test(r.headword))
-      if ((hanLike || results.length === 1) && results.length) {
+      // Only a query the user typed with Han GLYPHS resolves directly to the unified word card
+      // (incl. mixed kanji+kana like 入り口). Searches by sound or meaning — kana (パレスチナ), romaji
+      // pinyin/jyutping, or English — stay a plain list; they're lookups, not "this exact word", so
+      // they get no word card, no character breakdown, and no save/share (the user drills in to get
+      // those). Enrich the lexeme whose form is EXACTLY what was typed, falling back to the top hit.
+      const queryHasHan = HAN.test(term)
+      if (queryHasHan && results.length) {
         unified = true
         enriching = true
         const exact =
@@ -417,17 +415,19 @@
       <button class="brandbtn" onclick={goHome} aria-label="home"><span class="mark">古古</span> <span class="word">Kogu</span></button>
     </h1>
     <nav class="navbtns">
-      <button class="navbtn" class:on={view === 'history'} onclick={openHistory} aria-label="history" title="history"><Clock size={18} /></button>
-      <button class="navbtn" class:on={view === 'saved'} onclick={openSaved} aria-label="saved" title="saved"><Bookmark size={18} /></button>
+      <button class="navbtn" class:on={view === 'history'} onclick={openHistory} aria-label="history" title="history"><Clock size={24} /></button>
+      <button class="navbtn" class:on={view === 'saved'} onclick={openSaved} aria-label="saved" title="saved"><Bookmark size={24} /></button>
     </nav>
   </header>
 
   <div class="searchrow" class:focused>
-    <div class="field">
+    <!-- a real <form> so the iOS keyboard shows a Go/Search key that reliably submits (item 7) -->
+    <form class="field" onsubmit={(e) => { e.preventDefault(); submitSearch() }}>
       <span class="searchicon" aria-hidden="true"><Search size={17} /></span>
       <input
         bind:this={inputEl}
-        type="text"
+        type="search"
+        enterkeyhint="search"
         lang={langTag(queryLang)}
         style="font-family:{inputFont}"
         aria-label="Search by hanzi, kanji, pinyin, jyutping, kana, or English"
@@ -441,31 +441,36 @@
           composing = false
           onInput(e)
         }}
-        onkeydown={(e) => { if (e.key === 'Enter') submitSearch(); else if (e.key === 'Escape') { suggestions = []; inputEl?.blur() } }}
+        onkeydown={(e) => { if (e.key === 'Escape') { suggestions = []; inputEl?.blur() } }}
         data-testid="search-input"
         autocomplete="off"
         autocapitalize="off"
         spellcheck="false"
       />
       {#if q}
-        <button class="clearbtn" aria-label="clear search" onmousedown={(e) => e.preventDefault()} onclick={clearSearch} data-testid="clear"><X size={17} /></button>
+        <button type="button" class="clearbtn" aria-label="clear search" onmousedown={(e) => e.preventDefault()} onclick={clearSearch} data-testid="clear"><X size={17} /></button>
       {/if}
-      <button class="searchbtn" aria-label="search" title="search" onmousedown={(e) => e.preventDefault()} onclick={submitSearch} data-testid="search-go"><ArrowRight size={18} /></button>
-    </div>
+      <button type="submit" class="searchbtn" aria-label="search" title="search" data-testid="search-go"><ArrowRight size={18} /></button>
+
+      {#if focused && suggestions.length}
+        <!-- autocomplete dropdown menu (item 6) -->
+        <ul class="sgmenu" data-testid="suggests">
+          {#each suggestions as s, i (s.headword + i)}
+            <li>
+              <button type="button" class="sgrow" onmousedown={(e) => e.preventDefault()} onclick={() => pickSuggestion(s)}>
+                <span class="sghw" lang={langTag(s.variety)} style="font-family:{hanFont(s.variety)}">{s.headword}</span>
+                {#if s.reading}<span class="sgread">{s.variety === 'zh' ? pinyinMarks(s.reading) : s.reading}</span>{/if}
+                <span class="sgvar">{varietyLabel(s.variety)}</span>
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </form>
     <button class="rowbtn" class:on={panel === 'draw'} aria-label="draw a character" aria-pressed={panel === 'draw'} title="draw" onclick={toggleDraw} data-testid="draw-toggle"><Brush size={18} /></button>
     <button class="rowbtn" class:on={panel === 'photo'} aria-label="photo or image" title="photo / image" onclick={openPhoto} data-testid="scan-toggle"><Camera size={18} /></button>
     <input bind:this={fileInput} type="file" accept="image/*" onchange={onPhotoFile} hidden />
   </div>
-
-  {#if suggestions.length}
-    <!-- Google-Translate-style suggestions: plain text separated by vertical bars (item 1) -->
-    <div class="suggests" data-testid="suggests">
-      {#each suggestions as s, i (s.headword + i)}
-        {#if i}<span class="sgsep" aria-hidden="true">│</span>{/if}
-        <button class="sgitem" lang={langTag(s.variety)} style="font-family:{hanFont(s.variety)}" onmousedown={(e) => e.preventDefault()} onclick={() => pickSuggestion(s)}>{s.headword}</button>
-      {/each}
-    </div>
-  {/if}
 
   {#if panel === 'draw'}
     <section class="inputpanel"><Pad onpick={fromDraw} onclose={() => (panel = 'none')} /></section>
@@ -476,13 +481,13 @@
   {#if err}<div class="err">{err}</div>{/if}
 
   {#if canSaveShare}
-    <!-- per-page actions: bookmark + share a direct link (item 7) -->
+    <!-- per-page actions: icon-only save + share, on the right edge level with the big character -->
     <div class="actions">
       <button class="actbtn" class:on={savedNow} onclick={toggleSave} aria-pressed={savedNow} aria-label={savedNow ? 'remove bookmark' : 'save'} title={savedNow ? 'saved' : 'save'}>
-        <Bookmark size={16} fill={savedNow ? 'currentColor' : 'none'} /> <span>{savedNow ? 'saved' : 'save'}</span>
+        <Bookmark size={22} fill={savedNow ? 'currentColor' : 'none'} />
       </button>
       <button class="actbtn" onclick={shareCurrent} aria-label="share" title="share">
-        <Share2 size={16} /> <span>share</span>
+        <Share2 size={22} />
       </button>
     </div>
   {/if}
@@ -634,16 +639,16 @@
       calc(4rem + env(safe-area-inset-bottom)) calc(1.35rem + env(safe-area-inset-left));
   }
   .bar { margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
-  /* item 7: history + saved buttons to the right of the wordmark */
-  .navbtns { display: flex; gap: 0.2rem; }
-  .navbtn { display: inline-flex; align-items: center; justify-content: center; width: 2.2rem; height: 2.2rem; background: none; border: none; border-radius: var(--r); color: var(--faint); }
+  /* item 7: history + saved buttons to the right of the wordmark (enlarged) */
+  .navbtns { display: flex; gap: 0.3rem; }
+  .navbtn { display: inline-flex; align-items: center; justify-content: center; width: 2.9rem; height: 2.9rem; background: none; border: none; border-radius: var(--r); color: var(--muted); }
   .navbtn:hover { color: var(--text); background: var(--surface); }
   .navbtn.on { color: var(--text); }
-  /* per-page save/share actions */
-  .actions { display: flex; gap: 0.5rem; margin: 0 0 0.9rem; }
-  .actbtn { display: inline-flex; align-items: center; gap: 0.35rem; font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: 999px; padding: 0.3rem 0.7rem; }
-  .actbtn:hover { color: var(--text); border-color: var(--border-strong); }
-  .actbtn.on { color: var(--text); border-color: var(--border-strong); }
+  /* per-page save/share: icon-only, on the right edge, pulled up level with the big character */
+  .actions { display: flex; justify-content: flex-end; gap: 0.2rem; margin: 0 0 -2.6rem; position: relative; z-index: 3; pointer-events: none; }
+  .actbtn { display: inline-flex; align-items: center; justify-content: center; width: 2.6rem; height: 2.6rem; color: var(--muted); background: none; border: none; border-radius: var(--r); pointer-events: auto; }
+  .actbtn:hover { color: var(--text); background: var(--surface); }
+  .actbtn.on { color: var(--text); }
   /* saved / history list views */
   .listview { padding-top: 0.2rem; }
   .lvh { display: flex; align-items: center; gap: 0.7rem; font-family: var(--sans); font-size: 1.2rem; font-weight: 500; color: var(--text); margin: 0 0 0.6rem; }
@@ -662,10 +667,11 @@
   .field { position: relative; flex: 1; min-width: 0; display: flex; }
   .searchicon { position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; display: flex; }
   .field input {
-    width: 100%; height: 2.7rem; padding: 0 4.4rem 0 2.4rem; font-size: 1.05rem; line-height: 2.7rem;
-    font-family: var(--sans); color: var(--text);
+    width: 100%; padding: 0.65rem 4.4rem 0.65rem 2.4rem; font-size: 1.05rem; line-height: 1.4;
+    font-family: var(--sans); color: var(--text); -webkit-appearance: none; appearance: none;
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
   }
+  .field input::-webkit-search-decoration, .field input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
   .field input:focus { border-color: var(--border-strong); background: var(--surface-2); }
   .field input::placeholder { color: var(--faint); }
   /* item 1: monochrome selection so highlighting typed text doesn't look odd */
@@ -692,11 +698,21 @@
   /* item 1: focusing the field expands it to full width; draw + camera slide away */
   .searchrow.focused .rowbtn { max-width: 0; margin-left: 0; padding: 0; opacity: 0; border-width: 0; pointer-events: none; }
   @media (prefers-reduced-motion: reduce) { .rowbtn { transition: none; } }
-  /* Google-Translate-style suggestions: plain text divided by vertical bars */
-  .suggests { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.1rem; margin: -0.3rem 0 0.7rem; padding: 0 0.2rem; }
-  .sgsep { color: var(--border-strong); padding: 0 0.15rem; }
-  .sgitem { background: none; border: none; padding: 0.15rem 0.25rem; font-size: 1.05rem; color: var(--muted); border-radius: var(--r); }
-  .sgitem:hover { color: var(--text); background: var(--surface); }
+  /* autocomplete dropdown menu (item 6) */
+  .sgmenu {
+    position: absolute; top: calc(100% + 0.3rem); left: 0; right: 0; z-index: 40;
+    list-style: none; margin: 0; padding: 0.3rem; max-height: 60vh; overflow-y: auto;
+    background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--r-lg);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  }
+  .sgrow {
+    display: flex; align-items: baseline; gap: 0.6rem; width: 100%; text-align: left;
+    background: none; border: none; padding: 0.55rem 0.6rem; border-radius: var(--r);
+  }
+  .sgrow:hover { background: var(--surface); }
+  .sghw { font-size: 1.15rem; color: var(--text); }
+  .sgread { font-size: 0.85rem; color: var(--muted); font-family: var(--mono); }
+  .sgvar { margin-left: auto; font-family: var(--han); font-size: 0.85rem; color: var(--faint); }
 
   /* inline draw pad / photo selection, shown directly under the search row */
   .inputpanel { margin-bottom: 1.2rem; }

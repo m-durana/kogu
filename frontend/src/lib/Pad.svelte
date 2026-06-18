@@ -123,8 +123,10 @@
   </div>
 
   {#if candidates.length}
+    <!-- candidates as plain text divided by vertical bars (item 10), not a grid of boxed buttons -->
     <div class="cands" data-testid="pad-candidates">
-      {#each candidates as ch}
+      {#each candidates as ch, i}
+        {#if i}<span class="csep" aria-hidden="true">│</span>{/if}
         <button class="cand" onclick={() => pick(ch)}>{ch}</button>
       {/each}
     </div>
@@ -167,6 +169,8 @@
   }
   .clearx:hover { color: #fff; border-color: var(--border-strong); }
   .pad-status { color: var(--faint); font-size: 0.85rem; text-align: center; }
-  .cands { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; }
-  .cand { font-family: var(--han); font-size: 1.7rem; padding: 0.3rem 0.6rem; min-width: 2.8rem; }
+  .cands { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.15rem; }
+  .csep { color: var(--border-strong); }
+  .cand { font-family: var(--han); font-size: 1.7rem; padding: 0.1rem 0.4rem; background: none; border: none; color: var(--text); border-radius: var(--r); }
+  .cand:hover { background: var(--surface); }
 </style>
