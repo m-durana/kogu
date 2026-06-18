@@ -743,6 +743,7 @@
       <div class="defs">
         {#each defRows as r (r.id)}
           {@const ss = shownSenses(r)}
+          {@const longForm = [...(r.variety === 'zh' ? zhPair(r).trad : r.form || '')].length >= 3}
           <div class="dl">
             <div class="dlh">
               <span class="dvar">{varietyLabel(r.variety)}</span>
@@ -755,16 +756,20 @@
                 <!-- the language writes the same character with a different glyph (Japan: 电 → 電) -->
                 <span class="dform" lang={langTag(r.variety)} style="font-family:{hanFont(r.variety)}">{r.form}</span>
               {/if}
-              {#if r.variety === 'ja' && r.synthetic && jaReadItems.length}
-                <!-- a SYNTHETIC ja row (kanji used only in compounds) shows the character's full on/kun
-                     (kana + romaji), clamped to one line with a "+". A REAL ja word-row shows its OWN
-                     reading instead (so 日's ひ and にち rows don't both show the whole list). -->
-                <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe>{#each jaReadItems as it, i}{#if i}<span class="rsep">·</span>{/if}{it.main}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{jaReadOpen ? '−' : '+'}</button>{/if}
-              {:else if r.reading}
-                <span class="dread">{dispReading(r.variety, r.reading)}</span>
-              {/if}
-              {#if r.variety === 'zh' && headJyut && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread">{settings.romanization === 'yale' ? jyutpingToYale(headJyut) : headJyut}</span>{/if}
-              {#if canSpeak()}<button class="spk" onclick={() => speak(r.form, r.variety)} aria-label="listen" title="listen"><Volume2 size={15} /></button>{/if}
+              <!-- the readings (+ Cantonese + speaker) ride on their own full-width line for long
+                   forms so a wide idiom can't squish the romanisation down to a sliver (item 147). -->
+              <span class="drow2" class:wide={longForm}>
+                {#if r.variety === 'ja' && r.synthetic && jaReadItems.length}
+                  <!-- a SYNTHETIC ja row (kanji used only in compounds) shows the character's full on/kun
+                       (kana + romaji), clamped to one line with a "+". A REAL ja word-row shows its OWN
+                       reading instead (so 日's ひ and にち rows don't both show the whole list). -->
+                  <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe>{#each jaReadItems as it, i}{#if i}<span class="rsep">·</span>{/if}{it.main}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{jaReadOpen ? '−' : '+'}</button>{/if}
+                {:else if r.reading}
+                  <span class="dread">{dispReading(r.variety, r.reading)}</span>
+                {/if}
+                {#if r.variety === 'zh' && headJyut && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread">{settings.romanization === 'yale' ? jyutpingToYale(headJyut) : headJyut}</span>{/if}
+                {#if canSpeak()}<button class="spk" onclick={() => speak(r.form, r.variety)} aria-label="listen" title="listen"><Volume2 size={15} /></button>{/if}
+              </span>
             </div>
             {#if boundKind(r) || (single && (isRadicalChar || rowUsage(r.variety)))}
               <!-- tags (bound, rarely-used, radical) on their own line, indented under the readings.
@@ -1035,6 +1040,10 @@
   .dform { font-family: var(--han); font-size: 1.15rem; }
   .dform .ftag { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); margin-right: 0.18rem; vertical-align: 0.35em; }
   .dform .fsep { color: var(--faint); margin: 0 0.18rem; }
+  /* the reading group: inline with the form for short words; its own line for long ones (.wide),
+     where flex-basis:100% forces a wrap within the wrapping .dlh and the reading gets full width. */
+  .drow2 { display: inline-flex; align-items: baseline; gap: 0.7rem; min-width: 0; }
+  .drow2.wide { flex-basis: 100%; margin-top: 0.1rem; }
   .dread { font-family: var(--mono); font-size: 0.9rem; color: var(--muted); }
   /* tight reading separator (the old "  ·  " ate too much space) + romaji gloss + "+N more" toggle */
   .dread .rsep { color: var(--faint); margin: 0 0.28rem; }
