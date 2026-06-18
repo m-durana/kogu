@@ -426,7 +426,7 @@
       <span class="searchicon" aria-hidden="true"><Search size={17} /></span>
       <input
         bind:this={inputEl}
-        type="search"
+        type="text"
         enterkeyhint="search"
         lang={langTag(queryLang)}
         style="font-family:{inputFont}"
@@ -673,6 +673,8 @@
   }
   .field input::-webkit-search-decoration, .field input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
   .field input:focus { border-color: var(--border-strong); background: var(--surface-2); }
+  /* when the dropdown is open, square the input's bottom so the two read as one connected surface */
+  .field:has(.sgmenu) input { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
   .field input::placeholder { color: var(--faint); }
   /* item 1: monochrome selection so highlighting typed text doesn't look odd */
   .field input::selection { background: var(--muted); color: var(--bg); }
@@ -700,9 +702,11 @@
   @media (prefers-reduced-motion: reduce) { .rowbtn { transition: none; } }
   /* autocomplete dropdown menu (item 6) */
   .sgmenu {
-    position: absolute; top: calc(100% + 0.3rem); left: 0; right: 0; z-index: 40;
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 40;
     list-style: none; margin: 0; padding: 0.3rem; max-height: 60vh; overflow-y: auto;
-    background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--r-lg);
+    background: var(--surface-2); border: 1px solid var(--border-strong); border-top: none;
+    /* square top so it reads as coming straight out of the search field; only the bottom is rounded */
+    border-radius: 0 0 var(--r-lg) var(--r-lg);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   }
   .sgrow {

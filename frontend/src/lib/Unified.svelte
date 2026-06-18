@@ -721,7 +721,6 @@
           {@const ss = shownSenses(r)}
           <div class="dl">
             <div class="dlh">
-              {#if headTags.length}<span class="ltags">{#each headTags as t}<span class="ltag" class:rad={t === 'radical'}>{t}</span>{/each}</span>{/if}
               <span class="dvar">{varietyLabel(r.variety)}</span>
               {#if r.variety === 'zh'}
                 {@const zp = zhPair(r)}
@@ -741,8 +740,14 @@
                 <span class="dread">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>
               {/if}
               {#if r.variety === 'zh' && headJyut && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread">{headJyut}</span>{/if}
-              {#if isBoundForm(r.glosses) || r.synthetic}<button class="btag" onclick={() => openBound(r)} title="bound form: only used in compounds">bound</button>{/if}
             </div>
+            {#if (isBoundForm(r.glosses) || r.synthetic) || (single && headTags.length)}
+              <!-- tags (bound, rarely-used, radical) on their own line, indented under the readings -->
+              <div class="rtagline">
+                {#if isBoundForm(r.glosses) || r.synthetic}<button class="btag" onclick={() => openBound(r)} title="bound form: only used in compounds">bound</button>{/if}
+                {#if single}{#each headTags as t}<span class="ltag" class:rad={t === 'radical'}>{t}</span>{/each}{/if}
+              </div>
+            {/if}
             {#if ss.length}
               <ol class="senses" class:clamp={!expanded.has(r.id) && overflow.has(r.id)} use:clampProbe={{ id: r.id, rem: 2.9 }}>
                 {#each ss as g}<li><span class="sg">{#each glossParts(g) as p}{#if p.link}<button class="xref" onclick={() => onsearch(p.v)}>{p.v}</button>{:else}{p.v}{/if}{/each}</span></li>{/each}
@@ -816,19 +821,17 @@
         <!-- phono-semantic: which part carries the meaning vs the sound (媽 = 女 meaning + 馬 sound) -->
         <p class="comp">
           {#if comp?.idc}<IdcBox idc={comp.idc} /><span class="dim idcsep">:</span>{/if}
-          {#each roleParts as c, i}{#if i}<span class="plus">+</span>{/if}<button class="part" onclick={() => onsearch(c.ch)} title="look up {c.ch}">{c.ch}</button>{#if c.role === 'phonetic' && c.sound}<span class="cmean">sound: {pinyinMarks(c.sound)}</span>{:else if meaningOf(c.ch)}<span class="cmean">{meaningOf(c.ch)}</span>{/if}{#if roleBadge(c.role) && !(c.role === 'phonetic' && c.sound)}<span class="role role-{c.role}">{roleBadge(c.role)}</span>{/if}{/each}
+          {#each roleParts as c, i}{#if i}<span class="plus">+</span>{/if}<span class="cpart"><button class="part" onclick={() => onsearch(c.ch)} title="look up {c.ch}">{c.ch}</button>{#if c.role === 'phonetic' && c.sound}<span class="cmean">sound: {pinyinMarks(c.sound)}</span>{:else if meaningOf(c.ch)}<span class="cmean">{meaningOf(c.ch)}</span>{/if}{#if roleBadge(c.role) && !(c.role === 'phonetic' && c.sound)}<span class="role role-{c.role}">{roleBadge(c.role)}</span>{/if}</span>{/each}
         </p>
       {:else if decomp}
         <p class="comp">
           {#if comp?.idc}<IdcBox idc={comp.idc} /><span class="dim idcsep">:</span>{/if}
-          <span class="dim">{numWord(decomp.count)} ×</span>
-          <button class="part" onclick={() => onsearch(decomp.base)} title="look up {decomp.base}">{decomp.base}</button>
-          {#if meaningOf(decomp.base)}<span class="cmean">{meaningOf(decomp.base)}</span>{/if}
+          <span class="cpart"><span class="dim">{numWord(decomp.count)} ×</span> <button class="part" onclick={() => onsearch(decomp.base)} title="look up {decomp.base}">{decomp.base}</button>{#if meaningOf(decomp.base)}<span class="cmean">{meaningOf(decomp.base)}</span>{/if}</span>
         </p>
       {:else if comp}
         <p class="comp">
           {#if comp.idc}<IdcBox idc={comp.idc} /><span class="dim idcsep">:</span>{/if}
-          {#each comp.parts as p, i}{#if i}<span class="plus">+</span>{/if}<button class="part" onclick={() => onsearch(p.component)} title="look up {p.component}">{p.component}</button>{#if p.count > 1}<span class="dim">×{p.count}</span>{/if}{#if meaningOf(p.component)}<span class="cmean">{meaningOf(p.component)}</span>{/if}{/each}
+          {#each comp.parts as p, i}{#if i}<span class="plus">+</span>{/if}<span class="cpart"><button class="part" onclick={() => onsearch(p.component)} title="look up {p.component}">{p.component}</button>{#if p.count > 1}<span class="dim">×{p.count}</span>{/if}{#if meaningOf(p.component)}<span class="cmean">{meaningOf(p.component)}</span>{/if}</span>{/each}
         </p>
       {/if}
       {#if headChar.strokes}
@@ -1077,9 +1080,10 @@
   /* item 14: the script-change explanation sentence (replaces the bare "PRC simplification" caption) */
   .scriptnote { font-size: 0.85rem; color: var(--muted); line-height: 1.55; margin: 0.5rem 0 0; }
   .cnote { font-size: 0.9rem; color: var(--muted); font-style: italic; line-height: 1.55; margin: 0.6rem 0 0; }
-  /* items 17/18: radical / rarely-used tags shown left of each language label in the definition rows */
-  .ltags { display: inline-flex; gap: 0.3rem; align-self: center; }
-  .ltag { font-family: var(--mono); font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); border: 1px solid var(--border); border-radius: 999px; padding: 0.04rem 0.42rem; line-height: 1.5; }
+  /* items 17/18: radical / rarely-used / bound tags on their own line below the readings, indented one
+     level so they sit under the language kanji rather than crowding the header row. */
+  .rtagline { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; margin: 0.2rem 0 0; padding-left: 1.6rem; }
+  .ltag { font-family: var(--mono); font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); border: 1px solid var(--border); border-radius: var(--r); padding: 0.04rem 0.42rem; line-height: 1.5; }
   .ltag.rad { color: var(--muted); border-color: var(--border-strong); }
   /* per-language origin account label (中 山 / 日 山) */
   .oacc { margin-top: 1rem; }
@@ -1094,10 +1098,15 @@
   .cln { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 0.5rem; font-size: 0.8rem; }
   /* English label + Chinese glyph kept close in size so the line reads as one phrase (was 0.82rem vs
      1.6rem — too far apart). The component glyph leads only slightly. */
-  /* item 11: align components to the text baseline so the (larger) kanji and their English meanings
-     sit on the same line, instead of the kanji hanging below the latin like before. */
-  .comp { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.35rem; margin: 0.6rem 0 0; }
-  .comp :global(svg) { align-self: center; }
+  /* item 11 + wrap fix: flow components as inline text so each glyph stays with its own gloss and
+     wraps as a unit (the gloss never drops to its own line right after the kanji). Inline flow also
+     baseline-aligns the larger kanji with their latin meanings. */
+  .comp { display: block; line-height: 2; margin: 0.6rem 0 0; }
+  .comp :global(svg) { vertical-align: middle; }
+  /* each component (glyph + its gloss + role) flows as one inline unit, so the gloss never drops to a
+     line of its own straight after the glyph; the unit only wraps when the line is genuinely full. */
+  .cpart { display: inline; }
+  .comp .part { white-space: nowrap; }
   .part { font-family: var(--han); color: var(--text); background: none; border: none; padding: 0 0.1rem; font-size: 1.25rem; line-height: 1; }
   .part:hover { color: #fff; background: none; }
   .comp .dim { font-size: 0.95rem; }

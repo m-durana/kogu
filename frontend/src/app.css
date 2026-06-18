@@ -29,9 +29,9 @@
   --han-ja: "Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", var(--han);
   --han-tc: "Noto Serif TC", "Songti TC", var(--han);
 
-  /* subtle rounding (iOS-ish), monochrome */
-  --r: 9px;
-  --r-lg: 13px;
+  /* subtle rounding (kept restrained, monochrome) */
+  --r: 5px;
+  --r-lg: 7px;
   --r-pill: 980px;
 
   color-scheme: dark;
