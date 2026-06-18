@@ -245,7 +245,7 @@ fn build_entry(
     let mut ety_vars: std::collections::HashSet<String> = std::collections::HashSet::new();
     if let Some(t) = etymology.clone() {
         ety_vars.insert(variety.clone());
-        origins.push(OriginAccount { variety: variety.clone(), headword: headword.clone(), text: t });
+        origins.push(origin_account(conn, &variety, &headword, t));
     }
     for l in &same_form {
         if ety_vars.contains(&l.variety) {
@@ -253,12 +253,16 @@ fn build_entry(
         }
         if let Some(t) = etymology_of(conn, l.lexeme_id) {
             ety_vars.insert(l.variety.clone());
-            origins.push(OriginAccount { variety: l.variety.clone(), headword: l.headword.clone(), text: t });
+            origins.push(origin_account(conn, &l.variety, &l.headword, t));
         }
     }
 
-    // for a radical/bound component, replace the word "used in" with "appears in characters"
-    let appears_in = if headword.chars().count() == 1 && characters.first().map(|c| c.is_radical).unwrap_or(false) {
+    // "appears in characters" replaces the word "used in" for a radical/bound component AND for a
+    // glossless single-glyph component (𦘒, 肀): a character with no senses of its own is still worth
+    // showing as "only used inside these characters" instead of a blank page.
+    let single_char = headword.chars().count() == 1;
+    let is_radical_char = characters.first().map(|c| c.is_radical).unwrap_or(false);
+    let appears_in = if single_char && (is_radical_char || senses.is_empty()) {
         appears_in_chars(conn, headword.chars().next().unwrap())?
     } else {
         Vec::new()
@@ -295,10 +299,13 @@ fn char_compounds(
     exclude_id: i64,
 ) -> rusqlite::Result<Vec<LinkLite>> {
     let mut cs = conn.prepare(
-        // sorted by USAGE: most-frequent words first (NULL freq last), then shorter, then id.
-        "SELECT l.id FROM form_char fc JOIN lexeme l ON l.id = fc.lexeme_id \
+        // grouped by SCRIPT first (traditional words before simplified, so TC and SC don't interleave),
+        // then by USAGE: most-frequent first (NULL freq last), then shorter, then id.
+        "SELECT l.id, COALESCE((SELECT sf.script FROM surface_form sf \
+                                WHERE sf.lexeme_id = l.id AND sf.is_primary = 1 LIMIT 1), '') AS sc \
+         FROM form_char fc JOIN lexeme l ON l.id = fc.lexeme_id \
          WHERE fc.cp = ?1 AND l.id <> ?2 AND l.variety = ?3 GROUP BY l.id \
-         ORDER BY l.freq IS NULL, l.freq DESC, MIN(fc.flen) ASC, l.id ASC LIMIT 14",
+         ORDER BY (sc <> 'trad'), l.freq IS NULL, l.freq DESC, MIN(fc.flen) ASC, l.id ASC LIMIT 14",
     )?;
     let mut out = Vec::new();
     for v in ["zh", "yue", "ja"] {
@@ -348,11 +355,12 @@ fn build_char_entry(conn: &rusqlite::Connection, cp: u32) -> rusqlite::Result<Op
         }
         if let Some(t) = etymology_of(conn, lid) {
             ety_vars.insert(var.clone());
-            origins.push(OriginAccount { variety: var, headword: hw, text: t });
+            origins.push(origin_account(conn, &var, &hw, t));
         }
     }
     let etymology = origins.first().map(|o| o.text.clone());
-    let appears_in = if is_radical { appears_in_chars(conn, ch)? } else { Vec::new() };
+    // radical OR glossless component (𦘒): show the characters it appears inside rather than nothing.
+    let appears_in = if is_radical || senses.is_empty() { appears_in_chars(conn, ch)? } else { Vec::new() };
 
     Ok(Some(Entry {
         lexeme_id: -(cp as i64),
@@ -652,16 +660,136 @@ fn radical_gloss_number(gloss: Option<&str>) -> Option<i64> {
 /// strokes) first; capped so a high-frequency radical doesn't dump thousands.
 fn appears_in_chars(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Vec<CharLite>> {
     let pat = format!("%{}%", ch);
+    // Ordering: common-plane glyphs (cp < U+20000, fonts render them) before rare extension-plane
+    // ones (no wall of tofu); within that, traditional/orthodox kanji before simplified so TC and SC
+    // forms don't interleave (item 13); then lightest (fewest strokes) first.
     let mut s = conn.prepare(
-        "SELECT char, gloss_en FROM character WHERE ids LIKE ?1 AND cp <> ?2 \
-         ORDER BY strokes IS NULL, strokes ASC, cp ASC LIMIT 40",
+        "SELECT char, gloss_en, cp FROM character WHERE ids LIKE ?1 AND cp <> ?2 \
+         ORDER BY (cp >= 131072), (is_orthodox = 0), strokes IS NULL, strokes ASC, cp ASC LIMIT 40",
     )?;
     let out: Vec<CharLite> = s
         .query_map(rusqlite::params![pat, ch as i64], |r| {
-            Ok(CharLite { ch: r.get(0)?, gloss: r.get(1)? })
+            Ok(CharLite { ch: r.get(0)?, gloss: r.get(1)?, rare: r.get::<_, i64>(2)? >= 0x20000 })
         })?
         .collect::<Result<_, _>>()?;
     Ok(out)
+}
+
+/// Which script a glyph belongs to, ONLY when it diverges across reforms: a non-orthodox glyph with
+/// an identity parent is "simplified"; an orthodox glyph that has a simplified child is "traditional".
+/// Returns None for glyphs identical in every script (山, 古) — there is nothing to disambiguate.
+fn glyph_script(conn: &rusqlite::Connection, ch: char) -> Option<String> {
+    let cp = ch as i64;
+    let is_orthodox: bool = conn
+        .query_row("SELECT is_orthodox FROM character WHERE cp=?1", [cp], |r| r.get::<_, i64>(0))
+        .ok()
+        .map(|v| v != 0)?;
+    if !is_orthodox {
+        let has_parent: i64 = conn
+            .query_row(
+                &format!("SELECT EXISTS(SELECT 1 FROM glyph_edge WHERE child_cp=?1 AND type IN {IDENTITY_TYPES})"),
+                [cp],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
+        if has_parent != 0 {
+            return Some("simplified".into());
+        }
+    } else {
+        let has_child: i64 = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM glyph_edge WHERE parent_cp=?1 AND type='simplification')",
+                [cp],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
+        if has_child != 0 {
+            return Some("traditional".into());
+        }
+    }
+    None
+}
+
+/// Content words of a character's own Unihan gloss (for meaning comparison).
+fn char_gloss_words(conn: &rusqlite::Connection, ch: char) -> std::collections::HashSet<String> {
+    let g: Option<String> = conn
+        .query_row("SELECT gloss_en FROM character WHERE cp=?1", [ch as i64], |r| r.get(0))
+        .ok()
+        .flatten();
+    let mut out = std::collections::HashSet::new();
+    if let Some(g) = g {
+        for tok in g.to_lowercase().split(|c: char| !c.is_ascii_alphabetic()) {
+            if tok.len() >= 3 && !GLOSS_STOPWORDS.contains(&tok) {
+                out.insert(tok.to_string());
+            }
+        }
+    }
+    out
+}
+
+/// When a glyph doubles as the simplified form of one or more DISTINCT characters (丑 = earthly branch
+/// AND simplified 醜 "ugly"; 干 ← 乾/幹), a note naming them so the origin paragraph isn't misread as
+/// describing the merged-in character. Parents whose meaning overlaps the glyph's own (这↔這, plain
+/// spelling variants) are excluded — those aren't merges of distinct characters.
+fn merge_note(conn: &rusqlite::Connection, ch: char) -> Option<String> {
+    let own = char_gloss_words(conn, ch);
+    let mut s = conn
+        .prepare(
+            "SELECT p.char, p.gloss_en FROM glyph_edge e JOIN character p ON p.cp = e.parent_cp \
+             WHERE e.child_cp = ?1 AND e.type = 'simplification'",
+        )
+        .ok()?;
+    let rows: Vec<(String, Option<String>)> = s
+        .query_map([ch as i64], |r| Ok((r.get(0)?, r.get(1)?)))
+        .ok()?
+        .filter_map(Result::ok)
+        .collect();
+    let mut parts = Vec::new();
+    for (pch, pgloss) in rows {
+        if pch.chars().next() == Some(ch) {
+            continue;
+        }
+        let pwords: std::collections::HashSet<String> = pgloss
+            .as_deref()
+            .unwrap_or("")
+            .to_lowercase()
+            .split(|c: char| !c.is_ascii_alphabetic())
+            .filter(|t| t.len() >= 3 && !GLOSS_STOPWORDS.contains(t))
+            .map(|t| t.to_string())
+            .collect();
+        // a real merge: parent has its own meaning that does NOT overlap this glyph's meaning
+        if !pwords.is_empty() && pwords.is_disjoint(&own) {
+            let short = pgloss
+                .as_deref()
+                .map(|g| g.split([';', ',']).next().unwrap_or(g).trim().to_string())
+                .filter(|s| !s.is_empty());
+            match short {
+                Some(g) => parts.push(format!("{pch} ({g})")),
+                None => parts.push(pch),
+            }
+        }
+    }
+    if parts.is_empty() {
+        return None;
+    }
+    Some(format!("Also the simplified form of {}.", parts.join(", ")))
+}
+
+/// Build an OriginAccount, stamping the script and any simplification-merge note for single Chinese /
+/// Cantonese glyphs (so the reader can tell simplified from traditional, and spot merged characters).
+fn origin_account(
+    conn: &rusqlite::Connection,
+    variety: &str,
+    headword: &str,
+    text: String,
+) -> OriginAccount {
+    let (script, note) = if matches!(variety, "zh" | "yue") && headword.chars().count() == 1 {
+        let ch = headword.chars().next().unwrap();
+        (glyph_script(conn, ch), merge_note(conn, ch))
+    } else {
+        (None, None)
+    };
+    OriginAccount { variety: variety.to_string(), headword: headword.to_string(), text, script, note }
 }
 
 /// Radical-variant forms → the parent character whose meaning they carry, so 亻/氵/扌… are glossed

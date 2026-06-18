@@ -64,12 +64,22 @@ pub struct OriginAccount {
     pub variety: String,
     pub headword: String,
     pub text: String,
+    /// which script this glyph is, when it diverges across reforms: "traditional" | "simplified".
+    /// None when the glyph is the same in every script (山, 古) — nothing to disambiguate.
+    pub script: Option<String>,
+    /// a clarifying note when this glyph ALSO doubles as the simplified form of a distinct character
+    /// (丑 is the earthly branch AND the simplified form of 醜 "ugly"). Prevents the reader from
+    /// thinking the origin paragraph below describes the merged-in traditional character.
+    pub note: Option<String>,
 }
 
 #[derive(Serialize)]
 pub struct CharLite {
     pub ch: String,
     pub gloss: Option<String>,
+    /// true for rare extension-plane glyphs (cp ≥ U+20000) the device font likely renders as tofu;
+    /// the UI de-emphasises these and labels them with their codepoint rather than a blank box.
+    pub rare: bool,
 }
 
 #[derive(Serialize)]

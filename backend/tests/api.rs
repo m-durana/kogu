@@ -1149,3 +1149,92 @@ async fn phonetic_component_carries_its_sound() {
     let nu = comps.iter().find(|c| c["ch"] == "女").unwrap();
     assert!(nu["sound"].is_null(), "semantic component carries no sound");
 }
+
+// ---- items 17/18: glossless components surface "appears in", rare ext-plane glyphs flagged ----
+#[tokio::test]
+async fn glossless_component_lists_appears_in() {
+    // 𦘒 (U+26612): no gloss, no word-lexeme, but a component of 書 / 晝 / 畫.
+    let (_, e) = get("/entry/-157202").await;
+    assert!(e["senses"].as_array().unwrap().is_empty(), "𦘒 has no senses");
+    let ai = e["appears_in"].as_array().expect("appears_in array");
+    assert!(!ai.is_empty(), "𦘒 should list the characters it appears in");
+    let chars: Vec<&str> = ai.iter().filter_map(|c| c["ch"].as_str()).collect();
+    assert!(chars.contains(&"書"), "𦘒 appears in 書, got {chars:?}");
+}
+
+#[tokio::test]
+async fn appears_in_flags_rare_extension_glyphs() {
+    let (_, e) = get("/entry/-157202").await;
+    let ai = e["appears_in"].as_array().unwrap();
+    assert_eq!(ai[0]["rare"], false, "first appears-in glyph is common-plane, not tofu");
+    assert!(ai.iter().any(|c| c["rare"] == true), "some 𦘒 hosts are rare ext-B glyphs");
+}
+
+// ---- item 13: a radical's "appears in" kanji group traditional before simplified ----
+#[tokio::test]
+async fn appears_in_groups_traditional_before_simplified() {
+    // 钅 (U+9485, simplified metal radical): orthodox hosts must precede simplified ones.
+    let (_, e) = get("/entry/-38021").await;
+    let ai = e["appears_in"].as_array().expect("appears_in");
+    let chars: Vec<&str> = ai.iter().filter_map(|c| c["ch"].as_str()).collect();
+    match (chars.iter().position(|&c| c == "䥻"), chars.iter().position(|&c| c == "针")) {
+        (Some(t), Some(s)) => assert!(t < s, "traditional 䥻 (#{t}) before simplified 针 (#{s})"),
+        _ => panic!("expected both 䥻 and 针 in 钅 appears_in, got {chars:?}"),
+    }
+}
+
+// ---- item 15: simplification-merge note + script on origin accounts ----
+async fn zh_entry(q: &str) -> Value {
+    let v = search(q).await;
+    let id = v["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["variety"] == "zh")
+        .expect("a zh hit")["lexeme_id"]
+        .as_i64()
+        .unwrap();
+    get(&format!("/entry/{id}")).await.1
+}
+
+#[tokio::test]
+async fn merge_glyph_origin_has_note_and_simplified_script() {
+    let e = zh_entry("丑").await;
+    let acc = e["origins"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["variety"] == "zh")
+        .expect("a zh origin for 丑");
+    assert_eq!(acc["script"], "simplified", "丑 doubles as simplified 醜");
+    let note = acc["note"].as_str().expect("a merge note");
+    assert!(note.contains("醜"), "note names merged-in 醜, got {note:?}");
+}
+
+#[tokio::test]
+async fn plain_glyph_origin_has_no_script_or_note() {
+    // 山 is identical across scripts and merges nothing.
+    let e = zh_entry("山").await;
+    let acc = e["origins"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["variety"] == "zh")
+        .expect("a zh origin for 山");
+    assert!(acc["script"].is_null(), "山 carries no script label");
+    assert!(acc["note"].is_null(), "山 carries no merge note");
+}
+
+#[tokio::test]
+async fn traditional_glyph_origin_tagged_traditional() {
+    // 這 is orthodox with a simplified child 这: tagged traditional, but merges nothing.
+    let e = zh_entry("這").await;
+    let acc = e["origins"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["variety"] == "zh")
+        .expect("a zh origin for 這");
+    assert_eq!(acc["script"], "traditional");
+    assert!(acc["note"].is_null(), "這 merges nothing");
+}

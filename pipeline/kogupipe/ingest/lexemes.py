@@ -22,6 +22,22 @@ JMDICT_ZIP = SOURCES_DIR / "jmdict-eng-common.json.zip"
 
 _CEDICT_RE = re.compile(r"^(\S+)\s+(\S+)\s+\[([^\]]*)\]\s+/(.*)/\s*$")
 _TONE = re.compile(r"[1-5]")
+
+# CC-CEDICT embeds cross-references as `trad|simp[pin1yin1]` (or `word[pinyin]`, `trad|simp`) inside
+# glosses. Left raw they leak the simplified twin and a tone-numbered romanisation into the prose, and
+# rare referents render as tofu (〡 → "...蘇州碼子|苏州码子[Su1 zhou1 ma3 zi5]"). We keep the (traditional)
+# headword and drop the `|simp` twin and `[pinyin]`. A bracket NOT glued to a preceding word (a real
+# pronunciation note like "Tai-lo pr. [khè-su]") is left untouched.
+_REF_FULL = re.compile(r"([^\s|\[\]]+)\|[^\s\[\]]+(?:\[[^\]]*\])?")
+_REF_PIN = re.compile(r"([^\s|\[\]]+)(\[[^\]]*\])")
+_WS = re.compile(r"\s{2,}")
+
+
+def clean_gloss(g: str) -> str:
+    """Strip CC-CEDICT `trad|simp[pinyin]` cross-reference markup, keeping the traditional headword."""
+    g = _REF_FULL.sub(r"\1", g)
+    g = _REF_PIN.sub(r"\1", g)
+    return _WS.sub(" ", g).strip()
 # CC-CEDICT uses 'xx5' as a placeholder for an unknown reading. The original CJKV Dict leaked
 # this to the UI - we suppress it (keep the word + glosses, drop the bogus reading).
 _PLACEHOLDER = re.compile(r"xx[0-9]", re.IGNORECASE)
@@ -84,7 +100,7 @@ def _ingest_cedict(conn, ids: _Ids) -> int:
             # The '/' is CC-CEDICT's real sense boundary; ';' inside a sense stays (it marks synonyms,
             # exactly as JMdict uses it), so we never over-split.
             for order, g in enumerate(glosses):
-                senses.append((ids.next_sense(), lid, None, g, order))
+                senses.append((ids.next_sense(), lid, None, clean_gloss(g), order))
             n += 1
     conn.executemany("INSERT INTO lexeme(id,variety,headword,reading,freq,freq_source) VALUES (?,?,?,?,?,?)", lexemes)
     conn.executemany("INSERT INTO surface_form(id,lexeme_id,form,script,region,is_primary) VALUES (?,?,?,?,?,?)", forms)
