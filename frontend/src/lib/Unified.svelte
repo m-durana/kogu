@@ -981,10 +981,11 @@
 
   {#if boundOpen}
     {@const bc = boundCompounds(boundOpen)}
+    {@const often = boundKind(boundOpen) === 'often'}
     <div class="mbg" role="presentation" onclick={closeBound}>
       <div class="modal" role="dialog" aria-modal="true" aria-label="bound form" onclick={(e) => e.stopPropagation()}>
-        <div class="mh"><span class="mglyph">{boundOpen.form}</span><span class="mtag">bound form</span></div>
-        <p class="mexp">Not used as a word on its own; it carries meaning only inside compounds.</p>
+        <div class="mh"><span class="mglyph">{boundOpen.form}</span><span class="mtag">{often ? 'often in compounds' : 'bound form'}</span></div>
+        <p class="mexp">{often ? 'Used as a word on its own in some senses, but often appears only inside compounds.' : 'Not used as a word on its own; it carries meaning only inside compounds.'}</p>
         {#if bc.length}
           <div class="mlabel">appears in</div>
           <div class="chips">
