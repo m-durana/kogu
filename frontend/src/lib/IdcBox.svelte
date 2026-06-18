@@ -37,7 +37,7 @@
 {/if}
 
 <style>
-  .idc { flex: none; display: block; vertical-align: -0.25em; }
+  .idc { display: inline-block; vertical-align: -0.25em; }
   .frame { fill: none; stroke: var(--muted); stroke-width: 1.4; }
   .slot { fill: var(--muted); opacity: 0.32; stroke: var(--muted); stroke-width: 1; }
 </style>
