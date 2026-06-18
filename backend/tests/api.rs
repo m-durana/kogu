@@ -778,6 +778,47 @@ async fn probe_single_char_compounds() {
     assert!(e["compounds"].as_array().unwrap().len() >= 5, "愛 should list compounds");
 }
 
+// B9b. Compounds top/bottom split is by CONTENT, not result-cap race (item 160): on the 馬 page,
+// 種馬 (which literally contains 馬) must be a top "compound", never banished to "compound-alt".
+#[tokio::test]
+async fn probe_compound_split_by_content() {
+    let e = entry_top("馬").await;
+    let comps = e["compounds"].as_array().unwrap();
+    assert!(!comps.is_empty(), "馬 should list compounds");
+    // 種馬 present and classified as a same-glyph compound
+    let zhongma = comps
+        .iter()
+        .find(|l| l["headword"].as_str().unwrap() == "種馬")
+        .expect("種馬 should appear on the 馬 page");
+    assert_eq!(zhongma["relation"], "compound", "種馬 uses 馬, so it belongs in the top group");
+    // every top row's displayed form contains the exact glyph; every alt row does NOT
+    for l in comps {
+        let hw = l["headword"].as_str().unwrap();
+        if l["relation"] == "compound" {
+            assert!(hw.contains('馬'), "top compound {hw} should contain 馬");
+        } else if l["relation"] == "compound-alt" {
+            assert!(!hw.contains('馬'), "variant row {hw} should not contain the exact 馬");
+        }
+    }
+}
+
+// B9c. All same-glyph (top) compounds precede every variant (bottom) compound, so the frontend's
+// single "written with a variant" divider is correct.
+#[tokio::test]
+async fn probe_compound_top_before_alt() {
+    let e = entry_top("馬").await;
+    let comps = e["compounds"].as_array().unwrap();
+    let mut seen_alt = false;
+    for l in comps {
+        let is_alt = l["relation"] == "compound-alt";
+        if is_alt {
+            seen_alt = true;
+        } else {
+            assert!(!seen_alt, "a same-glyph compound appeared after a variant one: ordering broken");
+        }
+    }
+}
+
 // B10. SQL/FTS wildcards & injection don't crash or match-everything.
 #[tokio::test]
 async fn probe_wildcard_injection_safe() {

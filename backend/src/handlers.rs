@@ -329,52 +329,83 @@ fn variant_glyphs(conn: &rusqlite::Connection, ch: char) -> Vec<char> {
     out
 }
 
-/// Words containing a glyph, across ALL varieties, most-frequent first, appended with `relation` and
-/// deduped via `seen`.
-fn compounds_for_glyph(
+/// One compound row, displaying the surface form that uses the EXACT looked-up glyph (種馬 on a 馬
+/// page, 种马 on a 马 page) and falling back to the lexeme headword. The top/bottom split is decided by
+/// CONTENT: a row is "compound" (top) when its displayed form contains the exact glyph `ch`, else
+/// "compound-alt" (it only uses a cross-script variant like 马). Note: there is no per-surface-form
+/// frequency in the data, so we can't rank 馬上-vs-马上 "by which is used more"; instead the page
+/// consistently shows the form written with the character you're viewing (item 160).
+fn link_lite_compound(
     conn: &rusqlite::Connection,
-    cp: i64,
-    exclude_id: i64,
-    relation: &str,
-    cap: i64,
-    seen: &mut std::collections::HashSet<i64>,
-    out: &mut Vec<LinkLite>,
-) -> rusqlite::Result<()> {
-    let mut cs = conn.prepare(
-        "SELECT l.id FROM form_char fc JOIN lexeme l ON l.id = fc.lexeme_id \
-         WHERE fc.cp = ?1 AND l.id <> ?2 GROUP BY l.id \
-         ORDER BY l.freq IS NULL, l.freq DESC, MIN(fc.flen) ASC, l.id ASC LIMIT ?3",
-    )?;
-    let ids: Vec<i64> = cs
-        .query_map(rusqlite::params![cp, exclude_id, cap], |r| r.get(0))?
-        .collect::<Result<_, _>>()?;
-    for cid in ids {
-        if !seen.insert(cid) {
-            continue;
-        }
-        if let Some(l) = link_lite(conn, cid, relation, None)? {
-            out.push(l);
-        }
-    }
-    Ok(())
+    id: i64,
+    ch: char,
+) -> rusqlite::Result<Option<LinkLite>> {
+    let row = conn.query_row(
+        "SELECT variety, headword, reading FROM lexeme WHERE id=?1",
+        [id],
+        |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, Option<String>>(2)?)),
+    );
+    let (variety, headword, reading) = match row {
+        Ok(v) => v,
+        Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
+        Err(e) => return Err(e),
+    };
+    let mut fs = conn.prepare("SELECT form FROM surface_form WHERE lexeme_id=?1")?;
+    let forms: Vec<String> = fs.query_map([id], |r| r.get(0))?.collect::<Result<_, _>>()?;
+    let display = forms.iter().find(|f| f.contains(ch)).cloned().unwrap_or(headword);
+    let relation = if display.contains(ch) { "compound" } else { "compound-alt" };
+    let mut s = conn.prepare("SELECT gloss_en FROM sense WHERE lexeme_id=?1 ORDER BY sense_order LIMIT 3")?;
+    let glosses: Vec<String> = s.query_map([id], |r| r.get(0))?.collect::<Result<_, _>>()?;
+    Ok(Some(LinkLite {
+        lexeme_id: id,
+        variety,
+        headword: display,
+        reading,
+        glosses,
+        relation: relation.to_string(),
+        concept: None,
+    }))
 }
 
-/// 熟語 - words that contain a character, as one frequency-ranked flat list across all languages
-/// (relation "compound"), followed by words that use a CROSS-SCRIPT VARIANT of it (relation
-/// "compound-alt", e.g. 氷-words for a 冰 lookup) — the frontend shows those under a "written
-/// differently" divider. The language is shown per-row, so there's no per-variety sectioning.
+/// 熟語 - words that contain a character. The exact glyph AND its cross-script variants (马 for 馬) are
+/// gathered in ONE frequency-ranked query, deduped per lexeme, then each row is classified top/bottom
+/// by whether its displayed form actually contains the exact glyph (so 種馬, which uses 馬, is never
+/// banished to the "written differently" group just because of a result-cap race). The language is
+/// shown per row, so there's no per-variety sectioning.
 fn char_compounds(
     conn: &rusqlite::Connection,
     ch: char,
     exclude_id: i64,
 ) -> rusqlite::Result<Vec<LinkLite>> {
-    let mut out = Vec::new();
-    let mut seen = std::collections::HashSet::new();
-    compounds_for_glyph(conn, ch as i64, exclude_id, "compound", 30, &mut seen, &mut out)?;
-    for v in variant_glyphs(conn, ch) {
-        compounds_for_glyph(conn, v as i64, exclude_id, "compound-alt", 30, &mut seen, &mut out)?;
+    let mut cps: Vec<i64> = vec![ch as i64];
+    cps.extend(variant_glyphs(conn, ch).iter().map(|c| *c as i64));
+    let ph = cps.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!(
+        "SELECT l.id FROM form_char fc JOIN lexeme l ON l.id = fc.lexeme_id \
+         WHERE fc.cp IN ({ph}) AND l.id <> ? GROUP BY l.id \
+         ORDER BY l.freq IS NULL, l.freq DESC, MIN(fc.flen) ASC, l.id ASC LIMIT 60"
+    );
+    let mut params: Vec<rusqlite::types::Value> =
+        cps.iter().map(|c| rusqlite::types::Value::from(*c)).collect();
+    params.push(rusqlite::types::Value::from(exclude_id));
+    let mut cs = conn.prepare(&sql)?;
+    let ids: Vec<i64> = cs
+        .query_map(rusqlite::params_from_iter(params.iter()), |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    // content-based split: same-glyph rows first (freq order kept), variant rows after.
+    let mut top = Vec::new();
+    let mut alt = Vec::new();
+    for id in ids {
+        if let Some(l) = link_lite_compound(conn, id, ch)? {
+            if l.relation == "compound" {
+                top.push(l);
+            } else {
+                alt.push(l);
+            }
+        }
     }
-    Ok(out)
+    top.extend(alt);
+    Ok(top)
 }
 
 /// Character-only entry (kokuji / a character with no word-lexeme): readings, decomposition and the

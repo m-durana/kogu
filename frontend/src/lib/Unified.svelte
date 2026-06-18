@@ -972,7 +972,7 @@
         <ul class="usedlist">
           {#each compoundList as l, i (l.lexeme_id)}
             {#if l.relation === 'compound-alt' && (i === 0 || compoundList[i - 1].relation !== 'compound-alt')}
-              <li class="wdiv">written differently</li>
+              <li class="wdiv">written with a variant character</li>
             {/if}
             <li>
               <button class="usedrow" onclick={() => onsearch(l.headword)}>
