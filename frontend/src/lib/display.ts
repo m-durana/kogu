@@ -88,6 +88,20 @@ export function hanFont(v: Variety): string {
   return v === 'ja' ? 'var(--han-ja)' : v === 'yue' ? 'var(--han-tc)' : 'var(--han)'
 }
 
+/** A region-EXCLUSIVE word — one used only in a particular region, written with its own characters
+ * (taxi: Taiwan 計程車 vs mainland 出租車). CC-CEDICT marks these per sense with "(Tw)" / "(HK)". A word
+ * earns a region badge only when its PRIMARY (first non-minor) sense carries the marker, so a general
+ * word that merely has one regional sense is NOT tagged: 計程車 "(Tw) taxi" → ['Taiwan']; 出租車 "taxi" +
+ * "(Tw) rental car" → [] (its main meaning is general). Mainland is the unmarked default, so no badge.
+ * Runs on RAW glosses (before cleanGloss strips the marker). */
+export function regionTags(glosses: string[]): string[] {
+  const meaningful = glosses.filter((g) => g && g.trim())
+  const primary = meaningful.find((g) => !isMinorGloss(g)) ?? meaningful[0] ?? ''
+  if (/\(\s*Tw\s*\)/i.test(primary)) return ['Taiwan']
+  if (/\(\s*HK\s*\)/i.test(primary)) return ['Hong Kong']
+  return []
+}
+
 /** Region codes present across a hit's forms, in a stable order (core four). */
 export function regionsOf(hit: Hit): string[] {
   const order = ['CN', 'TW', 'HK', 'JP']
@@ -407,6 +421,7 @@ export function cleanGloss(g: string): string {
   // form by the "written differently" bridge - so drop them from the definition prose itself.
   s = s.replace(/[;,]?\s*\(?\s*Mandarin equivalent\s*:[^)]*\)?/gi, '') // "(Mandarin equivalent: 沒有…)"
   s = s.replace(/\s*\((?:Cantonese|Mandarin)\)/gi, '') // bare variety tags
+  s = s.replace(/\(\s*(?:Tw|HK)\s*\)\s*/g, '') // region markers (Tw)/(HK) → surfaced as a small badge
   s = s.replace(/\(\s*(?:meaningless\s+)?bound form\s*\)\s*/gi, '') // grammatical jargon → surfaced as a "bound" tag instead
   s = s.replace(/\s*\bCL:[^;]*(?=;|$)/g, '') // classifier clauses
   s = s.replace(/\[[A-Za-zÀ-ÿüÜ0-9·,.\s]*\]/g, '') // [hang2 kong1 gang3], [fa3] - before pipes
@@ -920,6 +935,9 @@ export function etymologyTokens(text: string): EtySegment[] {
     // "More at *márkos." is Wiktionary's cross-reference to a fuller (proto-form) entry that Kogu does
     // not have — a dead link. Drop the trailing "More at …." sentence. (item 159)
     line = line.replace(/\s*\bMore at [^.]*\.\s*$/i, '').trim()
+    // a raw "|" leaks from Wiktionary as an alternate-reading separator ("MC 'jij lje|lejH") or a
+    // trad|simp pair; it renders as a bare vertical line with no meaning. Show a clear " / " instead.
+    line = line.replace(/\s*\|\s*/g, ' / ')
     if (!line) continue
     // a competing theory stacked as a fresh top-level paragraph after the first (古: graphic theory,
     // then 苦 theory, then the Sino-Tibetan word origin) is flagged so the UI separates them.

@@ -485,8 +485,8 @@
   {/if}
 
   {#if panel === 'draw'}
-    <!-- floating draw pad: overlays the page so the results behind it live-update as you draw -->
-    <div class="drawfloat">
+    <!-- inline draw pad, directly under the search row (top of the page) so it sits where you type -->
+    <div class="drawpanel">
       <Pad onpick={fromDraw} onclose={() => (panel = 'none')} />
     </div>
   {/if}
@@ -554,8 +554,17 @@
     {#key entry.lexeme_id}
       <Unified entry={entry} anchor={q} onsearch={doSearch} />
     {/key}
+  {:else if unified && enrichEntry}
+    <!-- render the WHOLE card at once, from the full entry: definition + structure + origin + used-in +
+         bridges all appear together in one paint, so nothing pops in after (collapsed panel bodies
+         still render lazily on expand). The /entry fetch is ~10-16ms warm, hidden behind the skeleton. -->
+    <Unified hits={results} entry={enrichEntry} anchor={q} onsearch={doSearch} />
+  {:else if unified && enriching}
+    <!-- enriching: hold the whole-page skeleton rather than a partial def that then grows (no pop-in) -->
+    {@render pageSkel()}
   {:else if unified && results.length}
-    <Unified hits={results} entry={enrichEntry} {enriching} anchor={q} onsearch={doSearch} />
+    <!-- enrich finished but no entry came back (fetch failed): still show the card from search hits -->
+    <Unified hits={results} entry={null} anchor={q} onsearch={doSearch} />
   {:else if loading}
     {@render pageSkel()}
   {:else}
@@ -574,7 +583,9 @@
               <span class="line1">
                 {#if r.reading}<span class="rd">{r.reading}</span>{/if}
                 <span class="var">{varietyLabel(r.variety)}</span>
-                {#each regionsOf(r) as rg}<span class="rg">{rg}</span>{/each}
+                <!-- only the INFORMATIVE region tags: CN/JP are redundant with the 中/日 variety tag,
+                     so drop them; keep the rarer TW/HK that actually distinguish a regional word. -->
+                {#each regionsOf(r).filter((rg) => rg === 'TW' || rg === 'HK') as rg}<span class="rg">{rg}</span>{/each}
               </span>
               <span class="gl">{shortGloss(r.glosses)}</span>
             </span>
@@ -762,15 +773,12 @@
   /* item 1: focusing the field expands it to full width; draw + camera slide away */
   .searchrow.focused .rowbtn { max-width: 0; margin-left: 0; padding: 0; opacity: 0; border-width: 0; pointer-events: none; }
   @media (prefers-reduced-motion: reduce) { .rowbtn { transition: none; } }
-  /* floating draw pad: overlays the page (fixed) so the results behind live-update as you draw */
-  .drawfloat {
-    position: fixed; z-index: 45;
-    left: 50%; transform: translateX(-50%);
-    bottom: calc(1rem + env(safe-area-inset-bottom));
-    width: min(20rem, calc(100vw - 2rem));
-    background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--r);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-    padding: 0.7rem;
+  /* inline draw pad at the top (under the search row); minimal frame, no heavy floating chrome */
+  .drawpanel {
+    width: min(20rem, 100%);
+    margin: 0 0 1.2rem;
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 3px;
+    padding: 0.6rem;
   }
 
   /* inline photo selection, shown directly under the search row */

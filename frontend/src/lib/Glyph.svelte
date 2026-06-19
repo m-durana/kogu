@@ -10,12 +10,19 @@
     cls = '',
   }: { ch: string; font: string; lang?: string | undefined; cls?: string } = $props()
 
-  let missing = $state(false)
   const cp = $derived(ch && [...ch].length === 1 ? (ch.codePointAt(0) ?? 0) : 0)
   const gwUrl = $derived(glyphWikiUrl(ch) ?? '')
 
+  // Probe result: null until the canvas measurement runs, then true/false for "device font has it".
+  let fontHas = $state<boolean | null>(null)
+  // Render decision, computed SYNCHRONOUSLY so a rare supplementary-plane glyph (≥U+20000) shows the
+  // GlyphWiki SVG on the FIRST paint instead of rendering a tofu box that swaps to an image a frame
+  // later (pop-in). Until the probe resolves we assume supplementary glyphs are absent (nearly always
+  // true); the probe only ever downgrades back to the font glyph in the rare case the font DOES have it.
+  const missing = $derived(cp >= 0x20000 && fontHas !== true && !!gwUrl)
+
   $effect(() => {
-    missing = false
+    fontHas = null
     // BMP CJK (U+3400–U+9FFF) is universally covered; only the supplementary planes are worth probing.
     if (!cp || cp < 0x20000 || typeof document === 'undefined') return
     try {
@@ -24,9 +31,9 @@
       ctx.font = `48px ${font}`
       const w = ctx.measureText(ch).width
       const tofu = ctx.measureText('\u{10FFFF}').width // a noncharacter: always the font's .notdef box
-      missing = w === 0 || Math.abs(w - tofu) < 0.5
+      fontHas = !(w === 0 || Math.abs(w - tofu) < 0.5)
     } catch {
-      missing = false
+      fontHas = true // can't probe → trust the font, show the glyph rather than a network image
     }
   })
 </script>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle, reformLabel, scriptChangeNote, scriptChangeFromForms, scSwitchTarget, glyphWikiUrl, SEARCH_PLACEHOLDERS, placeholderAt, isAlwaysBound, jyutpingToYale, mcSoundLink } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle, reformLabel, scriptChangeNote, scriptChangeFromForms, scSwitchTarget, glyphWikiUrl, SEARCH_PLACEHOLDERS, placeholderAt, isAlwaysBound, jyutpingToYale, mcSoundLink, regionTags } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -679,6 +679,60 @@ describe('etymologyTokens - Wiktionary bullet sub-points + leaked-marker cleanup
     const segs = etymologyTokens('related to *njin forms')
     expect(segs[0].depth).toBe(0)
     expect(segs[0].tokens[0]).toEqual({ t: 'text', v: 'related to *njin forms' })
+  })
+})
+
+// a raw "|" leaks from Wiktionary as an alternate-reading separator and renders as a bare vertical
+// line with no meaning; etymologyTokens replaces it with a clear " / ".
+describe('etymologyTokens - the leaked "|" separator becomes " / "', () => {
+  const text = (s: string) => etymologyTokens(s)[0].tokens.map((t) => ('v' in t ? t.v : '')).join('')
+  it('replaces a pipe between alternate readings with " / "', () => {
+    expect(text('伊麗 (MC jij lje|lejH) attested.')).toContain('lje / lejH')
+  })
+  it('leaves no bare "|" in the output', () => {
+    expect(text('伊麗 (MC jij lje|lejH) attested.')).not.toContain('|')
+  })
+  it('collapses surrounding spaces around the pipe', () => {
+    expect(text('seen as A | B here')).toContain('A / B')
+  })
+  it('handles a trad|simp style pipe pair', () => {
+    expect(text('the form 處|处 appears')).toContain('處 / 处')
+  })
+  it('a line without a pipe is untouched', () => {
+    expect(text('A plain pictogram of a tree.')).toBe('A plain pictogram of a tree.')
+  })
+})
+
+// a region-exclusive word earns a small country tag from its PRIMARY-sense (Tw)/(HK) marker
+describe('regionTags - country tag for a region-exclusive word', () => {
+  it('Taiwan word: primary sense marked (Tw) → ["Taiwan"]', () => {
+    expect(regionTags(['(Tw) taxi; cab'])).toEqual(['Taiwan'])
+  })
+  it('Hong Kong word: primary sense marked (HK) → ["Hong Kong"]', () => {
+    expect(regionTags(['(HK) minibus'])).toEqual(['Hong Kong'])
+  })
+  it('general word with only a SECONDARY regional sense → no tag', () => {
+    expect(regionTags(['taxi', '(Tw) rental car'])).toEqual([])
+  })
+  it('a word with no region marker → no tag', () => {
+    expect(regionTags(['pineapple'])).toEqual([])
+  })
+  it('skips a leading minor sense and reads the first real sense', () => {
+    expect(regionTags(['variant of 計程車', '(Tw) taxi'])).toEqual(['Taiwan'])
+  })
+  it('empty / blank glosses → no tag', () => {
+    expect(regionTags([])).toEqual([])
+    expect(regionTags(['', '  '])).toEqual([])
+  })
+})
+
+// the raw (Tw)/(HK) marker is stripped from the prose (it becomes the badge instead)
+describe('cleanGloss - strips (Tw)/(HK) region markers', () => {
+  it('drops a leading (Tw) marker', () => {
+    expect(cleanGloss('(Tw) taxi; cab')).toBe('taxi; cab')
+  })
+  it('drops a leading (HK) marker', () => {
+    expect(cleanGloss('(HK) minibus')).toBe('minibus')
   })
 })
 

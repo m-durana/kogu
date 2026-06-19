@@ -16,7 +16,7 @@
 
 <script lang="ts">
   import type { CharInfo, Entry, Hit, ReadingKV, Variety } from './types'
-  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, isAlwaysBound, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle, scriptShort, scSwitchTarget, scriptChangeNote, scriptChangeFromForms, jyutpingToYale, mcSoundLink } from './display'
+  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, isAlwaysBound, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle, scriptShort, scSwitchTarget, scriptChangeNote, scriptChangeFromForms, jyutpingToYale, mcSoundLink, regionTags } from './display'
   import { speakReading, canSpeak } from './speech'
   import { settings } from './settings.svelte'
   import ScriptForms from './ScriptForms.svelte'
@@ -562,6 +562,9 @@
   // small two-arrow switch button at the top-right of the header glyph. Tap it to jump to the other
   // script's form (馬 ⇄ 马). Only for a genuine TC/SC pair (not shinjitai-only or z-variants).
   const scCounterpart = $derived(scSwitchTarget(headChar?.script_forms ?? null, head))
+  // a region-exclusive word (Taiwan-only 計程車, Hong Kong-only …): a small country tag next to the
+  // headword, derived from the looked-up lexeme's CC-CEDICT "(Tw)"/"(HK)" markers (primary sense only).
+  const regionBadges = $derived(regionTags((entry?.senses ?? []).map((s) => s.gloss_en)))
   // items 17/18: the radical and "rarely used" tags sit on their own line under each language row.
   // "radical" is a character property (bound in every language); "rarely used" is now PER-LANGUAGE,
   // from the per-variety containing-word count (巴 is common in 中 but rare in 日).
@@ -758,6 +761,10 @@
         {#if scCounterpart}
           <button class="scswitch" onclick={() => onsearch(scCounterpart.to)} title="switch to the {scCounterpart.label} form ({scCounterpart.to})" aria-label="switch to the {scCounterpart.label} form"><ArrowLeftRight size={17} /></button>
         {/if}
+        {#if regionBadges.length}
+          <!-- small country tag: this word is used only in this region (e.g. Taiwan 計程車) -->
+          <span class="regiontags">{#each regionBadges as t}<span class="rtag" title="used mainly in {t}">{t}</span>{/each}</span>
+        {/if}
       </div>
       {#if soundLoan}
         <!-- transliteration / phonetic loan: the characters were chosen for their sound, not meaning -->
@@ -771,9 +778,10 @@
             <div class="dlh">
               <span class="dvar">{varietyLabel(r.variety)}</span>
               {#if r.variety === 'zh'}
-                <!-- lead with the form the user searched (Simplified when there's no script signal);
-                     the other script rides small beside it (item: search-echoing trad/simp display). -->
-                {#if r.alt}<span class="dform"><span class="ftag">{formTag(r.formScript)}</span><Glyph ch={r.form} font={r.formScript === 'trad' ? 'var(--han-tc)' : 'var(--han)'} lang={r.formScript === 'trad' ? 'zh-Hant' : 'zh-Hans'} /><span class="altform"><span class="ftag">{formTag(r.altScript)}</span><Glyph ch={r.alt} font={r.altScript === 'trad' ? 'var(--han-tc)' : 'var(--han)'} lang={r.altScript === 'trad' ? 'zh-Hant' : 'zh-Hans'} /></span></span>{:else}<span class="dform"><span class="ftag">TC/SC</span><Glyph ch={r.form} font={hanFont(r.variety)} lang={langTag(r.variety)} /></span>{/if}
+                <!-- the searched glyph is already the big header above; so the Chinese row shows ONLY
+                     the OTHER script's form (search a TC hanzi → "SC 机场"; search SC → "TC 機場"), and
+                     nothing at all when the two scripts are identical (山). No repeat, no "TC/SC". -->
+                {#if r.alt}<span class="dform"><span class="ftag">{formTag(r.altScript)}</span><Glyph ch={r.alt} font={r.altScript === 'trad' ? 'var(--han-tc)' : 'var(--han)'} lang={r.altScript === 'trad' ? 'zh-Hant' : 'zh-Hans'} /></span>{/if}
               {:else if r.alt}
                 <span class="dform"><span class="ftag">{formTag(r.formScript)}</span><Glyph ch={r.form} font={hanFont(r.variety)} lang={langTag(r.variety)} /><span class="fsep">·</span><span class="ftag">{formTag(r.altScript)}</span><Glyph ch={r.alt} font={hanFont(r.variety)} lang={langTag(r.variety)} /></span>
               {:else if r.form !== head}
@@ -872,16 +880,18 @@
         </p>
       {/if}
       {#if headChar.script_forms}
-        <div class="strip">
+        <div class="strip substep">
+          <div class="sublabel">across scripts</div>
           <ScriptForms forms={headChar.script_forms} anchor={head} {onsearch} />
           {#if scriptNote}<p class="scriptnote">{scriptNote}</p>{/if}
         </div>
       {/if}
+      {#if hasRoles || decomp || comp}<div class="sublabel substep">what it's made of</div>{/if}
       {#if hasRoles}
         <!-- phono-semantic: which part carries the meaning vs the sound (媽 = 女 meaning + 馬 sound) -->
         <p class="comp">
           {#if comp?.idc}<IdcBox idc={comp.idc} /><span class="dim idcsep">:</span>{/if}
-          {#each roleParts as c, i}{#if i}<span class="plus">+</span>{/if}<span class="cpart"><button class="part" onclick={() => onsearch(c.ch)} title="look up {c.ch}">{c.ch}</button>{#if c.role === 'phonetic' && c.sound}<span class="crole">sound: {pinyinMarks(c.sound)}{#if c.mc_sound?.length}<span class="cmc" title="Middle Chinese reading (廣韻, Baxter transcription)"> · MC {c.mc_sound[0]}</span>{/if}</span>{:else if c.role === 'semantic' && meaningOf(c.ch)}<span class="crole">meaning: {meaningOf(c.ch)}</span>{:else if meaningOf(c.ch)}<span class="cmean">{meaningOf(c.ch)}</span>{/if}</span>{/each}
+          {#each roleParts as c, i}{#if i}<span class="plus">+</span>{/if}<span class="cpart"><button class="part" onclick={() => onsearch(c.ch)} title="look up {c.ch}">{c.ch}</button>{#if c.role === 'phonetic' && c.sound}<span class="crole">sound: {pinyinMarks(c.sound)}</span>{:else if c.role === 'semantic' && meaningOf(c.ch)}<span class="crole">meaning: {meaningOf(c.ch)}</span>{:else if meaningOf(c.ch)}<span class="cmean">{meaningOf(c.ch)}</span>{/if}</span>{/each}
         </p>
         <!-- phonological "why": the historical (Middle Chinese) sound link between the character and
              its phonetic component. Stated honestly: a full match, a partial resemblance, or a note
@@ -1063,8 +1073,12 @@
   .glyphrow { display: flex; align-items: flex-start; gap: 0.5rem; }
   .glyph { font-family: var(--han); font-size: clamp(3rem, 16vw, 4.5rem); line-height: 1; margin: 0 0 1.1rem; font-weight: 500; }
   /* tiny two-arrow switch to the TC/SC counterpart, top-right of the header glyph (item 161) */
-  .scswitch { display: inline-flex; align-items: center; justify-content: center; margin-top: 0.3rem; padding: 0.3rem; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: var(--r); }
-  .scswitch:hover { color: var(--text); border-color: var(--border-strong); }
+  /* just the two-arrow icon, no box around it (item) */
+  .scswitch { display: inline-flex; align-items: center; justify-content: center; margin-top: 0.45rem; padding: 0.15rem; color: var(--muted); background: none; border: none; }
+  .scswitch:hover { color: var(--text); background: none; }
+  /* small country tag(s) for a region-exclusive word (Taiwan/Hong Kong) — sits up by the headword */
+  .regiontags { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.55rem; }
+  .rtag { font-family: var(--mono); font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); border: 1px solid var(--border-strong); border-radius: var(--r); padding: 0.08rem 0.42rem; line-height: 1.5; }
   .defs { display: flex; flex-direction: column; gap: 0.8rem; }
   .dlh { display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap; }
   /* the language leads (it's the heading of the definition); the reading is secondary */
@@ -1074,11 +1088,12 @@
   .dform { font-family: var(--han); font-size: 1.15rem; }
   .dform .ftag { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); margin-right: 0.18rem; vertical-align: 0.35em; }
   .dform .fsep { color: var(--faint); margin: 0 0.18rem; }
-  /* the non-searched script form, shown small beside the primary (search-echoing trad/simp display) */
-  .dform .altform { font-size: 0.78em; opacity: 0.72; margin-left: 0.55rem; }
   /* the reading group: inline with the form for short words; its own line for long ones (.wide),
      where flex-basis:100% forces a wrap within the wrapping .dlh and the reading gets full width. */
-  .drow2 { display: inline-flex; align-items: baseline; gap: 0.7rem; min-width: 0; }
+  /* grow to fill the rest of the row so the ja on/kun readings line (.dreads, flex:1 1 0) has a bounded
+     width again and can clamp to one line + reveal its "+" toggle. (Without flex-grow here .drow2 sized
+     to its content, so .dreads never overflowed and the multi-reading toggle silently disappeared.) */
+  .drow2 { display: inline-flex; align-items: baseline; gap: 0.7rem; min-width: 0; flex: 1 1 0; }
   .drow2.wide { flex-basis: 100%; margin-top: 0.1rem; }
   .dread { font-family: var(--mono); font-size: 0.9rem; color: var(--muted); }
   /* a tappable reading (each ja on/kun): looks like the surrounding reading text, plays on tap. */
@@ -1134,11 +1149,18 @@
   .form .ftag { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); margin-right: 0.2rem; vertical-align: 0.3em; }
   .form .fsep { color: var(--faint); margin: 0 0.4rem; }
   .strip { margin-top: 0.5rem; }
+  /* item: visually separate the structure sub-sections (forms/simplification vs composition/why) with
+     a faint label and a hairline rule, so they don't read as one undifferentiated run. */
+  .sublabel { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); margin-bottom: 0.45rem; }
+  .substep { margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--border); }
+  /* the first sub-section (the forms strip) follows the heading directly — no rule above it */
+  .substep:first-of-type { margin-top: 0.6rem; padding-top: 0; border-top: none; }
   .read { font-family: var(--mono); color: var(--muted); font-size: 0.9rem; }
   .gloss { color: var(--text); font-size: 0.98rem; line-height: 1.4; }
 
   .note { color: var(--faint); font-size: 0.82rem; margin: 0.5rem 0 0; line-height: 1.5; display: flex; align-items: flex-start; gap: 0.4rem; }
-  .note :global(svg) { flex: none; margin-top: 0.15rem; color: var(--muted); }
+  /* align the warning triangle with the cap of the first text line (was sitting a touch low) */
+  .note :global(svg) { flex: none; margin-top: 0.02rem; color: var(--muted); }
 
   h3 { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 1.9rem 0 0.8rem; }
   .dim { color: var(--faint); }
@@ -1209,8 +1231,6 @@
   .cmean::after { content: ')'; }
   /* role-labelled part gloss: "meaning: woman, girl" / "sound: mǎ" as plain text (no chip, no parens) */
   .crole { color: var(--muted); font-size: 0.9rem; margin-left: 0.3rem; }
-  /* the phonetic component's Middle Chinese reading, appended to the modern "sound:" line */
-  .cmc { font-family: var(--mono); font-size: 0.82rem; color: var(--faint); }
 
   /* phonological "why": the historical (Middle Chinese) sound link char ↔ phonetic component */
   .phonowhy { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.7rem; margin: 0.4rem 0 0; font-size: 0.85rem; line-height: 1.55; }
