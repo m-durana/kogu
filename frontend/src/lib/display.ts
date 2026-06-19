@@ -754,7 +754,9 @@ const ETY_GLOSSARY: GlossEntry[] = [
   { term: 'Nihon Shoki', title: 'Japan’s oldest official chronicle, 720 CE.', word: true },
   { term: 'Nihongi', title: 'Alternative name for the Nihon Shoki, Japan’s oldest official chronicle (720 CE).', word: true },
   { term: 'Kojiki', title: 'Japan’s oldest extant chronicle, 712 CE.', word: true },
-  { term: "Man'yōshū", title: 'The oldest Japanese poetry anthology (after 759 CE).', word: true },
+  // proper nouns ending in a macron vowel (ū/ō) can't use word:true: the ASCII \b boundary fails after
+  // a non-ASCII letter, so they'd never match. They're distinctive enough to match as substrings.
+  { term: "Man'yōshū", title: 'The oldest Japanese poetry anthology (after 759 CE).' },
   { term: 'Shuowen', title: 'The Shuowen Jiezi, the first Chinese character dictionary (~100 CE).', word: true },
   { term: 'Guangyun', title: 'A 1008 CE Chinese rhyme dictionary, a key source for Middle Chinese.', word: true },
   { term: 'Guangya', title: 'A 3rd-c. CE Chinese dictionary expanding the Erya.', word: true },
@@ -762,6 +764,10 @@ const ETY_GLOSSARY: GlossEntry[] = [
   { term: 'Jiyun', title: 'An expanded 1037 CE Chinese rhyme dictionary.', word: true },
   { term: 'Shijing', title: 'The Classic of Poetry, China’s oldest poetry collection (~1000-600 BCE).', word: true },
   { term: 'Erya', title: 'The oldest Chinese dictionary/thesaurus, ~3rd c. BCE.', word: true },
+  { term: 'Wamyō Ruijushō', title: 'A ~931-938 CE Japanese dictionary, the oldest arranged by meaning.' },
+  { term: 'Wamyōshū', title: 'The Wamyō Ruijushō, a ~931-938 CE Japanese classified dictionary.' },
+  { term: 'Liji', title: 'The Book of Rites, a Confucian classic on ritual and conduct (~1st c. BCE).', word: true },
+  { term: 'Book of Rites', title: 'The Liji, a Confucian classic on ritual and conduct (~1st c. BCE).', word: true },
 ]
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 // Two passes: all-caps initialisms (cs) stay case-sensitive; everything else matches case-insensitively
@@ -769,7 +775,7 @@ const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const CI_ENTRIES = ETY_GLOSSARY.filter((e) => !e.cs)
 const CS_ENTRIES = ETY_GLOSSARY.filter((e) => e.cs)
 const glossSrc = (es: GlossEntry[], plural: boolean) =>
-  es.map((e) => (e.word ? `\\b${esc(e.term)}${plural ? 's?' : ''}\\b` : esc(e.term))).join('|')
+  es.map((e) => (e.word ? `\\b${esc(e.term)}${plural ? '(?:es|s)?' : ''}\\b` : esc(e.term))).join('|')
 const ETY_GLOSS_RE_CI = new RegExp(glossSrc(CI_ENTRIES, true), 'gi')
 const ETY_GLOSS_RE_CS = new RegExp(glossSrc(CS_ENTRIES, false), 'g')
 // exact-keyed (used by the reconstruction register lookup, e.g. "(OC *…)" → OC's plain-English note)
@@ -779,7 +785,7 @@ const CS_BY_KEY = new Map(CS_ENTRIES.map((e) => [e.term, e]))
 // resolve a matched surface form → {display, title}: case/plural-insensitive, applying any abbr.
 function ciGloss(v: string): { v: string; title: string } {
   const k = v.toLowerCase()
-  const e = CI_BY_KEY.get(k) ?? CI_BY_KEY.get(k.replace(/s$/, ''))
+  const e = CI_BY_KEY.get(k) ?? CI_BY_KEY.get(k.replace(/s$/, '')) ?? CI_BY_KEY.get(k.replace(/es$/, ''))
   return e ? { v: e.abbr ?? v, title: e.title } : { v, title: '' }
 }
 

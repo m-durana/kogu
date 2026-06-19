@@ -926,3 +926,21 @@ describe('mcSoundLink (phonological why)', () => {
     expect(r.relation).toBe('same') // duwngX toneless = duwng -> exact
   })
 })
+
+describe('etymology abbreviations - irregular plurals + rare works (coverage gap)', () => {
+  const abbrs = (text: string) =>
+    etymologyTokens(text)
+      .flatMap((s) => s.tokens)
+      .filter((t: any) => t.t === 'abbr')
+  it('tags an -es irregular plural (reflexes -> reflex)', () => {
+    const t: any = abbrs('with several reflexes in the daughter languages').find((x: any) => x.v === 'reflexes')
+    expect(t).toBeTruthy()
+    expect(t.title.toLowerCase()).toContain('descended')
+  })
+  it('tags the Wamyōshū with a tooltip', () => {
+    expect(abbrs('recorded in the Wamyōshū').some((t: any) => t.title.includes('931'))).toBe(true)
+  })
+  it('tags Liji / Book of Rites', () => {
+    expect(abbrs('quoted in the Liji').some((t: any) => t.title.includes('Confucian'))).toBe(true)
+  })
+})
