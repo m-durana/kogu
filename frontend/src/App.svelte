@@ -779,8 +779,9 @@
     position: absolute;
     z-index: 20;
     width: min(20rem, 100%);
-    background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--r-lg);
-    box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.6);
+    /* thin minimal frame (as requested), just a subtle shadow so it still reads as floating */
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 3px;
+    box-shadow: 0 8px 22px -10px rgba(0, 0, 0, 0.5);
     padding: 0.6rem;
   }
 

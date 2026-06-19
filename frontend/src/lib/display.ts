@@ -439,6 +439,25 @@ export function cleanGloss(g: string): string {
   return s.trim()
 }
 
+// CC-CEDICT separates SENSES with "/" (each becomes its own row) but within one sense uses ";" for
+// BOTH synonyms ("I; me; my" — one meaning) AND, sometimes, genuinely distinct senses each carrying a
+// scope marker ("(of a nation) to join an alliance; (of an athlete) to join a sports team; …"). The
+// first must stay on one line; the second should enumerate. The reliable distinct-sense signal is a
+// leading scope marker — "(…)", "lit.", "fig.", "(idiom)" — on the parts. So we split a single gloss
+// into multiple senses ONLY when ≥2 of its ";"-parts carry such a marker; plain synonym lists are left
+// as one line (so 我 stays "I; me; my", not "1. I 2. me 3. my").
+const SENSE_MARKER = /^\(|^lit\.|^fig\.|^\s*idiom\b/i
+export function expandSenses(glosses: string[]): string[] {
+  const out: string[] = []
+  for (const g of glosses) {
+    const parts = g.split(';').map((s) => s.trim()).filter(Boolean)
+    const marked = parts.filter((p) => SENSE_MARKER.test(p)).length
+    if (parts.length >= 2 && marked >= 2) out.push(...parts)
+    else out.push(g)
+  }
+  return out
+}
+
 /** Clean + join a list of glosses for a single line. */
 export function glossLine(glosses: string[], max = 4): string {
   return glosses.map(cleanGloss).filter(Boolean).slice(0, max).join('; ')

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle, reformLabel, scriptChangeNote, scriptChangeFromForms, scSwitchTarget, glyphWikiUrl, SEARCH_PLACEHOLDERS, placeholderAt, isAlwaysBound, jyutpingToYale, mcSoundLink, regionTags } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle, reformLabel, scriptChangeNote, scriptChangeFromForms, scSwitchTarget, glyphWikiUrl, SEARCH_PLACEHOLDERS, placeholderAt, isAlwaysBound, jyutpingToYale, mcSoundLink, regionTags, expandSenses } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -458,6 +458,27 @@ describe('etymologyTokens - delineate merged statements + jargon tooltips + Han 
   it('still flags a dated "Author (YEAR)" reconstruction as a competing account', () => {
     const segs = etymologyTokens('A graphic account.\nSchuessler (2007) reconstructs it differently.')
     expect(segs[1].alt).toBe(true)
+  })
+})
+
+describe('expandSenses - enumerate marker-tagged CC-CEDICT senses, keep synonym lists on one line', () => {
+  it('splits a gloss whose ;-parts each carry a scope marker into separate senses', () => {
+    const out = expandSenses(['(of a nation) to join an alliance; (of an athlete) to join a sports team'])
+    expect(out).toEqual(['(of a nation) to join an alliance', '(of an athlete) to join a sports team'])
+  })
+  it('keeps a plain synonym list as a single line', () => {
+    expect(expandSenses(['I; me; my'])).toEqual(['I; me; my'])
+    expect(expandSenses(['because; owing to; on account of'])).toEqual(['because; owing to; on account of'])
+  })
+  it('splits lit./fig. idiom packing', () => {
+    const out = expandSenses(['lit. cut sleeve; fig. euphemism for homosexuality'])
+    expect(out).toEqual(['lit. cut sleeve', 'fig. euphemism for homosexuality'])
+  })
+  it('does not split when only ONE part carries a marker (a sense with a trailing aside)', () => {
+    expect(expandSenses(['to join; (of a team) to sign']).length).toBe(1)
+  })
+  it('passes through already-separate senses untouched', () => {
+    expect(expandSenses(['to do', 'to make'])).toEqual(['to do', 'to make'])
   })
 })
 

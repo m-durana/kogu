@@ -16,7 +16,7 @@
 
 <script lang="ts">
   import type { CharInfo, Entry, Hit, ReadingKV, Variety } from './types'
-  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, isAlwaysBound, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle, scriptShort, scSwitchTarget, scriptChangeNote, scriptChangeFromForms, jyutpingToYale, mcSoundLink, regionTags } from './display'
+  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, isAlwaysBound, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle, scriptShort, scSwitchTarget, scriptChangeNote, scriptChangeFromForms, jyutpingToYale, mcSoundLink, regionTags, expandSenses } from './display'
   import { speakReading, canSpeak } from './speech'
   import { settings } from './settings.svelte'
   import ScriptForms from './ScriptForms.svelte'
@@ -458,13 +458,16 @@
   // major meanings shown by default. Bare cross-references ("abbr. for 入聲", "variant of X", "used
   // in …") are demoted and hidden behind "show more" — UNLESS a row has no major sense at all (中共 =
   // "abbr. for 中國共產黨" is the only meaning), in which case they ARE the definition and stay visible.
+  // expandSenses splits a CC-CEDICT gloss that packs several marker-tagged senses into one ";"-line
+  // (加盟 "(of a nation)…; (of an athlete)…") into separate enumerated senses, while leaving plain
+  // synonym lists ("I; me; my") as one line.
   function majorSenses(r: Row): string[] {
-    const all = r.glosses.map(cleanGloss).filter(Boolean)
+    const all = expandSenses(r.glosses.map(cleanGloss).filter(Boolean))
     const major = all.filter((g) => !isMinorGloss(g))
     return major.length ? major : all
   }
   function minorSenses(r: Row): string[] {
-    const all = r.glosses.map(cleanGloss).filter(Boolean)
+    const all = expandSenses(r.glosses.map(cleanGloss).filter(Boolean))
     const major = all.filter((g) => !isMinorGloss(g))
     return major.length ? all.filter((g) => isMinorGloss(g)) : []
   }
@@ -816,18 +819,16 @@
               <span class="drow2" class:wide={longForm}>
                 {#if r.variety === 'ja' && r.synthetic && jaReadItems.length}
                   <!-- a SYNTHETIC ja row (kanji used only in compounds) shows the character's full on/kun
-                       (kana + romaji), clamped to one line with a "+". A REAL ja word-row shows its OWN
-                       reading instead (so 日's ひ and にち rows don't both show the whole list). Each
-                       reading is tappable so every on/kun can be heard, and the row also carries the
-                       same speaker icon as the 中/粵 rows so the speech affordance is identical (item). -->
-                  <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe>{#each jaReadItems as it, i}{#if i}<span class="rsep">·</span>{/if}<button class="rtap" onclick={() => speakReading(it.main, 'ja')} title="listen to this reading">{it.main}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}</button>{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{jaReadOpen ? '−' : '+'}</button>{/if}{#if canSpeak()}<button class="spk" onclick={() => speakReading(jaReadItems[0].main, 'ja')} aria-label="listen" title="listen"><Volume2 size={15} /></button>{/if}
+                       (kana + romaji), clamped to one line with a "+" (and horizontally scrollable). A
+                       REAL ja word-row shows its OWN reading instead. The readings are plain text; the
+                       single speaker icon plays them — one consistent speech affordance across 中/粵/日. -->
+                  <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe>{#each jaReadItems as it, i}{#if i}<span class="rsep">·</span>{/if}{it.main}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{jaReadOpen ? '−' : '+'}</button>{/if}{#if canSpeak()}<button class="spk" onclick={() => speakReading(jaReadItems[0].main, 'ja')} aria-label="listen" title="listen"><Volume2 size={15} /></button>{/if}
                 {:else if r.reading}
-                  <!-- the reading text itself is tap-to-speak (like the ja on/kun), AND the speaker icon
-                       is here too — one consistent speech affordance across 中 / 粵 / 日 (item). -->
-                  <button class="dread rspeak" onclick={() => speakReading(r.reading, r.variety, r.form)} title="listen">{dispReading(r.variety, r.reading)}</button>
+                  <!-- plain reading text + the speaker icon (the single, consistent speech affordance). -->
+                  <span class="dread">{dispReading(r.variety, r.reading)}</span>
                   {#if canSpeak()}<button class="spk" onclick={() => speakReading(r.reading, r.variety, r.form)} aria-label="listen" title="listen"><Volume2 size={15} /></button>{/if}
                 {/if}
-                {#if r.variety === 'zh' && headJyut && !hasYueDef}<span class="dvar dcanto">粵</span><button class="dread rspeak" onclick={() => speakReading(headJyut, 'yue', r.form)} title="listen (Cantonese)">{settings.romanization === 'yale' ? jyutpingToYale(headJyut) : headJyut}</button>{#if canSpeak()}<button class="spk" onclick={() => speakReading(headJyut, 'yue', r.form)} aria-label="listen, Cantonese" title="listen (Cantonese)"><Volume2 size={15} /></button>{/if}{/if}
+                {#if r.variety === 'zh' && headJyut && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread">{settings.romanization === 'yale' ? jyutpingToYale(headJyut) : headJyut}</span>{#if canSpeak()}<button class="spk" onclick={() => speakReading(headJyut, 'yue', r.form)} aria-label="listen, Cantonese" title="listen (Cantonese)"><Volume2 size={15} /></button>{/if}{/if}
               </span>
             </div>
             {#if boundKind(r) || (single && headChar && (isRadicalChar || rowUsage(r.variety)))}
@@ -902,7 +903,7 @@
              left of the language rows above (item 18); here we keep only the explanatory detail. -->
         <p class="radline">
           {#if headChar.radical_number}<span class="dim">Kangxi radical {headChar.radical_number}</span>{/if}
-          {#if headChar.standalone}<span class="dim">· written</span> <button class="part" onclick={() => onsearch(headChar.standalone!)} title="look up {headChar.standalone}">{headChar.standalone}</button> <span class="dim">when standalone</span>{/if}
+          {#if headChar.standalone}<span class="dim">· written</span> <button class="part" onclick={() => onsearch(headChar.standalone!)} title="look up {headChar.standalone}"><Glyph ch={headChar.standalone} font="var(--han)" /></button> <span class="dim">when standalone</span>{/if}
         </p>
       {/if}
       {#if headChar.script_forms}
@@ -917,7 +918,7 @@
         <!-- phono-semantic: which part carries the meaning vs the sound (媽 = 女 meaning + 馬 sound) -->
         <p class="comp">
           {#if comp?.idc}<IdcBox idc={comp.idc} /><span class="dim idcsep">:</span>{/if}
-          {#each roleParts as c, i}{#if i}<span class="plus">+</span>{/if}<span class="cpart"><button class="part" onclick={() => onsearch(c.ch)} title="look up {c.ch}">{c.ch}</button>{#if c.role === 'phonetic' && c.sound}<span class="crole">sound: {pinyinMarks(c.sound)}</span>{:else if c.role === 'semantic' && meaningOf(c.ch)}<span class="crole">meaning: {meaningOf(c.ch)}</span>{:else if meaningOf(c.ch)}<span class="cmean">{meaningOf(c.ch)}</span>{/if}</span>{/each}
+          {#each roleParts as c, i}{#if i}<span class="plus">+</span>{/if}<span class="cpart"><button class="part" onclick={() => onsearch(c.ch)} title="look up {c.ch}"><Glyph ch={c.ch} font="var(--han)" /></button>{#if c.role === 'phonetic' && c.sound}<span class="crole">sound: {pinyinMarks(c.sound)}</span>{:else if c.role === 'semantic' && meaningOf(c.ch)}<span class="crole">meaning: {meaningOf(c.ch)}</span>{:else if meaningOf(c.ch)}<span class="cmean">{meaningOf(c.ch)}</span>{/if}</span>{/each}
         </p>
         <!-- phonological "why": the historical (Middle Chinese) sound link between the character and
              its phonetic component. Stated honestly: a full match, a partial resemblance, or a note
@@ -931,12 +932,12 @@
       {:else if decomp}
         <p class="comp">
           {#if comp?.idc}<IdcBox idc={comp.idc} /><span class="dim idcsep">:</span>{/if}
-          <span class="cpart"><span class="dim">{numWord(decomp.count)} ×</span> <button class="part" onclick={() => onsearch(decomp.base)} title="look up {decomp.base}">{decomp.base}</button>{#if meaningOf(decomp.base)}<span class="cmean">{meaningOf(decomp.base)}</span>{/if}</span>
+          <span class="cpart"><span class="dim">{numWord(decomp.count)} ×</span> <button class="part" onclick={() => onsearch(decomp.base)} title="look up {decomp.base}"><Glyph ch={decomp.base} font="var(--han)" /></button>{#if meaningOf(decomp.base)}<span class="cmean">{meaningOf(decomp.base)}</span>{/if}</span>
         </p>
       {:else if comp}
         <p class="comp">
           {#if comp.idc}<IdcBox idc={comp.idc} /><span class="dim idcsep">:</span>{/if}
-          {#each comp.parts as p, i}{#if i}<span class="plus">+</span>{/if}<span class="cpart"><button class="part" onclick={() => onsearch(p.component)} title="look up {p.component}">{p.component}</button>{#if p.count > 1}<span class="dim">×{p.count}</span>{/if}{#if meaningOf(p.component)}<span class="cmean">{meaningOf(p.component)}</span>{/if}</span>{/each}
+          {#each comp.parts as p, i}{#if i}<span class="plus">+</span>{/if}<span class="cpart"><button class="part" onclick={() => onsearch(p.component)} title="look up {p.component}"><Glyph ch={p.component} font="var(--han)" /></button>{#if p.count > 1}<span class="dim">×{p.count}</span>{/if}{#if meaningOf(p.component)}<span class="cmean">{meaningOf(p.component)}</span>{/if}</span>{/each}
         </p>
       {/if}
       {#if headChar.strokes}
@@ -1048,7 +1049,7 @@
           {#each entry.appears_in as c (c.ch)}
             <!-- rare ext-plane glyphs may render as tofu on devices without the font; the codepoint in
                  the tooltip + a subtle marker keep them identifiable instead of a blank box (item 5) -->
-            <button class="chip" class:rare={c.rare} onclick={() => onsearch(c.ch)} title={c.rare ? `${c.gloss ?? ''} (U+${c.ch.codePointAt(0)?.toString(16).toUpperCase()})` : (c.gloss ?? '')} lang={langTag(headVariety)} style="font-family:{hanFont(headVariety)}">{c.ch}</button>
+            <button class="chip" class:rare={c.rare} onclick={() => onsearch(c.ch)} title={c.rare ? `${c.gloss ?? ''} (U+${c.ch.codePointAt(0)?.toString(16).toUpperCase()})` : (c.gloss ?? '')}><Glyph ch={c.ch} font={hanFont(headVariety)} lang={langTag(headVariety)} /></button>
           {/each}
         </div>
       {/if}
@@ -1119,12 +1120,6 @@
   .drow2 { display: inline-flex; align-items: baseline; gap: 0.7rem; min-width: 0; flex: 1 1 0; }
   .drow2.wide { flex-basis: 100%; margin-top: 0.1rem; }
   .dread { font-family: var(--mono); font-size: 0.9rem; color: var(--muted); }
-  /* a reading rendered as a tap-to-speak button: looks exactly like the .dread text, no chrome */
-  .dread.rspeak { background: none; border: none; padding: 0; cursor: pointer; }
-  .dread.rspeak:hover { color: var(--text); text-decoration: underline; text-underline-offset: 0.18em; }
-  /* a tappable reading (each ja on/kun): looks like the surrounding reading text, plays on tap. */
-  .rtap { font: inherit; color: inherit; background: none; border: none; padding: 0; cursor: pointer; }
-  .rtap:hover { color: var(--text); text-decoration: underline; text-underline-offset: 0.18em; }
   /* tight reading separator (the old "  ·  " ate too much space) + romaji gloss + "+N more" toggle */
   .dread .rsep { color: var(--faint); margin: 0 0.28rem; }
   /* "+" / "−" toggle, sized to match the readings so it reads as part of the line, not a tiny tag */

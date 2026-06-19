@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ScriptForms } from './types'
   import { scriptShort, orderBranches } from './display'
+  import Glyph from './Glyph.svelte'
 
   // The character's script family (繁 → 简 · 日), anchored on the orthodox glyph, with the reform
   // that caused each divergence. The looked-up form is highlighted; kokuji are labelled as such.
@@ -22,7 +23,7 @@
 {#if forms}
   {#if forms.is_kokuji}
     <div class="sf" class:compact>
-      <span class="tag">日</span><span class="g">{forms.orthodox}</span>
+      <span class="tag">日</span><span class="g"><Glyph ch={forms.orthodox} font="var(--han-ja)" /></span>
       <span class="cap">Japanese-coined · no Chinese form</span>
     </div>
   {:else}
@@ -33,7 +34,7 @@
           <!-- the reform behind each change is explained as a full sentence below the strip (item 14),
                so no bare "PRC simplification" caption hangs under the glyph here. -->
           <button class="b" class:cur={b.form === anchor} onclick={() => onsearch(b.form)} title="look up {b.form}">
-            <span class="tag">{scriptShort(b.script)}</span><span class="g">{b.form}</span>
+            <span class="tag">{scriptShort(b.script)}</span><span class="g"><Glyph ch={b.form} font={b.script.includes('shinjitai') ? 'var(--han-ja)' : b.script.includes('simplified') ? 'var(--han)' : 'var(--han-tc)'} /></span>
           </button>
         </span>
       {/each}
