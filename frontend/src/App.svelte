@@ -170,11 +170,16 @@
   type NavMode = 'push' | 'replace' | 'none'
   const resultsUrl = (t: string) => (t ? `?q=${encodeURIComponent(t)}` : location.pathname)
 
+  // the term whose results are currently shown — used to skip a redundant re-search (e.g. tapping the
+  // word you're already on). NOT `q`: onInput overwrites q with the NEW typed value before doSearch
+  // runs, so comparing to q made every edit look like "same query" and silently skipped the search.
+  let lastSearched = ''
   async function doSearch(query: string, mode: NavMode = 'push') {
     const term = query.trim()
     // already showing this exact query (e.g. tapped the row/character for the page you're on):
-    // do nothing, so the view doesn't blank and reload.
-    if (term && term === q.trim() && searched && !loading && (results.length || entry)) return
+    // do nothing, so the view doesn't blank and reload. Compare to the last SEARCHED term, not q.
+    if (term && term === lastSearched && searched && !loading && (results.length || entry)) return
+    lastSearched = term
     q = query
     view = 'results'
     entry = null
@@ -295,6 +300,7 @@
     // headword echoes THAT script (tapping a traditional 機場 keeps 機場, not the simplified default)
     // instead of letting primaryForm fall back to Simplified. Empty anchor (deep link) → simp default.
     q = anchor
+    lastSearched = '' // leaving the results view: a later identical typed query should re-search
     results = []
     unified = false
     searched = false
@@ -398,6 +404,7 @@
 
   function clearSearch() {
     q = ''
+    lastSearched = ''
     results = []
     entry = null
     enrichEntry = null
