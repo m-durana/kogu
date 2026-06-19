@@ -469,8 +469,12 @@ fn build_char_entry(conn: &rusqlite::Connection, cp: u32) -> rusqlite::Result<Op
     }))
 }
 
-/// Do two lexemes share any concept? (kept for reference; relation now uses gloss disjointness)
-#[allow(dead_code)]
+/// Do two lexemes share a concept (a normalised-gloss synonym cluster)? A shared concept means at
+/// least one sense of each carries the SAME meaning, even when their primary glosses differ in
+/// wording or sense order. Used in classify_relation to rescue genuine cognates the primary-gloss
+/// test wrongly splits when the zh and ja dictionaries lead with different senses (天 = sky/heaven in
+/// both, but zh lists "day" first; 本 = root/book in both). It only ever turns a candidate
+/// false-friend INTO a cognate, so it cannot mislabel a real false friend (手紙, 娘, 会社 share none).
 fn shares_concept(conn: &rusqlite::Connection, a: i64, b: i64) -> rusqlite::Result<bool> {
     let n: i64 = conn.query_row(
         "SELECT EXISTS( \
@@ -510,7 +514,10 @@ fn is_meta_segment(seg: &str) -> bool {
 /// sense is the discriminator: two same-form words are cognates iff their main meanings overlap.
 /// Using only sense 1 avoids both false negatives from rich glosses (愛 shares "love" but has many
 /// other senses) and false positives from peripheral senses (大丈夫's archaic "great man", 娘's
-/// "young (woman)") that incidentally overlap the other language.
+/// "young (woman)") that incidentally overlap the other language. When the two dictionaries order
+/// their senses differently the primary glosses can wrongly look disjoint (天 zh "day" vs ja "sky",
+/// though both mean sky/heaven) - that gap is closed by the shared-concept check in classify_relation,
+/// not by widening this window (which would re-introduce the peripheral-sense false negatives above).
 fn gloss_words(conn: &rusqlite::Connection, id: i64) -> rusqlite::Result<std::collections::HashSet<String>> {
     let mut s = conn.prepare("SELECT gloss_en FROM sense WHERE lexeme_id=?1 ORDER BY sense_order LIMIT 1")?;
     let glosses: Vec<String> = s.query_map([id], |r| r.get(0))?.collect::<Result<_, _>>()?;
@@ -611,6 +618,11 @@ fn classify_relation(conn: &rusqlite::Connection, a: i64, b: i64) -> rusqlite::R
     let wa = gloss_words(conn, a)?;
     let wb = gloss_words(conn, b)?;
     let diverges = !wa.is_empty() && !wb.is_empty() && wa.is_disjoint(&wb);
+    // …but a shared concept (a non-primary sense that means the same thing) overrides a disjoint
+    // primary gloss, so sense-ordering differences don't fake a false friend (天, 本).
+    if diverges && shares_concept(conn, a, b)? {
+        return Ok("cognate");
+    }
     Ok(if diverges { "false-friend" } else { "cognate" })
 }
 

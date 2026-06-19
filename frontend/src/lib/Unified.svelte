@@ -22,6 +22,7 @@
   import ScriptForms from './ScriptForms.svelte'
   import IdcBox from './IdcBox.svelte'
   import Glyph from './Glyph.svelte'
+  import EntryRow from './EntryRow.svelte'
   import { AlertTriangle, Volume2, ArrowLeftRight } from '@lucide/svelte'
 
   // a reading shown in the user's chosen romanisation: pinyin tone-marks for 中, jyutping or Yale for 粵
@@ -562,6 +563,29 @@
   // small two-arrow switch button at the top-right of the header glyph. Tap it to jump to the other
   // script's form (馬 ⇄ 马). Only for a genuine TC/SC pair (not shinjitai-only or z-variants).
   const scCounterpart = $derived(scSwitchTarget(headChar?.script_forms ?? null, head))
+  // item: the same TC/SC switch must also work for multi-character WORDS (機場 ⇄ 机场), which have no
+  // single-char script_forms. Fall back to the Chinese definition row's own trad/simp pair: if the
+  // viewed zh form has a differing counterpart, offer the jump to it. (Single chars use scCounterpart.)
+  const switchTarget = $derived.by(() => {
+    if (scCounterpart) return scCounterpart
+    if (single) return null // a single glyph with no script_forms genuinely has no TC/SC pair
+    const zh = defRows.find((r) => r.variety === 'zh')
+    if (zh?.alt && zh.form === head && zh.altScript) {
+      return { to: zh.alt, label: zh.altScript === 'trad' ? 'traditional' : 'simplified' }
+    }
+    return null
+  })
+  // a TRADITIONAL-script Chinese headword must use the TC font stack: the SC-first --han stack leads
+  // with Simplified system fonts that can lack traditional-only forms (關), which tofu. The GlyphWiki
+  // fallback in Glyph.svelte still backstops genuinely-uncovered glyphs; this just prefers the right
+  // native font first. Detect the script from the Chinese definition row for the viewed form.
+  const headFont = $derived.by(() => {
+    if (headVariety === 'zh') {
+      const zh = defRows.find((r) => r.variety === 'zh' && r.form === head)
+      if (zh?.formScript === 'trad') return 'var(--han-tc)'
+    }
+    return hanFont(headVariety)
+  })
   // a region-exclusive word (Taiwan-only 計程車, Hong Kong-only …): a small country tag next to the
   // headword, derived from the looked-up lexeme's CC-CEDICT "(Tw)"/"(HK)" markers (primary sense only).
   const regionBadges = $derived(regionTags((entry?.senses ?? []).map((s) => s.gloss_en)))
@@ -739,27 +763,26 @@
 <article class="u">
   <!-- one tappable cross-language row (bridge band + plain results list) -->
   {#snippet rowItem(r: Row)}
-    <li>
-      <button class="lang" onclick={() => onsearch(r.form)} title="look up {r.form}">
-        <span class="body">
-          <span class="top">
-            <span class="lvar"><span class="vh">{varietyLabel(r.variety)}</span></span>
-            <span class="form" lang={langTag(r.variety)} style="font-family:{hanFont(r.variety)}">{#if r.alt}<span class="ftag">{formTag(r.formScript)}</span>{r.form}<span class="fsep">·</span><span class="ftag">{formTag(r.altScript)}</span>{r.alt}{:else}<Glyph ch={r.form} font={hanFont(r.variety)} lang={langTag(r.variety)} />{/if}</span>
-            {#if r.reading}<span class="read">{r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}</span>{/if}
-          </span>
-          {#if briefGloss(r.glosses)}<span class="gloss">{briefGloss(r.glosses)}</span>{/if}
-        </span>
-      </button>
-    </li>
+    <!-- the ONE shared entry-row style (same as the search results list): glyph left, reading + 中/粵/日
+         tag + gloss in the meta column (item: one singular style for every entry list). -->
+    <EntryRow
+      glyph={r.form}
+      font={hanFont(r.variety)}
+      lang={langTag(r.variety)}
+      reading={r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}
+      tags={[varietyLabel(r.variety)]}
+      gloss={briefGloss(r.glosses)}
+      onclick={() => onsearch(r.form)}
+    />
   {/snippet}
 
   {#if isGlyphSearch}
     <!-- Block A - the definition: the typed glyph across every language that writes it, co-equally -->
     <section class="def">
       <div class="glyphrow">
-        <h2 class="glyph"><Glyph ch={head} font={hanFont(headVariety)} lang={langTag(headVariety)} /></h2>
-        {#if scCounterpart}
-          <button class="scswitch" onclick={() => onsearch(scCounterpart.to)} title="switch to the {scCounterpart.label} form ({scCounterpart.to})" aria-label="switch to the {scCounterpart.label} form"><ArrowLeftRight size={17} /></button>
+        <h2 class="glyph"><Glyph ch={head} font={headFont} lang={langTag(headVariety)} /></h2>
+        {#if switchTarget}
+          <button class="scswitch" onclick={() => onsearch(switchTarget.to)} title="switch to the {switchTarget.label} form ({switchTarget.to})" aria-label="switch to the {switchTarget.label} form"><ArrowLeftRight size={17} /></button>
         {/if}
         {#if regionBadges.length}
           <!-- small country tag: this word is used only in this region (e.g. Taiwan 計程車) -->
@@ -795,13 +818,16 @@
                   <!-- a SYNTHETIC ja row (kanji used only in compounds) shows the character's full on/kun
                        (kana + romaji), clamped to one line with a "+". A REAL ja word-row shows its OWN
                        reading instead (so 日's ひ and にち rows don't both show the whole list). Each
-                       reading is tappable so every on/kun can be heard, not just the default one. -->
-                  <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe>{#each jaReadItems as it, i}{#if i}<span class="rsep">·</span>{/if}<button class="rtap" onclick={() => speakReading(it.main, 'ja')} title="listen to this reading">{it.main}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}</button>{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{jaReadOpen ? '−' : '+'}</button>{/if}
+                       reading is tappable so every on/kun can be heard, and the row also carries the
+                       same speaker icon as the 中/粵 rows so the speech affordance is identical (item). -->
+                  <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe>{#each jaReadItems as it, i}{#if i}<span class="rsep">·</span>{/if}<button class="rtap" onclick={() => speakReading(it.main, 'ja')} title="listen to this reading">{it.main}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}</button>{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{jaReadOpen ? '−' : '+'}</button>{/if}{#if canSpeak()}<button class="spk" onclick={() => speakReading(jaReadItems[0].main, 'ja')} aria-label="listen" title="listen"><Volume2 size={15} /></button>{/if}
                 {:else if r.reading}
-                  <span class="dread">{dispReading(r.variety, r.reading)}</span>
+                  <!-- the reading text itself is tap-to-speak (like the ja on/kun), AND the speaker icon
+                       is here too — one consistent speech affordance across 中 / 粵 / 日 (item). -->
+                  <button class="dread rspeak" onclick={() => speakReading(r.reading, r.variety, r.form)} title="listen">{dispReading(r.variety, r.reading)}</button>
                   {#if canSpeak()}<button class="spk" onclick={() => speakReading(r.reading, r.variety, r.form)} aria-label="listen" title="listen"><Volume2 size={15} /></button>{/if}
                 {/if}
-                {#if r.variety === 'zh' && headJyut && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread">{settings.romanization === 'yale' ? jyutpingToYale(headJyut) : headJyut}</span>{#if canSpeak()}<button class="spk" onclick={() => speakReading(headJyut, 'yue', r.form)} aria-label="listen, Cantonese" title="listen (Cantonese)"><Volume2 size={15} /></button>{/if}{/if}
+                {#if r.variety === 'zh' && headJyut && !hasYueDef}<span class="dvar dcanto">粵</span><button class="dread rspeak" onclick={() => speakReading(headJyut, 'yue', r.form)} title="listen (Cantonese)">{settings.romanization === 'yale' ? jyutpingToYale(headJyut) : headJyut}</button>{#if canSpeak()}<button class="spk" onclick={() => speakReading(headJyut, 'yue', r.form)} aria-label="listen, Cantonese" title="listen (Cantonese)"><Volume2 size={15} /></button>{/if}{/if}
               </span>
             </div>
             {#if boundKind(r) || (single && headChar && (isRadicalChar || rowUsage(r.variety)))}
@@ -928,18 +954,15 @@
       <ul class="langs">
         {#each entry.characters as c, i (c.ch)}
           {@const glyph = headChars.length === entry.characters.length ? headChars[i] : c.ch}
-          <li>
-            <button class="lang" onclick={() => onsearch(glyph)} title="look up {glyph}">
-              <span class="body">
-                <span class="top">
-                  <span class="lvar"><span class="vh">{charLangs(c).join(' ')}</span></span>
-                  <span class="form"><Glyph ch={glyph} font={hanFont(headVariety)} lang={langTag(headVariety)} /></span>
-                  {#if charReading(c)}<span class="read">{charReading(c)}</span>{/if}
-                </span>
-                {#if firstSense(c.gloss_en)}<span class="gloss">{firstSense(c.gloss_en)}</span>{/if}
-              </span>
-            </button>
-          </li>
+          <EntryRow
+            glyph={glyph}
+            font={hanFont(headVariety)}
+            lang={langTag(headVariety)}
+            reading={charReading(c)}
+            tags={charLangs(c)}
+            gloss={firstSense(c.gloss_en)}
+            onclick={() => onsearch(glyph)}
+          />
         {/each}
       </ul>
     </section>
@@ -1096,6 +1119,9 @@
   .drow2 { display: inline-flex; align-items: baseline; gap: 0.7rem; min-width: 0; flex: 1 1 0; }
   .drow2.wide { flex-basis: 100%; margin-top: 0.1rem; }
   .dread { font-family: var(--mono); font-size: 0.9rem; color: var(--muted); }
+  /* a reading rendered as a tap-to-speak button: looks exactly like the .dread text, no chrome */
+  .dread.rspeak { background: none; border: none; padding: 0; cursor: pointer; }
+  .dread.rspeak:hover { color: var(--text); text-decoration: underline; text-underline-offset: 0.18em; }
   /* a tappable reading (each ja on/kun): looks like the surrounding reading text, plays on tap. */
   .rtap { font: inherit; color: inherit; background: none; border: none; padding: 0; cursor: pointer; }
   .rtap:hover { color: var(--text); text-decoration: underline; text-underline-offset: 0.18em; }
@@ -1136,18 +1162,9 @@
   .bridge { margin-bottom: 0.6rem; }
   /* the bottom "related" band gets breathing room from origin / used-in above it */
   .bridge.related { margin-top: 1.4rem; }
-  .langs { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
-  .langs li { border-bottom: 1px solid var(--border); }
-  .lang { display: flex; gap: 0.8rem; align-items: flex-start; width: 100%; text-align: left; background: none; border: none; border-radius: 0; padding: 0.7rem 0.5rem; }
-  .lang:hover { background: var(--surface); }
-  .body { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; flex: 1; }
-  .top { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
-  .lvar { align-self: center; }
-  .lvar .vh { font-family: var(--han); font-size: 0.95rem; color: var(--muted); }
-  .form { font-family: var(--han); font-size: 1.5rem; line-height: 1.1; }
-  /* trad + simp shown as equal peers (no demoting bracket), each with a small 繁/简 tag */
-  .form .ftag { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); margin-right: 0.2rem; vertical-align: 0.3em; }
-  .form .fsep { color: var(--faint); margin: 0 0.4rem; }
+  /* entry lists (bridges, used-in, characters) — the rows themselves are rendered by EntryRow, which
+     owns the row layout and the hairline separators; this just resets the <ul>. */
+  .langs { list-style: none; margin: 0; padding: 0; }
   .strip { margin-top: 0.5rem; }
   /* item: visually separate the structure sub-sections (forms/simplification vs composition/why) with
      a faint label and a hairline rule, so they don't read as one undifferentiated run. */
@@ -1155,9 +1172,6 @@
   .substep { margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--border); }
   /* the first sub-section (the forms strip) follows the heading directly — no rule above it */
   .substep:first-of-type { margin-top: 0.6rem; padding-top: 0; border-top: none; }
-  .read { font-family: var(--mono); color: var(--muted); font-size: 0.9rem; }
-  .gloss { color: var(--text); font-size: 0.98rem; line-height: 1.4; }
-
   .note { color: var(--faint); font-size: 0.82rem; margin: 0.5rem 0 0; line-height: 1.5; display: flex; align-items: flex-start; gap: 0.4rem; }
   /* align the warning triangle with the cap of the first text line (was sitting a touch low) */
   .note :global(svg) { flex: none; margin-top: 0.02rem; color: var(--muted); }
@@ -1175,7 +1189,10 @@
   /* flex-basis 0 so the readings never trigger a wrap of the header (which would push the 日 label
      to its own line); it grows into the space after the label and clips to one line when long. */
   .dreads { flex: 1 1 0; min-width: 0; line-height: 1.5; }
-  .dreads.clamp { white-space: nowrap; overflow: hidden; }
+  /* clamped to one line, but horizontally SCROLLABLE — you can either swipe the readings right to see
+     more, or tap "+" to expand them onto multiple lines (item: both open and scroll). */
+  .dreads.clamp { white-space: nowrap; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .dreads.clamp::-webkit-scrollbar { display: none; }
   /* fade the last renderable character into nothing (like a "show more" cue) instead of a hard cut —
      only when the readings actually overflow */
   .dreads.faded { -webkit-mask-image: linear-gradient(to right, #000 80%, transparent); mask-image: linear-gradient(to right, #000 80%, transparent); }
@@ -1276,10 +1293,10 @@
   .ety rt { font-size: 0.55em; color: var(--faint); font-family: var(--han); }
   .ety .kanji { background: none; border: none; padding: 0; font: inherit; color: var(--text); font-family: var(--han); }
   .ety .kanji:hover { text-decoration: underline; }
-  /* clickable hanzi in origin prose: a subtle chip background, NOT an underline — the dotted underline
-     is reserved for abbreviation terms (.term) and the two were too easy to confuse (item 156). */
-  .ety .etylink { text-decoration: none; background: var(--surface); border-radius: 3px; padding: 0 0.18em; }
-  .ety .etylink:hover { text-decoration: none; background: var(--border-strong); color: var(--text); }
+  /* clickable hanzi in origin prose: a thin SOLID underline — distinct from the DOTTED underline that
+     marks abbreviation/jargon terms (.term), so the two reading cues don't get confused (item 156). */
+  .ety .etylink { text-decoration: underline solid; text-decoration-thickness: 1px; text-underline-offset: 2px; text-decoration-color: var(--border-strong); background: none; padding: 0; }
+  .ety .etylink:hover { text-decoration-color: var(--text); color: #fff; background: none; }
   /* item 19: numbered ("#") Wiktionary list items */
   .etyseg.ord { margin-top: 0.3rem; }
   .ety .etynum { font-family: var(--mono); font-size: 0.8em; color: var(--faint); }

@@ -719,6 +719,28 @@ async fn probe_cognate_controls() {
     }
 }
 
+// B3b. Characters that share a meaning in a NON-primary sense must not have their CROSS-LANGUAGE
+// same-glyph pair flagged false-friend just because the zh and ja dictionaries lead with different
+// senses (天 zh "day" / ja "sky", both mean sky+heaven; 本 zh "root" / ja "book", both mean both).
+// The shared-concept override in classify_relation fixes these. (Same-LANGUAGE same-glyph pairs can
+// still be false friends; the front-end warning only fires for a 2-language pair, so the
+// cross-language relation is what matters.)
+#[tokio::test]
+async fn probe_cognate_shared_concept() {
+    for (q, ja) in [("天", "天"), ("本", "本")] {
+        let e = entry_of(&search(q).await, "zh", q);
+        let id = e["lexeme_id"].as_i64().unwrap();
+        let entry = get(&format!("/entry/{id}")).await.1;
+        let sib = entry["same_form"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|l| l["variety"] == "ja" && l["headword"] == ja)
+            .unwrap_or_else(|| panic!("{q} should have a ja same-glyph sibling"));
+        assert_eq!(sib["relation"], "cognate", "{q} cross-language pair must be a cognate, not a false friend");
+    }
+}
+
 // B4. Cross-language false friend whose forms are variant glyphs: 会社 (jp "company") and 會社
 // (zh "guild") - 会 is the shinjitai of 會, so the variant-spelling cognate rule must NOT apply
 // across languages (the canonical 会社 case from the probe set).

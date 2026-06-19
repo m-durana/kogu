@@ -3,6 +3,7 @@
   import type { Entry, Hit, CharInfo } from './lib/types'
   import { primaryForm, varietyLabel, regionsOf, shortGloss, cleanGloss, langTag, hanFont, placeholderAt } from './lib/display'
   import Unified from './lib/Unified.svelte'
+  import EntryRow from './lib/EntryRow.svelte'
   import Pad from './lib/Pad.svelte'
   import Ocr from './lib/Ocr.svelte'
   import { Search, X, Brush, Camera, Bookmark, Clock, Share2, Trash2, ArrowRight, Download, Settings, SquarePlus } from '@lucide/svelte'
@@ -285,13 +286,15 @@
     setTimeout(() => (focused = false), 150)
   }
 
-  async function openEntry(id: number, mode: NavMode = 'push') {
+  async function openEntry(id: number, mode: NavMode = 'push', anchor = '') {
     if (view === 'entry' && entry?.lexeme_id === id) return // already on this entry (before loading!)
     loading = true
     err = ''
-    // reached not via the search bar (saved/history/link/character tap): clear the stale query so the
-    // search field empties and the headword/glyph come from the ENTRY, not a leftover search term.
-    q = ''
+    // reached not via the search bar (saved/history/link/character tap): the `anchor` is the exact
+    // form the user tapped (a saved/history headword, a result-row glyph). Seed q with it so the
+    // headword echoes THAT script (tapping a traditional 機場 keeps 機場, not the simplified default)
+    // instead of letting primaryForm fall back to Simplified. Empty anchor (deep link) → simp default.
+    q = anchor
     results = []
     unified = false
     searched = false
@@ -506,18 +509,15 @@
   {/if}
 
   {#snippet savedRow(it: SavedItem)}
-    <li>
-      <button class="hit" onclick={() => openEntry(it.id)}>
-        <span class="hw" lang={langTag(it.variety)} style="font-family:{hanFont(it.variety)}">{it.headword}</span>
-        <span class="meta-col">
-          <span class="line1">
-            {#if it.reading}<span class="rd">{it.reading}</span>{/if}
-            <span class="var">{varietyLabel(it.variety)}</span>
-          </span>
-          {#if it.gloss}<span class="gl">{shortGloss([it.gloss])}</span>{/if}
-        </span>
-      </button>
-    </li>
+    <EntryRow
+      glyph={it.headword}
+      font={hanFont(it.variety)}
+      lang={langTag(it.variety)}
+      reading={it.reading ?? ''}
+      tags={[varietyLabel(it.variety)]}
+      gloss={it.gloss ? shortGloss([it.gloss]) : ''}
+      onclick={() => openEntry(it.id, 'push', it.headword)}
+    />
   {/snippet}
 
   {#snippet pageSkel()}
@@ -555,13 +555,13 @@
       <Unified entry={entry} anchor={q} onsearch={doSearch} />
     {/key}
   {:else if unified && enrichEntry}
-    <!-- render the WHOLE card at once, from the full entry: definition + structure + origin + used-in +
-         bridges all appear together in one paint, so nothing pops in after (collapsed panel bodies
-         still render lazily on expand). The /entry fetch is ~10-16ms warm, hidden behind the skeleton. -->
+    <!-- the full entry has arrived: definition + structure + origin + used-in + bridges all rendered. -->
     <Unified hits={results} entry={enrichEntry} anchor={q} onsearch={doSearch} />
   {:else if unified && enriching}
-    <!-- enriching: hold the whole-page skeleton rather than a partial def that then grows (no pop-in) -->
-    {@render pageSkel()}
+    <!-- enriching: show the DEFINITION immediately from the search hits, with the lower sections'
+         scaffolding/skeleton in place; the structure/origin/used-in content fills in when /entry
+         arrives in the background. The user gets the main page at once instead of a blank skeleton. -->
+    <Unified hits={results} entry={null} enriching={true} anchor={q} onsearch={doSearch} />
   {:else if unified && results.length}
     <!-- enrich finished but no entry came back (fetch failed): still show the card from search hits -->
     <Unified hits={results} entry={null} anchor={q} onsearch={doSearch} />
@@ -574,23 +574,21 @@
     <ul class="results" data-testid="results">
       {#each results as r (r.lexeme_id)}
         {@const d = primaryForm(r.forms, r.variety, q)}
-        <li>
-          <button class="hit" onclick={() => doSearch(d?.primary.form ?? r.headword)}>
-            <span class="hw" lang={langTag(r.variety)} style="font-family:{hanFont(r.variety)}">
-              {d?.primary.form ?? r.headword}{#if d?.alternate}<span class="alt">{d.alternate.form}</span>{/if}
-            </span>
-            <span class="meta-col">
-              <span class="line1">
-                {#if r.reading}<span class="rd">{r.reading}</span>{/if}
-                <span class="var">{varietyLabel(r.variety)}</span>
-                <!-- only the INFORMATIVE region tags: CN/JP are redundant with the 中/日 variety tag,
-                     so drop them; keep the rarer TW/HK that actually distinguish a regional word. -->
-                {#each regionsOf(r).filter((rg) => rg === 'TW' || rg === 'HK') as rg}<span class="rg">{rg}</span>{/each}
-              </span>
-              <span class="gl">{shortGloss(r.glosses)}</span>
-            </span>
-          </button>
-        </li>
+        <!-- open the tapped result by id (not a re-search): a kana/loanword row like トイレ has no Han
+             glyph, so re-searching its headword just re-lists; opening by id always shows the focused
+             entry. Pass the displayed form as anchor so the headword keeps its script. Only the
+             INFORMATIVE region tags (TW/HK) are shown; CN/JP are redundant with the 中/日 tag. -->
+        <EntryRow
+          glyph={d?.primary.form ?? r.headword}
+          font={hanFont(r.variety)}
+          lang={langTag(r.variety)}
+          alt={d?.alternate?.form ?? null}
+          reading={r.reading ?? ''}
+          tags={[varietyLabel(r.variety)]}
+          regions={regionsOf(r).filter((rg) => rg === 'TW' || rg === 'HK')}
+          gloss={shortGloss(r.glosses)}
+          onclick={() => openEntry(r.lexeme_id, 'push', d?.primary.form ?? r.headword)}
+        />
       {/each}
     </ul>
     {#if searched && !loading && results.length === 0}
@@ -691,6 +689,7 @@
 
 <style>
   .wrap {
+    position: relative;
     max-width: 680px;
     margin: 0 auto;
     padding: calc(1.4rem + env(safe-area-inset-top)) calc(1.35rem + env(safe-area-inset-right))
@@ -773,11 +772,15 @@
   /* item 1: focusing the field expands it to full width; draw + camera slide away */
   .searchrow.focused .rowbtn { max-width: 0; margin-left: 0; padding: 0; opacity: 0; border-width: 0; pointer-events: none; }
   @media (prefers-reduced-motion: reduce) { .rowbtn { transition: none; } }
-  /* inline draw pad at the top (under the search row); minimal frame, no heavy floating chrome */
+  /* draw pad: a FLOATING panel just under the search row. position:absolute with no offset keeps it at
+     its natural place in flow but lifts it OUT of flow, so the results list / about text render full
+     height behind it and simply continue past — the pad overlays them instead of pushing them down. */
   .drawpanel {
+    position: absolute;
+    z-index: 20;
     width: min(20rem, 100%);
-    margin: 0 0 1.2rem;
-    background: var(--surface-2); border: 1px solid var(--border); border-radius: 3px;
+    background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--r-lg);
+    box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.6);
     padding: 0.6rem;
   }
 
@@ -787,22 +790,8 @@
   .meta { color: var(--faint); font-size: 0.7rem; margin-bottom: 0.6rem; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.1em; }
   .err { color: var(--text); margin: 0.5rem 0; }
 
-  /* results - an editorial list: big serif headword, quiet meta column */
+  /* results - an editorial list of EntryRow rows (the one shared row style); the <ul> just resets. */
   .results { list-style: none; margin: 0; padding: 0; }
-  .results li + li { border-top: 1px solid var(--border); }
-  .hit {
-    display: flex; align-items: center; justify-content: flex-start; gap: 0.9rem; width: 100%; text-align: left;
-    background: none; border: none; border-radius: var(--r); padding: 0.7rem 0.5rem;
-  }
-  .hit:hover { background: var(--surface); color: var(--text); }
-  .hw { font-family: var(--han); font-size: 1.7rem; line-height: 1.05; flex: none; min-width: 2.2em; }
-  .hw .alt { color: var(--faint); font-size: 0.95rem; margin-left: 0.35rem; }
-  .meta-col { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }
-  .line1 { display: flex; align-items: baseline; gap: 0.5rem; }
-  .rd { font-family: var(--mono); color: var(--text); font-size: 0.8rem; }
-  .var { font-family: var(--han); font-size: 0.72rem; color: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 0 0.25rem; }
-  .rg { font-size: 0.6rem; color: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 0 0.2rem; font-family: var(--mono); }
-  .gl { color: var(--muted); font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .empty { color: var(--faint); padding: 1.2rem 0; }
 
   /* no-word breakdown: the query shown big (like a headword), a quiet note, then tappable chars */

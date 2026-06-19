@@ -889,7 +889,11 @@ function inlineEty(s: string): EtyInline[] {
 
 /** Split merged etymology prose into delineated segments (one per newline-separated statement),
  * lifting "Etymology N" markers to segment headings and stripping Wiktionary "; " list leaks. */
-const ALT_LEADIN = /^(From |Possibly |Perhaps |Alternatively\b|Compare\b|Cognate\b|[A-Z][a-zA-Z]+ \(\d{4}\))/
+// The horizontal rule before a stacked paragraph marks a COMPETING / alternative origin theory, so it
+// must only fire on lines that genuinely open a new account ("From …", "Alternatively…", a dated
+// "Author (1998)…" reconstruction). "Compare …" and "Cognate with …" are supplementary
+// cross-references, not rival theories — they were drawing a divider mid-account, so they're excluded.
+const ALT_LEADIN = /^(From |Possibly |Perhaps |Alternatively\b|[A-Z][a-zA-Z]+ \(\d{4}\))/
 
 export function etymologyTokens(text: string): EtySegment[] {
   const segs: EtySegment[] = []

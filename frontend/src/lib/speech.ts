@@ -81,10 +81,13 @@ async function fetchClip(url: string): Promise<string | null> {
   }
 }
 
+// per-syllable clips are recorded slowly and one-at-a-time; played back-to-back at natural rate a
+// multi-syllable word drags. A small speed-up reads as normal conversational pace without distortion.
+const CLIP_RATE = 1.18
 function playOne(objUrl: string, my: number): Promise<void> {
   return new Promise((resolve) => {
     const a = new Audio(objUrl)
-    a.playbackRate = 0.95
+    a.playbackRate = CLIP_RATE
     const done = () => {
       URL.revokeObjectURL(objUrl)
       if (current === a) current = null
@@ -99,14 +102,21 @@ function playOne(objUrl: string, my: number): Promise<void> {
 }
 
 async function playClips(urls: string[], my: number): Promise<number> {
+  // fetch every syllable IN PARALLEL first, then play them back-to-back. Previously each clip was
+  // fetched only when the prior finished, so even cache-warm words had an audible gap between
+  // syllables; pre-fetching makes a multi-syllable word flow as one continuous utterance.
+  const objs = await Promise.all(urls.map(fetchClip))
+  if (my !== token) {
+    objs.forEach((o) => o && URL.revokeObjectURL(o))
+    return 0
+  }
   let played = 0
-  for (const url of urls) {
-    if (my !== token) return played
-    const obj = await fetchClip(url)
+  for (let i = 0; i < objs.length; i++) {
     if (my !== token) {
-      if (obj) URL.revokeObjectURL(obj)
+      objs.slice(i).forEach((o) => o && URL.revokeObjectURL(o)) // release the unplayed remainder
       return played
     }
+    const obj = objs[i]
     if (!obj) continue // a missing syllable: skip it, keep voicing the rest of the word
     played++
     await playOne(obj, my)

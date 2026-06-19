@@ -441,6 +441,24 @@ describe('etymologyTokens - delineate merged statements + jargon tooltips + Han 
   it('never flags the very first paragraph as alt, even when it opens with "From"', () => {
     expect(etymologyTokens('From Old Chinese root word.')[0].alt).toBe(false)
   })
+  // a supplementary cross-reference ("Compare …", "Cognate with …") is NOT a competing theory, so it
+  // must not draw the alternative-theory horizontal rule mid-account (item: origin horizontal lines).
+  it('does not flag a "Compare" cross-reference as an alternative theory', () => {
+    const segs = etymologyTokens('A pictogram of a tree.\nCompare 林 and 森.')
+    expect(segs[1].alt).toBe(false)
+  })
+  it('does not flag a "Cognate with" cross-reference as an alternative theory', () => {
+    const segs = etymologyTokens('A pictogram of a tree.\nCognate with 樹.')
+    expect(segs[1].alt).toBe(false)
+  })
+  it('still flags a genuine "Alternatively" competing theory', () => {
+    const segs = etymologyTokens('The standard account.\nAlternatively, a phonetic loan.')
+    expect(segs[1].alt).toBe(true)
+  })
+  it('still flags a dated "Author (YEAR)" reconstruction as a competing account', () => {
+    const segs = etymologyTokens('A graphic account.\nSchuessler (2007) reconstructs it differently.')
+    expect(segs[1].alt).toBe(true)
+  })
 })
 
 describe('placeholderAt - rotating search placeholder (item 1)', () => {
