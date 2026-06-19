@@ -611,17 +611,6 @@
     return parts.find((p) => !isMinorGloss(p)) ?? parts[0] ?? ''
   }
 
-  // Chinese always carries a trad/simp clarifier. When the two scripts differ we show 繁 X · 简 Y; when
-  // they're identical we show one glyph tagged 繁简 (same in both). Other varieties don't get this.
-  function zhPair(r: Row): { trad: string; simp: string; same: boolean } {
-    if (r.alt) {
-      const trad = r.formScript === 'simp' ? r.alt : r.form
-      const simp = r.formScript === 'simp' ? r.form : r.alt
-      return { trad, simp, same: trad === simp }
-    }
-    return { trad: r.form, simp: r.form, same: true }
-  }
-
   // 熟語 - one flat, frequency-ranked list (language tag per row, no per-variety sectioning). Words
   // that use a CROSS-SCRIPT VARIANT of the character (relation 'compound-alt', e.g. 氷-words for 冰)
   // come after the same-glyph words under a "written differently" divider, still frequency-ranked.
@@ -777,13 +766,14 @@
       <div class="defs">
         {#each defRows as r (r.id)}
           {@const ss = shownSenses(r)}
-          {@const longForm = [...(r.variety === 'zh' ? zhPair(r).trad : r.form || '')].length >= 3}
+          {@const longForm = [...(r.form || '')].length >= 3}
           <div class="dl">
             <div class="dlh">
               <span class="dvar">{varietyLabel(r.variety)}</span>
               {#if r.variety === 'zh'}
-                {@const zp = zhPair(r)}
-                {#if zp.same}<span class="dform"><span class="ftag">TC/SC</span><Glyph ch={zp.trad} font={hanFont(r.variety)} lang={langTag(r.variety)} /></span>{:else}<span class="dform"><span class="ftag">TC</span><Glyph ch={zp.trad} font="var(--han-tc)" lang="zh-Hant" /><span class="fsep">·</span><span class="ftag">SC</span><Glyph ch={zp.simp} font="var(--han)" lang="zh-Hans" /></span>{/if}
+                <!-- lead with the form the user searched (Simplified when there's no script signal);
+                     the other script rides small beside it (item: search-echoing trad/simp display). -->
+                {#if r.alt}<span class="dform"><span class="ftag">{formTag(r.formScript)}</span><Glyph ch={r.form} font={r.formScript === 'trad' ? 'var(--han-tc)' : 'var(--han)'} lang={r.formScript === 'trad' ? 'zh-Hant' : 'zh-Hans'} /><span class="altform"><span class="ftag">{formTag(r.altScript)}</span><Glyph ch={r.alt} font={r.altScript === 'trad' ? 'var(--han-tc)' : 'var(--han)'} lang={r.altScript === 'trad' ? 'zh-Hant' : 'zh-Hans'} /></span></span>{:else}<span class="dform"><span class="ftag">TC/SC</span><Glyph ch={r.form} font={hanFont(r.variety)} lang={langTag(r.variety)} /></span>{/if}
               {:else if r.alt}
                 <span class="dform"><span class="ftag">{formTag(r.formScript)}</span><Glyph ch={r.form} font={hanFont(r.variety)} lang={langTag(r.variety)} /><span class="fsep">·</span><span class="ftag">{formTag(r.altScript)}</span><Glyph ch={r.alt} font={hanFont(r.variety)} lang={langTag(r.variety)} /></span>
               {:else if r.form !== head}
@@ -1084,6 +1074,8 @@
   .dform { font-family: var(--han); font-size: 1.15rem; }
   .dform .ftag { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); margin-right: 0.18rem; vertical-align: 0.35em; }
   .dform .fsep { color: var(--faint); margin: 0 0.18rem; }
+  /* the non-searched script form, shown small beside the primary (search-echoing trad/simp display) */
+  .dform .altform { font-size: 0.78em; opacity: 0.72; margin-left: 0.55rem; }
   /* the reading group: inline with the form for short words; its own line for long ones (.wide),
      where flex-basis:100% forces a wrap within the wrapping .dlh and the reading gets full width. */
   .drow2 { display: inline-flex; align-items: baseline; gap: 0.7rem; min-width: 0; }

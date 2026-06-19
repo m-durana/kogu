@@ -13,14 +13,18 @@ export interface DisplayForms {
 }
 
 /** Choose the headword form by echoing what the user typed: if the query equals one of the surface
- * forms, lead with that (search 机场 → 机场 leads, 機場 → 機場 leads); otherwise the canonical form.
- * The differing alternate is always shown bracketed. No script toggle needed. */
+ * forms, lead with that (search 机场 → 机场 leads, 機場 → 機場 leads). When the query gives no script
+ * signal (an English / reading lookup, a saved item), fall back to the SIMPLIFIED form as the main one
+ * (it's what most readers expect, simply because there are more Simplified readers). The differing
+ * alternate is always shown small beside it. No script toggle needed. */
 export function primaryForm(forms: Form[], variety: Variety, query = ''): DisplayForms | null {
   if (!forms || forms.length === 0) return null
   const q = query.trim()
   const matched = q ? forms.find((f) => f.form === q) : undefined
   if (variety === 'zh') {
-    const primary = matched ?? forms.find((f) => f.is_primary) ?? forms[0]
+    // searched form wins; else Simplified; else the primary (trad); else whatever exists.
+    const primary =
+      matched ?? forms.find((f) => f.script === 'simp') ?? forms.find((f) => f.is_primary) ?? forms[0]
     const alt = forms.find((f) => f.form !== primary.form) ?? null
     return { primary, alternate: alt }
   }

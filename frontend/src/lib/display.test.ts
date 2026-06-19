@@ -95,10 +95,15 @@ describe('primaryForm - echo the typed form (no toggle)', () => {
     expect(d.primary.form).toBe('機場')
     expect(d.alternate?.form).toBe('机场')
   })
-  it('no/!match query falls back to canonical, still brackets the other', () => {
+  it('no/!match query (English/reading) falls back to SIMPLIFIED as main, trad small', () => {
     const d = primaryForm(ts, 'zh', 'airport')!
-    expect(d.primary.form).toBe('機場')
-    expect(d.alternate?.form).toBe('机场')
+    expect(d.primary.form).toBe('机场')
+    expect(d.alternate?.form).toBe('機場')
+  })
+  it('empty query also falls back to simplified main', () => {
+    const d = primaryForm(ts, 'zh', '')!
+    expect(d.primary.form).toBe('机场')
+    expect(d.alternate?.form).toBe('機場')
   })
   it('identical forms across scripts -> no bracket', () => {
     const d = primaryForm([f('山', 'trad', null, true), f('山', 'simp', 'CN')], 'zh', '')!
