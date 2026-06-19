@@ -34,6 +34,8 @@ _LEXEMES = [
     (4, "zh", "自由"),       # freedom (zh)
     (5, "ja", "自由"),       # freedom (ja) - SAME glyphs as the zh form
     (6, "zh", "攀缘"),       # climb/clamber (zh synonym) - same variety as 攀岩
+    (7, "ja", "木"),         # tree (ja, SINGLE char) - excluded from auto bridges
+    (8, "zh", "樹木"),       # tree (zh, multi-char)
 ]
 
 
@@ -100,6 +102,34 @@ def test_same_variety_skipped(tmp_path):
     ])
     translations.ingest(conn, tsv)
     assert _edges(conn) == set()
+
+
+# 2c. Single-character members are excluded: an English-gloss pivot is too polysemous for a lone
+#     character, so a ja 木 / zh 樹木 row yields NO auto bridge (the single char 木 is dropped, leaving
+#     one member). The concept+frequency-gated "everyday word" path handles legit single-char cases.
+def test_single_char_member_skipped(tmp_path):
+    conn = _mini_db()
+    tsv = _write_tsv(tmp_path, [
+        ("tree", "ja", "木"),
+        ("tree", "zh", "樹木"),
+    ])
+    translations.ingest(conn, tsv)
+    assert _edges(conn) == set()
+
+
+# 2d. With a single char AND two multi-char members, only the multi-char pair bridges (木 excluded).
+def test_single_char_excluded_multichar_kept(tmp_path):
+    conn = _mini_db()
+    tsv = _write_tsv(tmp_path, [
+        ("tree", "ja", "木"),       # single char -> dropped
+        ("tree", "zh", "樹木"),     # multi
+        ("tree", "yue", "攀石"),    # multi (stand-in distinct yue word for the pairing test)
+    ])
+    translations.ingest(conn, tsv)
+    e = _edges(conn)
+    assert all(7 not in (s, d) for s, d, _, _ in e), f"single-char 木 (id 7) must not appear: {e}"
+    assert (8, 3, "cross-lang", "wiktionary") in e and (3, 8, "cross-lang", "wiktionary") in e
+    assert len(e) == 2, e
 
 
 # 3. Unresolved target words are skipped (and never invent a link).

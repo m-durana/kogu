@@ -97,7 +97,16 @@ def ingest(conn, path: Path | None = None) -> None:
             resolved_words += 1
             if lid not in seen_ids:
                 seen_ids.add(lid)
-                members.append((lid, variety, headword(lid)))
+                hw = headword(lid)
+                # Skip single-character members. An English-gloss pivot is far too polysemous for a
+                # lone character (English "color" -> 色 but also 上色/顏色), so auto cross-language
+                # bridges to/from single chars are noisy (色->上色, 違う->不, 神->上帝). The single
+                # character's real cross-language word is surfaced instead by the concept- and
+                # frequency-gated "everyday word" path (耳 -> 耳朵). Hand-verified single-char pairs
+                # (信/手紙) live in the CURATED bridges, which are unaffected.
+                if len(hw) < 2:
+                    continue
+                members.append((lid, variety, hw))
         for a_id, a_var, a_head in members:
             for b_id, b_var, b_head in members:
                 # a real CROSS-LANGUAGE bridge only: a different variety AND written DIFFERENTLY
