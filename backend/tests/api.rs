@@ -437,9 +437,18 @@ fn everyday_words(entry: &Value) -> Vec<String> {
 }
 #[tokio::test]
 async fn everyday_word_ear() {
+    // ja 耳 surfaces the Chinese everyday word 耳朵. It now arrives via a CURATED equivalence edge
+    // (耳↔耳朵), which is a stronger link than the derived everyday-word and supersedes it (the
+    // equivalence pass shares the dedup set and runs first). So accept either relation: what matters
+    // is that the ja 耳 page shows 耳朵 in its bridge.
     let hit = entry_of(&search("耳").await, "ja", "耳");
     let e = get(&format!("/entry/{}", hit["lexeme_id"].as_i64().unwrap())).await.1;
-    assert!(everyday_words(&e).contains(&"耳朵".to_string()), "耳 should point to everyday 耳朵");
+    let shows_duo = e["translations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|l| l["headword"] == "耳朵" && matches!(l["relation"].as_str(), Some("everyday-word") | Some("equivalent")));
+    assert!(shows_duo, "ja 耳 should surface 耳朵 (as everyday-word or curated equivalent)");
 }
 #[tokio::test]
 async fn everyday_word_duo_flower() {
@@ -450,7 +459,9 @@ async fn everyday_word_duo_flower() {
 }
 #[tokio::test]
 async fn everyday_word_relation_is_multichar_zh_with_reading() {
-    let hit = entry_of(&search("耳").await, "ja", "耳");
+    // 朵 has no curated equivalent, so 花朵 stays a derived everyday-word: a good probe for the
+    // relation's shape (multi-character zh).
+    let hit = entry_of(&search("朵").await, "zh", "朵");
     let e = get(&format!("/entry/{}", hit["lexeme_id"].as_i64().unwrap())).await.1;
     let ew = e["translations"]
         .as_array()
