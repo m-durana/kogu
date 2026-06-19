@@ -52,16 +52,35 @@ export function yueFile(tok: string): string | null {
 // A single monotonic token guards playback: every new speak() bumps it, so any in-flight fetch loop or
 // queued clip from an earlier tap bails the moment a newer tap starts.
 let token = 0
-let current: HTMLAudioElement | null = null
+// playback uses the Web Audio API so syllable clips can be SCHEDULED back-to-back (even slightly
+// overlapped) on one timeline — that removes the audible gap the old <Audio>-per-clip approach left
+// between syllables (each <Audio> only started after the previous fired 'ended', plus the clips'
+// own silent padding). We keep references to the scheduled sources so a new tap can stop them.
+let audioCtx: AudioContext | null = null
+let liveSources: AudioBufferSourceNode[] = []
+
+function getCtx(): AudioContext | null {
+  if (typeof window === 'undefined') return null
+  const AC = window.AudioContext || (window as any).webkitAudioContext
+  if (!AC) return null
+  if (!audioCtx) {
+    try {
+      audioCtx = new AC()
+    } catch {
+      return null
+    }
+  }
+  return audioCtx
+}
 
 function stopAll() {
   token++
-  if (current) {
+  for (const s of liveSources) {
     try {
-      current.pause()
+      s.stop()
     } catch {}
-    current = null
   }
+  liveSources = []
   if (haveSynth()) {
     try {
       window.speechSynthesis.cancel()
@@ -69,57 +88,49 @@ function stopAll() {
   }
 }
 
-async function fetchClip(url: string): Promise<string | null> {
+async function fetchBuffer(url: string, ac: AudioContext): Promise<AudioBuffer | null> {
   try {
     const res = await fetch(url)
     const type = res.headers.get('content-type') || ''
     // jyutping.org serves a 200 text/html SPA page for a missing syllable — accept only real audio.
     if (!res.ok || !type.startsWith('audio')) return null
-    return URL.createObjectURL(await res.blob())
+    return await ac.decodeAudioData(await res.arrayBuffer())
   } catch {
     return null
   }
 }
 
-// per-syllable clips are recorded slowly and one-at-a-time; played back-to-back at natural rate a
-// multi-syllable word drags. A small speed-up reads as normal conversational pace without distortion.
-const CLIP_RATE = 1.18
-function playOne(objUrl: string, my: number): Promise<void> {
-  return new Promise((resolve) => {
-    const a = new Audio(objUrl)
-    a.playbackRate = CLIP_RATE
-    const done = () => {
-      URL.revokeObjectURL(objUrl)
-      if (current === a) current = null
-      resolve()
-    }
-    a.onended = done
-    a.onerror = done
-    if (my !== token) return done()
-    current = a
-    a.play().catch(done)
-  })
-}
+// per-syllable clips are recorded slowly with silent padding; a small speed-up plus a slight overlap
+// between consecutive syllables makes a multi-syllable word flow as one utterance at a natural pace.
+const CLIP_RATE = 1.1
+const CLIP_OVERLAP = 0.07 // seconds each syllable starts before the previous one ends (trims the gap)
 
 async function playClips(urls: string[], my: number): Promise<number> {
-  // fetch every syllable IN PARALLEL first, then play them back-to-back. Previously each clip was
-  // fetched only when the prior finished, so even cache-warm words had an audible gap between
-  // syllables; pre-fetching makes a multi-syllable word flow as one continuous utterance.
-  const objs = await Promise.all(urls.map(fetchClip))
-  if (my !== token) {
-    objs.forEach((o) => o && URL.revokeObjectURL(o))
-    return 0
+  const ac = getCtx()
+  if (!ac) return 0
+  if (ac.state === 'suspended') {
+    try {
+      await ac.resume()
+    } catch {}
   }
+  // fetch + decode every syllable IN PARALLEL, then schedule them on the audio clock back-to-back.
+  const buffers = await Promise.all(urls.map((u) => fetchBuffer(u, ac)))
+  if (my !== token) return 0
   let played = 0
-  for (let i = 0; i < objs.length; i++) {
-    if (my !== token) {
-      objs.slice(i).forEach((o) => o && URL.revokeObjectURL(o)) // release the unplayed remainder
-      return played
-    }
-    const obj = objs[i]
-    if (!obj) continue // a missing syllable: skip it, keep voicing the rest of the word
+  let when = ac.currentTime + 0.03
+  for (const buf of buffers) {
+    if (my !== token) break
+    if (!buf) continue // a missing syllable: skip it, keep voicing the rest of the word
+    const src = ac.createBufferSource()
+    src.buffer = buf
+    src.playbackRate.value = CLIP_RATE
+    src.connect(ac.destination)
+    src.start(when)
+    liveSources.push(src)
     played++
-    await playOne(obj, my)
+    // advance the clock by this clip's (rate-adjusted) length minus the overlap, so the next syllable
+    // begins just before this one fades out — no silent gap between syllables.
+    when += Math.max(0.05, buf.duration / CLIP_RATE - CLIP_OVERLAP)
   }
   return played
 }

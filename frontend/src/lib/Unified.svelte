@@ -822,7 +822,7 @@
                        (kana + romaji), clamped to one line with a "+" (and horizontally scrollable). A
                        REAL ja word-row shows its OWN reading instead. The readings are plain text; the
                        single speaker icon plays them — one consistent speech affordance across 中/粵/日. -->
-                  <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe>{#each jaReadItems as it, i}{#if i}<span class="rsep">·</span>{/if}{it.main}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{jaReadOpen ? '−' : '+'}</button>{/if}{#if canSpeak()}<button class="spk" onclick={() => speakReading(jaReadItems[0].main, 'ja')} aria-label="listen" title="listen"><Volume2 size={15} /></button>{/if}
+                  <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe>{#each jaReadItems as it, i}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{it.main}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{#if canSpeak()}<button class="spk spk-sm" onclick={() => speakReading(it.main, 'ja')} aria-label="listen to {it.main}" title="listen"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{jaReadOpen ? '−' : '+'}</button>{/if}
                 {:else if r.reading}
                   <!-- plain reading text + the speaker icon (the single, consistent speech affordance). -->
                   <span class="dread">{dispReading(r.variety, r.reading)}</span>
@@ -1202,6 +1202,9 @@
   /* speaker (Web Speech API) button on each definition row */
   .spk { display: inline-flex; align-items: center; justify-content: center; background: none; border: none; color: var(--faint); padding: 0.1rem 0.2rem; border-radius: var(--r); align-self: center; }
   .spk:hover { color: var(--text); background: var(--surface); }
+  /* a per-reading speaker for the Japanese on/kun list, so each reading can be heard individually */
+  .rdg { white-space: nowrap; }
+  .spk-sm { padding: 0 0.1rem; vertical-align: -0.15em; margin-left: 0.1rem; }
   .rtagline { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; margin: 0.2rem 0 0; padding-left: 1.6rem; }
   /* one unified style for every small row tag: radical, rarely used, uncommon, only/often in compounds */
   .ltag { font-family: var(--mono); font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); background: none; border: 1px solid var(--border); border-radius: var(--r); padding: 0.06rem 0.42rem; line-height: 1.5; }

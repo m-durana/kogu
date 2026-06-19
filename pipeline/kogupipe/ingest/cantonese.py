@@ -80,8 +80,12 @@ def ingest(conn) -> None:
         if jyut:
             readings.append((lid, "jyutping", jyut))
             readings.append((lid, "jyutping_plain", _jyut_plain(jyut)))
-        next_sense += 1
-        senses.append((next_sense, lid, None, "; ".join(glosses), 0))
+        # one sense ROW per CC-Canto "/"-separated sense, so the UI enumerates them (1. … 2. …) like
+        # CC-CEDICT does — instead of collapsing every sense onto one "; "-joined line. (";" inside a
+        # single sense stays as synonyms.)
+        for order, g in enumerate(glosses):
+            next_sense += 1
+            senses.append((next_sense, lid, None, g, order))
         created += 1
 
     conn.executemany("INSERT INTO lexeme(id,variety,headword,reading,freq,freq_source) VALUES (?,?,?,?,?,?)", lex)
