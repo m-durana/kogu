@@ -14,6 +14,7 @@ import zipfile
 from collections import defaultdict
 
 from ..db import SOURCES_DIR
+from .cjk_readings import READING_SOURCE_FIELDS, parse_jyutping, parse_pinyin
 
 UNIHAN_ZIP = SOURCES_DIR / "Unihan.zip"
 KANJIDIC_ZIP = SOURCES_DIR / "kanjidic2-en.json.zip"
@@ -101,15 +102,12 @@ def ingest(conn) -> None:
     # NB: Unihan kJapaneseOn/kJapaneseKun are ROMAJI (e.g. "ABURA", "KO") - unusable for kana
     # display, so we do NOT ingest them. Japanese on/kun come solely from Kanjidic (proper kana,
     # applied below); characters Kanjidic lacks simply get no JP reading rather than romaji junk.
-    READING_FIELDS = {
-        "kMandarin": "pinyin", "kCantonese": "jyutping",
-    }
+    # Collect the raw reading fields; the FULL polyphonic pinyin/jyutping sets are assembled from them
+    # below (kMandarin/kCantonese alone give only the one customary reading — see cjk_readings).
+    raw_readings: dict[int, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
     for cp, field, value in _unihan("Unihan_Readings.txt"):
-        if field in READING_FIELDS:
-            kind = READING_FIELDS[field]
-            for v in value.split(" "):
-                if v:
-                    readings[cp][kind].append(v)
+        if field in READING_SOURCE_FIELDS:
+            raw_readings[cp][field].append(value)
             chars.add(cp)
         elif field == "kDefinition":
             gloss[cp] = value
@@ -245,16 +243,25 @@ def ingest(conn) -> None:
         "INSERT OR IGNORE INTO character(cp,char,is_orthodox,strokes,radical,ids,gloss_en,gloss_ja) "
         "VALUES (?,?,?,?,?,?,?,?)", char_rows)
 
-    # ---- write readings ----
+    # assemble the full polyphonic pinyin/jyutping sets (customary reading first) from the raw fields
+    for cp, rf in raw_readings.items():
+        py = parse_pinyin(rf)
+        jy = parse_jyutping(rf)
+        if py:
+            readings[cp]["pinyin"] = py
+        if jy:
+            readings[cp]["jyutping"] = jy
+
+    # ---- write readings (ord = position within a kind, so the customary reading sorts first) ----
     reading_rows = []
     for cp, kinds in readings.items():
         if cp not in valid:
             continue
         for kind, vals in kinds.items():
-            for v in dict.fromkeys(vals):  # dedupe, keep order
-                reading_rows.append((cp, kind, v))
+            for i, v in enumerate(dict.fromkeys(vals)):  # dedupe, keep order
+                reading_rows.append((cp, kind, v, i))
     conn.executemany(
-        "INSERT OR IGNORE INTO char_reading(cp,kind,value) VALUES (?,?,?)", reading_rows)
+        "INSERT OR IGNORE INTO char_reading(cp,kind,value,ord) VALUES (?,?,?,?)", reading_rows)
 
     # ---- write edges (skip any endpoint we didn't materialise) ----
     edge_rows = [(c, p, t, r) for (c, p, t, r) in edges if c in valid and p in valid]

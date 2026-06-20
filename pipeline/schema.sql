@@ -57,6 +57,7 @@ CREATE TABLE char_reading (
     kind    TEXT NOT NULL,               -- 'pinyin','jyutping','onyomi','kunyomi','zhuyin','mc'(middle chinese, phase 4)
     value   TEXT NOT NULL,
     region  TEXT REFERENCES region(code),-- optional region-specific reading
+    ord     INTEGER NOT NULL DEFAULT 0,  -- position within (cp,kind); 0 = the customary reading first
     PRIMARY KEY (cp, kind, value)
 ) WITHOUT ROWID;
 CREATE INDEX idx_char_reading_value ON char_reading(kind, value);

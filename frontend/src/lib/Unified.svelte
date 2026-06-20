@@ -328,10 +328,12 @@
   // understood the same in 粵, differing only in pronunciation. So when there's no SEPARATE Cantonese
   // row (which would signal a Cantonese-specific word/meaning, e.g. 係 hai6 / 乜), we surface the
   // character's jyutping right on the Chinese row — 中 ěr · 粵 ji5 — instead of burying it below.
-  const headJyut = $derived.by(() =>
+  // ALL the character's Cantonese readings (a polyphonic char has several: 行 hang4/hang6/hong4),
+  // customary first (backend orders by `ord`). Each renders with its own speaker, like the JA on/kun.
+  const headJyutList = $derived.by<string[]>(() =>
     single && headChar
-      ? headChar.readings.filter((r) => r.kind === 'jyutping').map((r) => r.value).join('  ')
-      : '',
+      ? headChar.readings.filter((r) => r.kind === 'jyutping').map((r) => r.value)
+      : [],
   )
   const hasYueDef = $derived(defRows.some((r) => r.variety === 'yue'))
   // single character's composition (what parts make it up, with structure kept): 森 = three 木
@@ -828,7 +830,7 @@
                   <span class="dread">{dispReading(r.variety, r.reading)}</span>
                   {#if canSpeak()}<button class="spk" onclick={() => speakReading(r.reading, r.variety, r.form)} aria-label="listen" title="listen"><Volume2 size={15} /></button>{/if}
                 {/if}
-                {#if r.variety === 'zh' && headJyut && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread">{settings.romanization === 'yale' ? jyutpingToYale(headJyut) : headJyut}</span>{#if canSpeak()}<button class="spk" onclick={() => speakReading(headJyut, 'yue', r.form)} aria-label="listen, Cantonese" title="listen (Cantonese)"><Volume2 size={15} /></button>{/if}{/if}
+                {#if r.variety === 'zh' && headJyutList.length && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread">{#each headJyutList as j, i}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{settings.romanization === 'yale' ? jyutpingToYale(j) : j}{#if canSpeak()}<button class="spk spk-sm" onclick={() => speakReading(j, 'yue', r.form)} aria-label="listen to {j}, Cantonese" title="listen (Cantonese)"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{/if}
               </span>
             </div>
             {#if boundKind(r) || (single && headChar && (isRadicalChar || rowUsage(r.variety)))}

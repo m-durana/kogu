@@ -1024,7 +1024,9 @@ fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<C
         Err(e) => return Err(e),
     };
 
-    let mut s = conn.prepare("SELECT kind, value FROM char_reading WHERE cp=?1")?;
+    // ORDER BY ord so a polyphonic character's customary reading comes first (ord 0), then the rest;
+    // on/kun/mc rows default to ord 0 and fall back to value order, unchanged.
+    let mut s = conn.prepare("SELECT kind, value FROM char_reading WHERE cp=?1 ORDER BY kind, ord, value")?;
     let readings: Vec<ReadingKV> = s
         .query_map([cp], |r| Ok(ReadingKV { kind: r.get(0)?, value: r.get(1)? }))?
         .collect::<Result<_, _>>()?;
