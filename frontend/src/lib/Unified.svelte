@@ -821,7 +821,6 @@
       <div class="defs">
         {#each defRows as r (r.id)}
           {@const ss = shownSenses(r)}
-          {@const longForm = [...(r.form || '')].length >= 3}
           <div class="dl">
             <div class="dlh">
               <span class="dvar">{varietyLabel(r.variety)}</span>
@@ -836,9 +835,10 @@
                 <!-- the language writes the same character with a different glyph (Japan: 电 → 電) -->
                 <span class="dform"><Glyph ch={r.form} font={hanFont(r.variety)} lang={langTag(r.variety)} /></span>
               {/if}
-              <!-- the readings (+ Cantonese + speaker) ride on their own full-width line for long
-                   forms so a wide idiom can't squish the romanisation down to a sliver (item 147). -->
-              <span class="drow2" class:wide={longForm}>
+              <!-- the readings (+ Cantonese + speaker) sit INLINE after the language tag; they grow into
+                   the remaining width and wrap there only if genuinely too long (never forced to their
+                   own line, which read as the reading "dropping" under the tag). -->
+              <span class="drow2">
                 {#if r.variety === 'ja' && singleJaRow && jaReadItems.length}
                   <!-- a SYNTHETIC ja row (kanji used only in compounds) shows the character's full on/kun
                        (kana + romaji), clamped to one line with a "+" (and horizontally scrollable). A
@@ -1140,7 +1140,6 @@
      width again and can clamp to one line + reveal its "+" toggle. (Without flex-grow here .drow2 sized
      to its content, so .dreads never overflowed and the multi-reading toggle silently disappeared.) */
   .drow2 { display: inline-flex; align-items: baseline; gap: 0.7rem; min-width: 0; flex: 1 1 0; }
-  .drow2.wide { flex-basis: 100%; margin-top: 0.1rem; }
   .dread { font-family: var(--mono); font-size: 0.9rem; color: var(--muted); }
   /* tight reading separator (the old "  ·  " ate too much space) + romaji gloss + "+N more" toggle */
   .dread .rsep { color: var(--faint); margin: 0 0.28rem; }
