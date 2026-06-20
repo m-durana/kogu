@@ -8,7 +8,7 @@
   import Pad from './lib/Pad.svelte'
   import Ocr from './lib/Ocr.svelte'
   import { Search, X, Brush, Camera, Bookmark, Clock, Share2, Trash2, ArrowRight, Download, Settings, SquarePlus, ExternalLink } from '@lucide/svelte'
-  import { settings, setRomanization, setTheme, applyTheme, THEMES } from './lib/settings.svelte'
+  import { settings, setRomanization } from './lib/settings.svelte'
   import { onMount } from 'svelte'
   import { getSaved, getHistory, isSaved, toggleSaved, recordHistory, clearHistory, type SavedItem } from './lib/store'
 
@@ -374,7 +374,6 @@
   }
 
   onMount(() => {
-    applyTheme() // restore the chosen design mockup on <html data-theme>
     window.addEventListener('popstate', onPop)
     // deep link: a shared #/entry/<id> (id may be negative for a char-only page) reopens that entry
     const m = location.hash.match(/^#\/entry\/(-?\d+)$/)
@@ -476,10 +475,12 @@
     ocrFile = null
     doSearch(text)
   }
-  // a stroke-recognised character from the draw pad: APPEND it to the field, live-update the results
-  // behind the floating pad (= Enter after each character), and keep the pad open for the next one.
-  function fromDraw(ch: string) {
-    q = q + ch
+  // a stroke-recognised character from the draw pad. replace=true swaps the last (provisional) char
+  // for the new guess (Google-Translate style: the top guess auto-enters as you draw, and picking a
+  // different candidate replaces it); replace=false appends a fresh character. Live-updates results.
+  function fromDraw(ch: string, replace: boolean) {
+    const cur = [...q]
+    q = (replace && cur.length ? cur.slice(0, -1).join('') : q) + ch
     clearTimeout(timer)
     doSearch(q, 'replace')
   }
@@ -689,15 +690,8 @@
         </p>
         <p class="intropos"><span class="intropron">/ko.gu/</span> <span class="introtag">noun</span></p>
 
-        <!-- design mockups: tap to preview a look (saved). "iOS" is the component-library style. -->
-        <div class="themepick">
-          <span class="themelabel">design</span>
-          <div class="themebtns">
-            {#each THEMES as t}
-              <button class="themebtn" class:on={settings.theme === t.id} onclick={() => setTheme(t.id)} aria-pressed={settings.theme === t.id}>{t.label}</button>
-            {/each}
-          </div>
-        </div>
+        <!-- design mockups live on their own page (doesn't re-skin the app) -->
+        <p class="designlink"><a href="/design/" target="_blank" rel="noopener">▦ compare design mockups →</a></p>
 
         <p class="introgloss">A dictionary for the living Han script. One character or word is shown across <b>中文</b> (Mandarin), <b>粵語</b> (Cantonese), and <b>日本語</b> (Japanese) at once, so you can see how the same writing is read and used in each, and how the reforms pulled the forms apart.</p>
 
@@ -765,7 +759,7 @@
     margin: 0 auto;
   }
   /* leave room so the bottom-docked handwriting panel doesn't cover the last results */
-  .wrap.drawing { padding-bottom: 60vh; }
+  .wrap.drawing { padding-bottom: 80dvh; }
   .wrap {
     padding: calc(1.4rem + env(safe-area-inset-top)) calc(1.35rem + env(safe-area-inset-right))
       calc(4rem + env(safe-area-inset-bottom)) calc(1.35rem + env(safe-area-inset-left));
@@ -858,14 +852,16 @@
     z-index: 40;
     display: flex;
     flex-direction: column;
-    height: min(56vh, 460px); /* a real dock height so the writing canvas (flex:1) fills it */
+    /* the writing area takes most of the screen (down from just under the search row) — the candidate
+       strip + a big full-bleed canvas, like Google Translate / PLECO */
+    height: min(78dvh, 720px);
     background: var(--surface-2);
     border-top: 1px solid var(--border-strong);
     box-shadow: 0 -8px 24px -12px rgba(0, 0, 0, 0.6);
     padding: 0.6rem calc(0.8rem + env(safe-area-inset-right)) calc(0.6rem + env(safe-area-inset-bottom)) calc(0.8rem + env(safe-area-inset-left));
   }
-  /* the pad fills the dock; centered to the app's column width */
-  .drawpanel :global(.pad) { flex: 1; min-height: 0; width: 100%; max-width: 680px; margin: 0 auto; }
+  /* the pad fills the dock full width (edge to edge), not a centered box */
+  .drawpanel :global(.pad) { flex: 1; min-height: 0; width: 100%; }
 
   /* inline photo selection, shown directly under the search row */
   .inputpanel { margin-bottom: 1.2rem; }
@@ -908,13 +904,10 @@
   .intropos { margin: 0.35rem 0 1rem; display: flex; align-items: baseline; gap: 0.6rem; }
   .intropron { font-family: var(--mono); font-size: 0.95rem; color: var(--faint); }
   .introtag { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); }
-  /* design-mockup switcher */
-  .themepick { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin: 1rem 0 1.4rem; }
-  .themelabel { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--faint); }
-  .themebtns { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; }
-  .themebtn { font-family: var(--mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-pill); padding: 0.32rem 0.7rem; }
-  .themebtn:hover { color: var(--text); border-color: var(--border-strong); }
-  .themebtn.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+  /* link to the standalone design-mockup page */
+  .designlink { margin: 0.6rem 0 1.2rem; }
+  .designlink a { font-family: var(--mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); text-decoration: none; }
+  .designlink a:hover { color: var(--text); }
   /* install-as-web-app button (item 2) */
   /* install button sits to the right of the 古古 Kogu wordmark (item 139) */
   .installbtn { display: inline-flex; align-items: center; gap: 0.35rem; margin-left: auto; align-self: center; font-family: var(--mono); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text); background: none; border: 1px solid var(--border-strong); border-radius: var(--r); padding: 0.3rem 0.6rem; }

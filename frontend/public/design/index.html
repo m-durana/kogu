@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Kogu · design mockups</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0b0b0c; color: #ededeb; font-family: ui-sans-serif, system-ui, sans-serif; height: 100dvh; display: flex; flex-direction: column; }
+  .bar { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; padding: 0.7rem 0.9rem; border-bottom: 1px solid #2a2a2e; }
+  .bar .ttl { font-family: ui-monospace, monospace; font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase; color: #9c9ca3; margin-right: 0.4rem; }
+  .bar button { font-family: ui-monospace, monospace; font-size: 0.72rem; color: #b4b4ba; background: #141416; border: 1px solid #2a2a2e; border-radius: 980px; padding: 0.35rem 0.8rem; cursor: pointer; }
+  .bar button:hover { color: #fff; border-color: #3a3a40; }
+  .bar button.on { background: #ededeb; color: #0b0b0c; border-color: #ededeb; }
+  .bar .tagp { font-size: 0.55rem; color: #9c9ca3; }
+  iframe { flex: 1; width: 100%; border: 0; background: #000; }
+</style>
+</head>
+<body>
+  <div class="bar">
+    <span class="ttl">Kogu design</span>
+    <button data-d="sharp" class="on">Sharp <span class="tagp">(current)</span></button>
+    <button data-d="ios">iOS</button>
+    <button data-d="editorial">Editorial</button>
+    <button data-d="terminal">Terminal</button>
+    <button data-d="pico">Pico.css <span class="tagp">(preset)</span></button>
+    <button data-d="openprops">Open Props <span class="tagp">(preset)</span></button>
+  </div>
+  <iframe id="frame" title="design preview"></iframe>
+
+<script>
+// The same sample dictionary entry, rendered in each design so the aesthetics compare like-for-like.
+const SAMPLE = `
+<main class="card">
+  <header class="hd"><h1 class="hw">機場</h1><span class="pos">noun · place</span></header>
+  <p class="read"><b>中</b> jī chǎng <i>·</i> <b>粵</b> gēi chèuhng <i>·</i> <b>日</b> くうこう</p>
+  <ol class="senses"><li>airport</li><li>airfield</li></ol>
+  <nav class="seg"><button class="on">Structure</button><button>Related</button><button>Origin</button><button>Used in</button></nav>
+  <ul class="rows">
+    <li><span class="g">空港</span><span class="m">日 くうこう — airport</span></li>
+    <li><span class="g">机场</span><span class="m">中 jīchǎng — airport (simplified)</span></li>
+    <li><span class="g">飛行場</span><span class="m">日 ひこうじょう — airfield</span></li>
+  </ul>
+</main>`
+
+// shared fonts (so the mockups look like the real app's type)
+const FONTS = `<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=Space+Mono:wght@400;700&family=Noto+Serif+SC:wght@400;500&display=swap" rel="stylesheet">`
+
+// base layout shared by the HAND designs (the presets supply their own look)
+const BASE = `
+*{box-sizing:border-box} body{margin:0;min-height:100dvh;padding:1.4rem 1.2rem 3rem}
+.card{max-width:640px;margin:0 auto}
+.hd{display:flex;align-items:baseline;gap:.7rem}
+.read i{opacity:.4;margin:0 .15rem}
+.senses{margin:.6rem 0 0;padding-left:1.4rem} .senses li{margin:.2rem 0}
+.seg{display:flex;margin:1.3rem 0 .2rem;padding:.22rem}
+.seg button{flex:1;border:none;padding:.42rem .6rem;cursor:pointer;background:none}
+.rows{list-style:none;margin:.4rem 0 0;padding:0}
+.rows li{display:flex;gap:.8rem;align-items:baseline;padding:.7rem .4rem}
+.rows .g{font-size:1.5rem;min-width:3.2em}`
+
+const DESIGNS = {
+  sharp: { lib: '', css: BASE + `
+    :root{--bg:#0b0b0c;--sf:#141416;--sf2:#1b1b1e;--bd:#2a2a2e;--bds:#3a3a40;--tx:#ededeb;--mu:#b4b4ba;--fa:#9c9ca3}
+    body{background:var(--bg);color:var(--tx);font-family:"Newsreader",Georgia,"Noto Serif SC",serif}
+    .hw{font-family:"Noto Serif SC",serif;font-weight:500;font-size:3.2rem;margin:0;line-height:1}
+    .pos{font-family:"Space Mono",monospace;font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--fa)}
+    .read{font-family:"Space Mono",monospace;font-size:.92rem;color:var(--mu);margin:.9rem 0 0}.read b{color:var(--tx)}
+    .senses{color:var(--tx)} .senses li::marker{font-family:"Space Mono",monospace;font-size:.78rem;color:var(--mu)}
+    .seg{background:var(--sf);border:1px solid var(--bd);border-radius:980px}
+    .seg button{font-size:.9rem;color:var(--mu);border-radius:980px}.seg button.on{background:var(--sf2);color:var(--tx)}
+    .rows li{border-top:1px solid var(--bd)} .rows li:first-child{border-top:none}
+    .rows .g{font-family:"Noto Serif SC",serif} .rows .m{color:var(--mu);font-size:.9rem}` },
+
+  ios: { lib: '', css: BASE + `
+    :root{--bg:#000;--sf:#1c1c1e;--sf2:#2c2c2e;--bd:#3a3a3c;--tx:#fff;--mu:#c7c7cc;--fa:#8e8e93}
+    body{background:var(--bg);color:var(--tx);font-family:-apple-system,system-ui,"SF Pro Text",Roboto,"Noto Serif SC",sans-serif}
+    .card{}
+    .hw{font-family:"Noto Serif SC",serif;font-weight:500;font-size:3rem;margin:0;line-height:1}
+    .pos{font-size:.72rem;color:var(--fa)}
+    .read{font-size:.95rem;color:var(--mu);margin:.9rem 0 0}.read b{color:var(--tx)}
+    .senses li{margin:.3rem 0}
+    /* iOS segmented control — monochrome (no blue): white-ish active pill */
+    .seg{background:var(--sf);border-radius:12px;gap:.1rem}
+    .seg button{font-size:.92rem;color:var(--mu);border-radius:9px;padding:.5rem .6rem}
+    .seg button.on{background:#48484a;color:#fff}
+    .rows li{background:var(--sf);border-radius:12px;margin-bottom:.4rem}
+    .rows .g{font-family:"Noto Serif SC",serif}.rows .m{color:var(--mu);font-size:.92rem}` },
+
+  editorial: { lib: '', css: BASE + `
+    :root{--bg:#0c0b0a;--sf:#16140f;--sf2:#1e1b15;--bd:#2c281f;--tx:#efe9dc;--mu:#b7ad97;--fa:#8a8170}
+    body{background:var(--bg);color:var(--tx);font-family:"Newsreader",Georgia,"Noto Serif SC",serif}
+    .hw{font-family:"Noto Serif SC",serif;font-weight:500;font-size:3.6rem;margin:0;line-height:1}
+    .pos{font-style:italic;font-size:.85rem;color:var(--fa)}
+    .read{font-size:1.05rem;color:var(--mu);margin:1rem 0 0}.read b{color:var(--tx)}
+    .senses{font-size:1.1rem} .senses li{margin:.25rem 0}
+    .seg{border-bottom:1px solid var(--bd);gap:1.2rem;padding:0 0 .2rem}
+    .seg button{flex:0 0 auto;font-family:"Space Mono",monospace;font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--fa);padding:.4rem 0}
+    .seg button.on{color:var(--tx);border-bottom:2px solid var(--tx)}
+    .rows li{border-top:1px solid var(--bd)}.rows li:first-child{border-top:none}
+    .rows .g{font-family:"Noto Serif SC",serif}.rows .m{color:var(--mu);font-size:.95rem;font-style:italic}` },
+
+  terminal: { lib: '', css: BASE + `
+    :root{--bg:#000;--sf:#0a0a0a;--bd:#2a2a2a;--bds:#454545;--tx:#e8e8e8;--mu:#9f9f9f;--fa:#6e6e6e}
+    body{background:var(--bg);color:var(--tx);font-family:"Space Mono",ui-monospace,Menlo,"Noto Serif SC",monospace}
+    .hw{font-family:"Noto Serif SC",serif;font-weight:500;font-size:2.8rem;margin:0;line-height:1}
+    .pos{font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--fa)}
+    .read{font-size:.85rem;color:var(--mu);margin:.9rem 0 0}.read b{color:var(--tx)}
+    .senses li{margin:.25rem 0}
+    .seg{border:1px solid var(--bd);padding:0}
+    .seg button{font-family:inherit;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mu);border-right:1px solid var(--bd);padding:.5rem .4rem}
+    .seg button:last-child{border-right:none}.seg button.on{background:var(--tx);color:#000}
+    .rows li{border-top:1px solid var(--bd)}.rows li:first-child{border-top:none}
+    .rows .g{font-family:"Noto Serif SC",serif}.rows .m{color:var(--mu);font-size:.82rem}` },
+
+  // PRESET 1 — Pico.css (classless), forced dark + a grey (non-blue) accent. Styles the bare tags.
+  pico: {
+    lib: `<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">`,
+    css: `:root{--pico-primary:#c7c7cc;--pico-primary-background:#3a3a40;--pico-primary-hover:#fff;--pico-border-radius:.4rem}
+      [data-theme="dark"],body{--pico-font-family:"Newsreader",Georgia,"Noto Serif SC",serif}
+      body{padding:1.4rem 1.2rem 3rem} .card{max-width:640px;margin:0 auto}
+      .hw{font-family:"Noto Serif SC",serif;font-size:3rem;margin:0}
+      .read b{color:var(--pico-color)} .seg{display:flex;gap:.3rem;margin:1.2rem 0 .4rem}
+      .seg button{width:auto} .rows{list-style:none;padding:0} .rows li{display:flex;gap:.8rem;padding:.6rem 0;border-top:1px solid var(--pico-muted-border-color)}
+      .rows .g{font-family:"Noto Serif SC",serif;font-size:1.5rem;min-width:3.2em}`,
+    attr: ' data-theme="dark"' },
+
+  // PRESET 2 — Open Props (design-token preset): the look is built entirely from its gray scale,
+  // radii, shadows and font tokens (no bespoke colours).
+  openprops: {
+    lib: `<link rel="stylesheet" href="https://unpkg.com/open-props"><link rel="stylesheet" href="https://unpkg.com/open-props/normalize.dark.min.css">`,
+    css: `body{background:var(--gray-12);color:var(--gray-1);font-family:var(--font-serif,"Newsreader"),"Noto Serif SC",serif;padding:var(--size-5) var(--size-4) var(--size-9)}
+      .card{max-width:640px;margin:0 auto}
+      .hw{font-family:"Noto Serif SC",serif;font-size:var(--font-size-8);margin:0;line-height:1.1}
+      .pos{font-family:var(--font-mono);font-size:var(--font-size-0);color:var(--gray-5);text-transform:uppercase;letter-spacing:var(--font-letterspacing-3)}
+      .read{font-family:var(--font-mono);font-size:var(--font-size-1);color:var(--gray-4);margin-top:var(--size-3)}.read b{color:var(--gray-0)}
+      .senses{padding-left:var(--size-5)} .senses li{margin:var(--size-1) 0}
+      .seg{display:flex;background:var(--gray-10);border:var(--border-size-1) solid var(--gray-8);border-radius:var(--radius-3);padding:var(--size-1);margin:var(--size-5) 0 var(--size-2)}
+      .seg button{flex:1;border:none;background:none;color:var(--gray-4);border-radius:var(--radius-2);padding:var(--size-2);cursor:pointer;font-family:var(--font-sans)}
+      .seg button.on{background:var(--gray-7);color:var(--gray-0)}
+      .rows{list-style:none;padding:0;margin:0} .rows li{display:flex;gap:var(--size-3);padding:var(--size-3) var(--size-2);border-top:var(--border-size-1) solid var(--gray-9)}
+      .rows .g{font-family:"Noto Serif SC",serif;font-size:var(--font-size-5);min-width:3.2em} .rows .m{color:var(--gray-4);font-size:var(--font-size-1)}` },
+}
+
+const frame = document.getElementById('frame')
+function render(id){
+  const d = DESIGNS[id]
+  frame.srcdoc = `<!doctype html><html lang="en"${d.attr||''}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${FONTS}${d.lib}<style>${d.css}</style></head><body>${SAMPLE}</body></html>`
+  document.querySelectorAll('.bar button').forEach(b => b.classList.toggle('on', b.dataset.d === id))
+}
+document.querySelectorAll('.bar button').forEach(b => b.addEventListener('click', () => render(b.dataset.d)))
+render('sharp')
+</script>
+</body>
+</html>

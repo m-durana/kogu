@@ -2,13 +2,17 @@
   import { recognize, type Stroke } from './api'
   import { X } from '@lucide/svelte'
 
-  let { onpick, onclose }: { onpick: (ch: string) => void; onclose?: () => void } = $props()
+  // onpick(ch, replace): replace=true swaps the provisional character already in the field for `ch`
+  // (Google-Translate style — the top guess auto-enters, picking another replaces it).
+  let { onpick, onclose }: { onpick: (ch: string, replace: boolean) => void; onclose?: () => void } = $props()
 
   let canvas: HTMLCanvasElement
   let drawing = $state(false)
   let strokes: Stroke[] = []
   let current: Stroke = []
   let candidates = $state<string[]>([])
+  // a provisional (auto-entered) character is currently in the field for the strokes being drawn
+  let live = false
   let busy = $state(false)
   let error = $state('')
   let t0 = 0
@@ -121,10 +125,21 @@
     clearTimeout(timer)
     timer = setTimeout(run, 160)
   }
-  // a candidate was chosen: hand it up (the field appends it) and reset the pad for the next character
+  // clear the drawing/candidates (for the next character), without closing the dock
+  function reset() {
+    clearTimeout(timer)
+    strokes = []
+    current = []
+    candidates = []
+    error = ''
+    ctx().clearRect(0, 0, cw, ch)
+  }
+  // tapping a candidate commits THIS character (replacing the auto-entered provisional) and advances:
+  // the canvas clears so the next strokes are a fresh character.
   function pick(ch: string) {
-    onpick(ch)
-    clear()
+    onpick(ch, live)
+    live = false
+    reset()
   }
   function clear() {
     // nothing drawn yet → the X doubles as "close the draw box"
@@ -132,12 +147,8 @@
       onclose?.()
       return
     }
-    clearTimeout(timer)
-    strokes = []
-    current = []
-    candidates = []
-    error = ''
-    ctx().clearRect(0, 0, cw, ch)
+    reset()
+    live = false
   }
   async function run() {
     if (strokes.length === 0) return
@@ -147,7 +158,13 @@
       // pass the real CSS-pixel bounds, matching the stroke coordinates
       const res = await recognize(cw, ch, strokes, ['zh', 'ja'])
       candidates = res.candidates
-      if (candidates.length === 0) error = 'no match, try again'
+      if (candidates.length === 0) {
+        error = 'no match, try again'
+      } else {
+        // auto-enter the top guess (replacing the previous provisional as more strokes refine it)
+        onpick(candidates[0], live)
+        live = true
+      }
     } catch {
       error = 'recogniser unavailable'
     } finally {
@@ -206,11 +223,10 @@
   .canvas-wrap { position: relative; display: flex; flex: 1; min-height: 200px; }
   canvas {
     display: block;
-    /* fill the dock: full width, flexible height bounded for sane phone/desktop sizes */
+    /* fill the dock entirely: the whole area below the candidate strip */
     width: 100%;
     height: 100%;
     min-height: 200px;
-    max-height: 46vh;
     background: var(--surface);
     border: 1px solid var(--border-strong);
     border-radius: 3px; /* less prominent rounding in the drawing window */
