@@ -195,6 +195,9 @@ describe('cleanGloss - strip CC-CEDICT markup', () => {
   it('removes CL classifier clauses', () => {
     expect(cleanGloss('telephone; CL:通[tong1]; phone number')).toBe('telephone; phone number')
   })
+  it('removes a CL clause wrapped in parens without leaving a dangling "("', () => {
+    expect(cleanGloss('fish (CL:條,尾)')).toBe('fish')
+  })
   it('removes bracketed romanisation', () => {
     expect(cleanGloss('airport (abbr. for 航空港[hang2 kong1 gang3])')).toBe('airport (abbr. for 航空港)')
   })

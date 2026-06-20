@@ -423,7 +423,7 @@ export function cleanGloss(g: string): string {
   s = s.replace(/\s*\((?:Cantonese|Mandarin)\)/gi, '') // bare variety tags
   s = s.replace(/\(\s*(?:Tw|HK)\s*\)\s*/g, '') // region markers (Tw)/(HK) → surfaced as a small badge
   s = s.replace(/\(\s*(?:meaningless\s+)?bound form\s*\)\s*/gi, '') // grammatical jargon → surfaced as a "bound" tag instead
-  s = s.replace(/\s*\bCL:[^;]*(?=;|$)/g, '') // classifier clauses
+  s = s.replace(/\s*\(?\s*\bCL:[^;)]*\)?/g, '') // classifier clauses, incl. when wrapped in (…): "fish (CL:條,尾)" → "fish"
   s = s.replace(/\[[A-Za-zÀ-ÿüÜ0-9·,.\s]*\]/g, '') // [hang2 kong1 gang3], [fa3] - before pipes
   s = s.replace(/([^\s;,，|[\]]+)\|([^\s;,，|[\]]+)/g, '$1') // 處|处 -> 處
   s = s.replace(/[,;]?\s*(?:Taiwan|Mainland|also|old|erhua|Cantonese)\s+pr\.\s*/gi, ' ') // pr. notes

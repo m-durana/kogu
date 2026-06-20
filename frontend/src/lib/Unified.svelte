@@ -7,6 +7,7 @@
     showOrigin: boolean
     showWords: boolean
     jaReadOpen: boolean
+    yueReadOpen: boolean
     boundId: number | null
     ts: number
   }
@@ -538,6 +539,12 @@
   // "+N" toggle so a kanji with a dozen readings doesn't wrap into a wall. (中 pinyin / 粵 jyutping are
   // short and already sit on their rows; there is no separate "readings" section any more.)
   let jaReadOpen = $state(false)
+  let yueReadOpen = $state(false)
+  // a single character with exactly ONE Japanese row should show the CHARACTER's full on/kun set
+  // (志 → シ · こころざ.す · こころざし), not just the one reading of the word-lexeme that happens to
+  // exist (こころざし). When a character has several ja words (生: なま/いきる/セイ…) they stay as
+  // separate per-word rows instead, so the full list isn't duplicated across them.
+  const singleJaRow = $derived(single && defRows.filter((r) => r.variety === 'ja').length === 1)
   const jaReadItems = $derived.by<{ main: string; sub: string }[]>(() => {
     if (!single || !headChar) return []
     const mk = (kind: string) =>
@@ -695,6 +702,7 @@
       showOrigin,
       showWords,
       jaReadOpen,
+      yueReadOpen,
       boundId: boundOpen?.id ?? null,
       ts: Date.now(),
     })
@@ -716,6 +724,10 @@
     jaReadOpen = !jaReadOpen
     save()
   }
+  function toggleYueRead() {
+    yueReadOpen = !yueReadOpen
+    save()
+  }
   function pivot(q: string) {
     save() // persist the open bound menu so it's still open when we come back
     boundOpen = null
@@ -734,32 +746,36 @@
       showOrigin = snap.showOrigin
       showWords = snap.showWords
       jaReadOpen = snap.jaReadOpen
+      yueReadOpen = snap.yueReadOpen ?? false
       boundOpen = snap.boundId != null ? allRows.find((r) => r.id === snap.boundId) ?? null : null
     } else {
       expanded = new Set()
       showOrigin = false
       showWords = false
       jaReadOpen = false
+      yueReadOpen = false
       boundOpen = null
     }
   })
 
-  // ── readings "show more" (#102): clamp the 日 on/kun line to ONE line; "+" reveals the rest when it
-  // would wrap. Line-break driven (not a fixed count). ──
+  // ── readings "show more" (#102): clamp a readings line to ONE line; "+" reveals the rest when it
+  // would overflow (and the line stays side-scrollable). Used by BOTH the 日 on/kun list and the 粵
+  // jyutping list, so readProbe takes a setter for whichever "over" flag this line drives. ──
   let jaReadOver = $state(false)
-  function readProbe(node: HTMLElement) {
+  let yueReadOver = $state(false)
+  function readProbe(node: HTMLElement, setOver: (v: boolean) => void) {
     const measure = () => {
       // only meaningful while clamped (one line); when expanded keep the toggle visible so it can
       // collapse again. Horizontal overflow = the readings would be clipped → show "+".
       if (!node.classList.contains('clamp')) return
-      jaReadOver = node.scrollWidth > node.clientWidth + 2
+      setOver(node.scrollWidth > node.clientWidth + 2)
     }
     measure()
     requestAnimationFrame(measure)
     document.fonts?.ready?.then(measure)
     const ro = new ResizeObserver(measure)
     ro.observe(node)
-    return { destroy: () => ro.disconnect() }
+    return { update: (s: (v: boolean) => void) => { setOver = s }, destroy: () => ro.disconnect() }
   }
 </script>
 
@@ -819,18 +835,18 @@
               <!-- the readings (+ Cantonese + speaker) ride on their own full-width line for long
                    forms so a wide idiom can't squish the romanisation down to a sliver (item 147). -->
               <span class="drow2" class:wide={longForm}>
-                {#if r.variety === 'ja' && r.synthetic && jaReadItems.length}
+                {#if r.variety === 'ja' && singleJaRow && jaReadItems.length}
                   <!-- a SYNTHETIC ja row (kanji used only in compounds) shows the character's full on/kun
                        (kana + romaji), clamped to one line with a "+" (and horizontally scrollable). A
                        REAL ja word-row shows its OWN reading instead. The readings are plain text; the
                        single speaker icon plays them — one consistent speech affordance across 中/粵/日. -->
-                  <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe>{#each jaReadItems as it, i}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{it.main}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{#if canSpeak()}<button class="spk spk-sm" onclick={() => speakReading(it.main, 'ja')} aria-label="listen to {it.main}" title="listen"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{jaReadOpen ? '−' : '+'}</button>{/if}
+                  <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe={(v) => (jaReadOver = v)}>{#each jaReadItems as it, i}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{it.main}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{#if canSpeak()}<button class="spk spk-sm" onclick={() => speakReading(it.main, 'ja')} aria-label="listen to {it.main}" title="listen"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{jaReadOpen ? '−' : '+'}</button>{/if}
                 {:else if r.reading}
                   <!-- plain reading text + the speaker icon (the single, consistent speech affordance). -->
                   <span class="dread">{dispReading(r.variety, r.reading)}</span>
                   {#if canSpeak()}<button class="spk" onclick={() => speakReading(r.reading, r.variety, r.form)} aria-label="listen" title="listen"><Volume2 size={15} /></button>{/if}
                 {/if}
-                {#if r.variety === 'zh' && headJyutList.length && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread">{#each headJyutList as j, i}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{settings.romanization === 'yale' ? jyutpingToYale(j) : j}{#if canSpeak()}<button class="spk spk-sm" onclick={() => speakReading(j, 'yue', r.form)} aria-label="listen to {j}, Cantonese" title="listen (Cantonese)"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{/if}
+                {#if r.variety === 'zh' && headJyutList.length && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread dreads" class:clamp={!yueReadOpen} class:faded={yueReadOver && !yueReadOpen} use:readProbe={(v) => (yueReadOver = v)}>{#each headJyutList as j, i}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{settings.romanization === 'yale' ? jyutpingToYale(j) : j}{#if canSpeak()}<button class="spk spk-sm" onclick={() => speakReading(j, 'yue', r.form)} aria-label="listen to {j}, Cantonese" title="listen (Cantonese)"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if yueReadOver}<button class="rmore" onclick={toggleYueRead} aria-label={yueReadOpen ? 'show fewer readings' : 'show more readings'}>{yueReadOpen ? '−' : '+'}</button>{/if}{/if}
               </span>
             </div>
             {#if boundKind(r) || (single && headChar && (isRadicalChar || rowUsage(r.variety)))}

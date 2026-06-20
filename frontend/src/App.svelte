@@ -286,6 +286,9 @@
     q = v
     if (composing) return
     clearTimeout(timer)
+    // emptying the field keeps the current page (results/entry stay) until a new character is typed —
+    // don't run an empty search that would blank back to the home screen.
+    if (!v.trim()) return
     timer = setTimeout(() => doSearch(v, 'replace'), 160)
   }
   // commit immediately (Enter / search button): also close the draw / photo panel
@@ -418,18 +421,14 @@
     ;(e.target as HTMLInputElement).value = '' // allow re-picking the same file
   }
 
+  // the X button just EMPTIES the text — it keeps whatever page is shown (results / entry / card)
+  // until you type a new character, so you can clear and retype without it blanking to the home
+  // screen. (The logo, goHome, is the full reset.) lastSearched is left intact so retyping the same
+  // term doesn't reload the identical page.
   function clearSearch() {
     q = ''
-    lastSearched = ''
-    results = []
-    entry = null
-    enrichEntry = null
-    enriching = false
-    unified = false
-    searched = false
-    breakdown = []
     err = ''
-    history.replaceState({ view: 'results', q: '' }, '', location.pathname)
+    inputEl?.focus()
   }
 
   // tapping the logo resets everything to a clean home
@@ -437,8 +436,18 @@
     panel = 'none'
     ocrFile = null
     entry = null
+    enrichEntry = null
+    enriching = false
+    unified = false
+    searched = false
+    results = []
+    breakdown = []
+    breaking = false
+    q = ''
+    lastSearched = ''
+    err = ''
     view = 'results'
-    clearSearch()
+    history.replaceState({ view: 'results', q: '' }, '', location.pathname)
   }
 
   // a character was chosen from the photo selection — search it and close the panel
