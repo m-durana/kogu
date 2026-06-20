@@ -27,6 +27,8 @@
   let toast = $state('') // transient "Link copied" confirmation for share
   // inline input panel below the search row: 'draw' shows the pad; 'photo' shows the picked image
   let panel = $state<'none' | 'draw' | 'photo'>('none')
+  // draw pad expanded to (near) full screen via the expand button on the candidate strip
+  let padFull = $state(false)
   let ocrFile = $state<File | null>(null)
   let fileInput: HTMLInputElement
   let loading = $state(false)
@@ -542,8 +544,16 @@
 
   {#if panel === 'draw'}
     <!-- inline draw pad, directly under the search row (top of the page) so it sits where you type -->
-    <div class="drawpanel">
-      <Pad onpick={fromDraw} onclose={() => (panel = 'none')} />
+    <div class="drawpanel" class:full={padFull}>
+      <Pad
+        onpick={fromDraw}
+        onclose={() => {
+          panel = 'none'
+          padFull = false
+        }}
+        expanded={padFull}
+        ontoggle={() => (padFull = !padFull)}
+      />
     </div>
   {/if}
 
@@ -759,7 +769,7 @@
     margin: 0 auto;
   }
   /* leave room so the bottom-docked handwriting panel doesn't cover the last results */
-  .wrap.drawing { padding-bottom: 80dvh; }
+  .wrap.drawing { padding-bottom: 52dvh; }
   .wrap {
     padding: calc(1.4rem + env(safe-area-inset-top)) calc(1.35rem + env(safe-area-inset-right))
       calc(4rem + env(safe-area-inset-bottom)) calc(1.35rem + env(safe-area-inset-left));
@@ -852,14 +862,16 @@
     z-index: 40;
     display: flex;
     flex-direction: column;
-    /* the writing area takes most of the screen (down from just under the search row) — the candidate
-       strip + a big full-bleed canvas, like Google Translate / PLECO */
-    height: min(78dvh, 720px);
+    /* default: a comfortable docked strip (candidate row + canvas), like Google Translate's collapsed
+       handwriting pad. The expand button on the candidate strip grows it to (near) full screen. */
+    height: min(46dvh, 460px);
     background: var(--surface-2);
     border-top: 1px solid var(--border-strong);
     box-shadow: 0 -8px 24px -12px rgba(0, 0, 0, 0.6);
     padding: 0.6rem calc(0.8rem + env(safe-area-inset-right)) calc(0.6rem + env(safe-area-inset-bottom)) calc(0.8rem + env(safe-area-inset-left));
+    transition: height 0.22s cubic-bezier(0.4, 0, 0.2, 1);
   }
+  .drawpanel.full { height: min(88dvh, 820px); }
   /* the pad fills the dock full width (edge to edge), not a centered box */
   .drawpanel :global(.pad) { flex: 1; min-height: 0; width: 100%; }
 

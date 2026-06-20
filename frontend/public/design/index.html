@@ -22,9 +22,9 @@
   <div class="bar">
     <span class="ttl">Kogu — design directions</span>
     <button data-d="seal" class="on">印 <b>Seal</b></button>
-    <button data-d="stone">石 <b>Stone</b></button>
+    <button data-d="grid">格 <b>Grid</b></button>
     <button data-d="ios">iOS</button>
-    <button data-d="terminal">電 <b>Terminal</b></button>
+    <button data-d="poster">版 <b>Poster</b></button>
     <button data-d="ink">墨 <b>Ink</b></button>
   </div>
   <iframe id="frame" title="design preview"></iframe>
@@ -36,7 +36,7 @@ const RESET = '*{box-sizing:border-box;margin:0}body{min-height:100dvh;-webkit-f
 
 const D = {}
 
-/* ───────────────────────── 印 SEAL — editorial serif, one vermilion accent ───────────────────────── */
+/* ───────────────────────── 印 SEAL — editorial serif, carved ivory stamp (monochrome) ───────────────────────── */
 D.seal = { css: `
   body{background:#14110d;color:#ece4d4;font-family:"Newsreader",Georgia,serif;padding:2.4rem 1.6rem 4rem;position:relative}
   body::before{content:"";position:fixed;inset:0;background-image:url("${GRAIN}");background-size:160px;opacity:.04;pointer-events:none;mix-blend-mode:screen}
@@ -44,19 +44,19 @@ D.seal = { css: `
   .kick{font-family:"Space Mono",monospace;font-size:.6rem;letter-spacing:.34em;text-transform:uppercase;color:#9a8e78;animation:fade .6s both}
   .hero{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin:1.6rem 0 .2rem}
   .hw{font-family:"Noto Serif SC";font-weight:500;font-size:clamp(4rem,22vw,6rem);line-height:.9;letter-spacing:.02em;animation:up .7s both}
-  .seal{flex:none;margin-top:.6rem;width:3rem;height:3rem;border-radius:5px;background:#cf3a26;color:#fff5ec;display:grid;place-items:center;font-family:"Noto Serif SC";font-weight:600;font-size:1.5rem;box-shadow:0 2px 16px rgba(207,58,38,.3);transform:rotate(3deg);animation:up .7s .1s both}
+  .seal{flex:none;margin-top:.6rem;width:3rem;height:3rem;border-radius:4px;background:#ece4d4;color:#14110d;display:grid;place-items:center;font-family:"Noto Serif SC";font-weight:600;font-size:1.5rem;box-shadow:0 2px 14px rgba(0,0,0,.5);transform:rotate(3deg);animation:up .7s .1s both}
   .reads{display:flex;flex-wrap:wrap;gap:1.2rem;font-family:"Space Mono",monospace;font-size:.92rem;color:#c8bda6;margin:1.2rem 0 0;animation:up .7s .12s both}
-  .reads .lab{color:#cf3a26;font-weight:700;margin-right:.45rem}
+  .reads .lab{color:#ece4d4;font-weight:700;margin-right:.45rem}
   .senses{list-style:none;padding:0;margin:1.8rem 0 0;animation:up .7s .18s both}
   .senses li{display:flex;gap:.9rem;font-size:1.3rem;line-height:1.5;padding:.15rem 0}
-  .senses .n{font-family:"Space Mono",monospace;font-size:.85rem;color:#cf3a26;padding-top:.4rem}
+  .senses .n{font-family:"Space Mono",monospace;font-size:.85rem;color:#9a8e78;padding-top:.4rem}
   .seg{display:flex;gap:1.6rem;margin:2.2rem 0 .4rem;border-bottom:1px solid #2e271d;animation:up .7s .24s both}
   .seg button{background:none;border:none;color:#8a7e68;font-family:"Space Mono",monospace;font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;padding:0 0 .7rem;cursor:pointer}
-  .seg .on{color:#ece4d4;box-shadow:inset 0 -2px 0 #cf3a26}
+  .seg .on{color:#ece4d4;box-shadow:inset 0 -2px 0 #ece4d4}
   .rows{list-style:none;padding:0;margin:.4rem 0 0;animation:up .7s .3s both}
   .rows li{display:flex;align-items:baseline;gap:1rem;padding:.85rem .1rem;border-bottom:1px solid #221d16}
   .rows .g{font-family:"Noto Serif SC";font-size:1.9rem;min-width:2.4em}
-  .rows .tag{font-family:"Space Mono",monospace;font-size:.6rem;color:#cf3a26;border:1px solid #4a2c23;border-radius:3px;padding:.05rem .3rem}
+  .rows .tag{font-family:"Space Mono",monospace;font-size:.6rem;color:#9a8e78;border:1px solid #3a3228;border-radius:3px;padding:.05rem .3rem}
   .rows .m{color:#b3a88f;font-size:1rem;font-style:italic}
 `, body: `<div class="wrap">
   <div class="kick">古古 Kogu · 中文 / 粵語 / 日本語</div>
@@ -70,35 +70,46 @@ D.seal = { css: `
     <li><span class="g">飛行場</span><span class="tag">日</span><span class="m">ひこうじょう — airfield</span></li>
   </ul></div>` }
 
-/* ───────────────────────── 石 STONE — pure monochrome museum plate, vast air ───────────────────────── */
-D.stone = { css: `
-  body{background:#0c0c0d;color:#e9e9e7;font-family:"Newsreader",Georgia,serif;padding:3rem 1.7rem 4rem;
-    background-image:linear-gradient(90deg,#15151700 0,#15151700 calc(50% - .5px),#1a1a1c 50%,#15151700 calc(50% + .5px));background-size:100% 100%}
-  .wrap{max-width:560px;margin:0 auto}
-  .plate{font-family:"Space Mono",monospace;font-size:.58rem;letter-spacing:.22em;text-transform:uppercase;color:#6f6f76;display:flex;justify-content:space-between;animation:fade .8s both}
-  .hw{font-family:"Noto Serif SC";font-weight:300;font-size:clamp(5rem,30vw,8.5rem);line-height:.86;text-align:center;margin:2.4rem 0 1.4rem;animation:up .9s both}
-  .reads{display:flex;justify-content:center;gap:2rem;font-family:"Space Mono",monospace;font-size:.8rem;color:#9a9aa0;border-top:1px solid #232326;border-bottom:1px solid #232326;padding:.9rem 0;animation:up .8s .15s both}
-  .reads b{color:#e9e9e7;font-weight:400;display:block;font-family:"Noto Serif SC";margin-bottom:.2rem;text-align:center}
-  .senses{list-style:none;padding:0;margin:2rem 0 0;text-align:center;font-size:1.35rem;line-height:1.9;animation:up .8s .25s both}
-  .senses .n{font-family:"Space Mono",monospace;font-size:.7rem;color:#6f6f76;margin-right:.5rem}
-  .seg{display:flex;justify-content:center;gap:1.8rem;margin:2.6rem 0 1rem;animation:up .8s .32s both}
-  .seg button{background:none;border:none;color:#74747a;font-family:"Space Mono",monospace;font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;cursor:pointer;position:relative;padding:.3rem 0}
-  .seg .on{color:#e9e9e7}
-  .seg .on::after{content:"";position:absolute;left:50%;bottom:-.5rem;width:3px;height:3px;border-radius:50%;background:#e9e9e7;transform:translateX(-50%)}
-  .rows{list-style:none;padding:0;margin:1.2rem 0 0;animation:up .8s .4s both}
-  .rows li{display:flex;align-items:baseline;justify-content:center;gap:1rem;padding:1rem 0;border-top:1px solid #1c1c1f}
-  .rows .g{font-family:"Noto Serif SC";font-weight:300;font-size:2rem}
-  .rows .m{color:#8a8a90;font-size:.92rem;font-family:"Space Mono",monospace}
+/* ───────────────────────── 格 GRID — Swiss / brutalist, ruled spec sheet (monochrome) ───────────────────────── */
+D.grid = { css: `
+  body{background:#0a0a0a;color:#f2f2f0;font-family:ui-sans-serif,system-ui,"Helvetica Neue",Arial,sans-serif;display:flex;justify-content:center}
+  .wrap{width:100%;max-width:600px;min-height:100dvh;border-inline:1px solid #26262a;animation:fade .5s both}
+  .mast{display:flex;justify-content:space-between;align-items:baseline;padding:.9rem 1.1rem;border-bottom:1px solid #26262a;font-family:"Space Mono",monospace;font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;color:#87878d}
+  .mast b{color:#f2f2f0;font-weight:400}
+  .hw{font-family:"Noto Serif SC";font-weight:400;font-size:clamp(5rem,27vw,8rem);line-height:.9;padding:1.5rem 1.1rem .9rem;border-bottom:1px solid #26262a;animation:up .7s both}
+  .grid3{display:grid;grid-template-columns:auto 1fr;border-bottom:1px solid #26262a;animation:up .7s .1s both}
+  .grid3 .k,.grid3 .v{padding:.7rem 1.1rem;font-family:"Space Mono",monospace;display:flex;align-items:center;border-top:1px solid #1a1a1d}
+  .grid3 .k{font-size:.66rem;letter-spacing:.12em;color:#87878d;border-right:1px solid #26262a;text-transform:uppercase}
+  .grid3 .v{font-size:.92rem;color:#f2f2f0}
+  .grid3 .k:first-child,.grid3 .k:first-child + .v{border-top:none}
+  .cap{font-family:"Space Mono",monospace;font-size:.58rem;letter-spacing:.24em;text-transform:uppercase;color:#6f6f76;padding:.85rem 1.1rem .15rem;animation:up .7s .15s both}
+  .defs{list-style:none;padding:0 1.1rem 1rem;border-bottom:1px solid #26262a;animation:up .7s .18s both}
+  .defs li{display:flex;gap:1rem;font-size:1.15rem;padding:.3rem 0}
+  .defs .n{font-family:"Space Mono",monospace;font-size:.78rem;color:#6f6f76;padding-top:.18rem}
+  .seg{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid #26262a;animation:up .7s .24s both}
+  .seg button{background:none;border:none;border-right:1px solid #26262a;color:#87878d;font-family:"Space Mono",monospace;font-size:.58rem;letter-spacing:.06em;text-transform:uppercase;padding:.85rem .15rem;cursor:pointer}
+  .seg button:last-child{border-right:none}
+  .seg .on{background:#f2f2f0;color:#0a0a0a}
+  .rows{list-style:none;padding:0;margin:0;animation:up .7s .3s both}
+  .rows li{display:grid;grid-template-columns:auto auto 1fr;gap:1rem;align-items:center;padding:.85rem 1.1rem;border-bottom:1px solid #1a1a1d}
+  .rows .g{font-family:"Noto Serif SC";font-size:1.85rem}
+  .rows .tag{font-family:"Space Mono",monospace;font-size:.58rem;color:#87878d;border:1px solid #3a3a40;border-radius:2px;padding:.08rem .35rem}
+  .rows .m{font-family:"Space Mono",monospace;font-size:.76rem;color:#9a9aa0}
 `, body: `<div class="wrap">
-  <div class="plate"><span>古古 KOGU</span><span>U+6A5F U+5834 · 16+12 strokes</span></div>
+  <div class="mast"><span>古古 / <b>KOGU</b></span><span>NO.01 · <b>機場</b></span></div>
   <div class="hw">機場</div>
-  <div class="reads"><span><b>中</b>jī chǎng</span><span><b>粵</b>gēi chèuhng</span><span><b>日</b>くうこう</span></div>
-  <ol class="senses" style="list-style:none"><li><span class="n">i</span>airport</li><li><span class="n">ii</span>airfield</li></ol>
+  <div class="grid3">
+    <div class="k">中 ZH</div><div class="v">jī chǎng</div>
+    <div class="k">粵 YUE</div><div class="v">gēi chèuhng</div>
+    <div class="k">日 JA</div><div class="v">くうこう</div>
+  </div>
+  <div class="cap">Definition</div>
+  <ol class="defs"><li><span class="n">01</span><span>airport</span></li><li><span class="n">02</span><span>airfield; aerodrome</span></li></ol>
   <nav class="seg"><button class="on">Structure</button><button>Related</button><button>Origin</button><button>Used in</button></nav>
   <ul class="rows">
-    <li><span class="g">空港</span><span class="m">日 — airport</span></li>
-    <li><span class="g">机场</span><span class="m">中 — simplified</span></li>
-    <li><span class="g">飛行場</span><span class="m">日 — airfield</span></li>
+    <li><span class="g">空港</span><span class="tag">日</span><span class="m">くうこう · airport</span></li>
+    <li><span class="g">机场</span><span class="tag">中</span><span class="m">jīchǎng · simplified</span></li>
+    <li><span class="g">飛行場</span><span class="tag">日</span><span class="m">ひこうじょう · airfield</span></li>
   </ul></div>` }
 
 /* ───────────────────────── iOS — polished iOS 17 dark, graphite (no blue) ───────────────────────── */
@@ -140,41 +151,37 @@ D.ios = { css: `
     <div class="it"><span class="g">飛行場</span><span class="tx"><div class="t">airfield</div><div class="s">日 ひこうじょう</div></span><span class="chev">›</span></div>
   </div></div>` }
 
-/* ───────────────────────── 電 TERMINAL — technical mono grid, amber accent ───────────────────────── */
-D.terminal = { css: `
-  body{background:#07080a;color:#cfd2cc;font-family:"Space Mono",ui-monospace,monospace;padding:1.4rem;
-    background-image:repeating-linear-gradient(#0d0f12 0 1px,transparent 1px 26px);background-size:100% 26px}
-  .wrap{max-width:580px;margin:0 auto;border:1px solid #1d2126;position:relative}
-  .wrap::before,.wrap::after{content:"+";position:absolute;color:#e0a23c;font-size:.7rem}
-  .wrap::before{top:-.55rem;left:-.4rem}.wrap::after{bottom:-.55rem;right:-.4rem}
-  .top{display:flex;justify-content:space-between;font-size:.6rem;letter-spacing:.1em;color:#5c6168;border-bottom:1px solid #1d2126;padding:.5rem .8rem}
-  .top .rec{color:#e0a23c}
-  .head{padding:1.6rem .8rem;display:flex;align-items:center;gap:1.2rem;border-bottom:1px solid #1d2126;animation:up .5s both}
-  .hw{font-family:"Noto Serif SC";font-weight:500;font-size:4.2rem;line-height:1;color:#eef0ec}
-  .head .col{font-size:.72rem;line-height:1.9;color:#8a9098}
-  .head .col b{color:#e0a23c;font-weight:400}
-  .defs{padding:1rem .8rem;border-bottom:1px solid #1d2126;animation:up .5s .1s both}
-  .defs li{list-style:none;font-size:.9rem;line-height:1.7;color:#cfd2cc}
-  .defs .n{color:#e0a23c}
-  .seg{display:flex;border-bottom:1px solid #1d2126;animation:up .5s .15s both}
-  .seg button{flex:1;background:none;border:none;border-right:1px solid #1d2126;color:#6c727a;font-family:inherit;font-size:.62rem;letter-spacing:.06em;padding:.7rem .2rem;cursor:pointer}
-  .seg button:last-child{border-right:none}
-  .seg .on{color:#07080a;background:#e0a23c}
-  .rows{animation:up .5s .2s both}
-  .rows .r{display:grid;grid-template-columns:auto 1fr;gap:1rem;align-items:center;padding:.7rem .8rem;border-bottom:1px solid #14171b}
-  .rows .g{font-family:"Noto Serif SC";font-size:1.7rem;color:#eef0ec}
-  .rows .m{font-size:.74rem;color:#8a9098}
-  .rows .m b{color:#e0a23c;font-weight:400}
+/* ───────────────────────── 版 POSTER — bold typographic specimen, scale contrast (monochrome) ───────────────────────── */
+D.poster = { css: `
+  body{background:#0c0c0c;color:#f4f4f2;font-family:ui-sans-serif,system-ui,"Helvetica Neue",Arial,sans-serif;padding:2rem 1.5rem 4rem;overflow-x:hidden}
+  .wrap{max-width:600px;margin:0 auto}
+  .top{display:flex;justify-content:space-between;font-family:"Space Mono",monospace;font-size:.6rem;letter-spacing:.22em;text-transform:uppercase;color:#7a7a80;animation:fade .6s both}
+  .hw{font-family:"Noto Serif SC";font-weight:400;font-size:clamp(6rem,40vw,12rem);line-height:.82;letter-spacing:-.01em;margin:.4rem 0 0;animation:up .8s both}
+  .en{font-family:ui-sans-serif,system-ui,sans-serif;font-weight:900;font-size:clamp(3rem,18vw,5.3rem);line-height:.86;letter-spacing:-.035em;text-transform:uppercase;margin:.5rem 0 0;animation:up .8s .08s both}
+  .en .sub{display:block;font-size:.72rem;font-weight:400;letter-spacing:.06em;text-transform:none;color:#8a8a90;font-family:"Space Mono",monospace;margin-top:.8rem}
+  .senses{font-family:"Newsreader",Georgia,serif;font-size:1.25rem;font-style:italic;color:#cfcfca;margin:1.3rem 0 0;line-height:1.5;animation:up .8s .16s both}
+  .reads{display:flex;flex-wrap:wrap;gap:1.6rem;font-family:"Space Mono",monospace;font-size:.84rem;color:#b0b0b6;margin:1.6rem 0 0;padding-top:1.2rem;border-top:1px solid #232327;animation:up .8s .2s both}
+  .reads b{color:#f4f4f2;font-weight:700;margin-right:.4rem}
+  .seg{display:flex;gap:1.5rem;margin:2rem 0 .3rem;border-bottom:1px solid #232327;animation:up .8s .26s both}
+  .seg button{background:none;border:none;color:#7a7a80;font-family:"Space Mono",monospace;font-size:.64rem;letter-spacing:.12em;text-transform:uppercase;padding:0 0 .8rem;cursor:pointer}
+  .seg .on{color:#f4f4f2;box-shadow:inset 0 -2px 0 #f4f4f2}
+  .rows{list-style:none;padding:0;margin:.5rem 0 0;animation:up .8s .32s both}
+  .rows li{display:flex;align-items:baseline;gap:1rem;padding:.95rem .1rem;border-bottom:1px solid #1a1a1d}
+  .rows .g{font-family:"Noto Serif SC";font-size:2rem;min-width:2.2em}
+  .rows .tag{font-family:"Space Mono",monospace;font-size:.58rem;color:#8a8a90;border:1px solid #34343a;border-radius:2px;padding:.05rem .32rem}
+  .rows .m{color:#a0a0a6;font-family:"Space Mono",monospace;font-size:.8rem}
 `, body: `<div class="wrap">
-  <div class="top"><span><span class="rec">●</span> KOGU//LOOKUP</span><span>U+6A5F·U+5834</span></div>
-  <div class="head"><div class="hw">機場</div><div class="col">中 <b>jī chǎng</b><br>粵 <b>gēi chèuhng</b><br>日 <b>くうこう</b></div></div>
-  <ol class="defs" style="padding-left:1.6rem"><li><span class="n">[1]</span> airport</li><li><span class="n">[2]</span> airfield</li></ol>
-  <nav class="seg"><button class="on">STRUCTURE</button><button>RELATED</button><button>ORIGIN</button><button>USED·IN</button></nav>
-  <div class="rows">
-    <div class="r"><span class="g">空港</span><span class="m"><b>日</b> くうこう · airport</span></div>
-    <div class="r"><span class="g">机场</span><span class="m"><b>中</b> jīchǎng · simplified</span></div>
-    <div class="r"><span class="g">飛行場</span><span class="m"><b>日</b> ひこうじょう · airfield</span></div>
-  </div></div>` }
+  <div class="top"><span>古古 KOGU</span><span>中文 · 粵語 · 日本語</span></div>
+  <div class="hw">機場</div>
+  <div class="en">Airport<span class="sub">jī chǎng · 16+12 strokes · U+6A5F U+5834</span></div>
+  <div class="senses">a place where aircraft take off and land; an airfield or aerodrome.</div>
+  <div class="reads"><span><b>中</b>jī chǎng</span><span><b>粵</b>gēi chèuhng</span><span><b>日</b>くうこう</span></div>
+  <nav class="seg"><button class="on">Structure</button><button>Related</button><button>Origin</button><button>Used in</button></nav>
+  <ul class="rows">
+    <li><span class="g">空港</span><span class="tag">日</span><span class="m">くうこう · airport</span></li>
+    <li><span class="g">机场</span><span class="tag">中</span><span class="m">jīchǎng · simplified</span></li>
+    <li><span class="g">飛行場</span><span class="tag">日</span><span class="m">ひこうじょう · airfield</span></li>
+  </ul></div>` }
 
 /* ───────────────────────── 墨 INK — ink-wash, vertical reading column, organic ───────────────────────── */
 D.ink = { css: `

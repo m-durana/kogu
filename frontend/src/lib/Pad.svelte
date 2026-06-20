@@ -1,10 +1,21 @@
 <script lang="ts">
   import { recognize, type Stroke } from './api'
-  import { X } from '@lucide/svelte'
+  import { X, Maximize2, Minimize2 } from '@lucide/svelte'
 
   // onpick(ch, replace): replace=true swaps the provisional character already in the field for `ch`
   // (Google-Translate style — the top guess auto-enters, picking another replaces it).
-  let { onpick, onclose }: { onpick: (ch: string, replace: boolean) => void; onclose?: () => void } = $props()
+  // expanded/ontoggle: drive the dock's full-screen expansion from the strip's expand button.
+  let {
+    onpick,
+    onclose,
+    expanded = false,
+    ontoggle,
+  }: {
+    onpick: (ch: string, replace: boolean) => void
+    onclose?: () => void
+    expanded?: boolean
+    ontoggle?: () => void
+  } = $props()
 
   let canvas: HTMLCanvasElement
   let drawing = $state(false)
@@ -188,7 +199,18 @@
     {:else}
       <span class="pad-status">draw a character below</span>
     {/if}
-    <button class="clearx" onclick={clear} data-testid="pad-clear" aria-label="clear / close"><X size={18} /></button>
+    <div class="padbtns">
+      <button
+        class="padbtn"
+        onclick={() => ontoggle?.()}
+        data-testid="pad-expand"
+        aria-label={expanded ? 'shrink draw pad' : 'expand draw pad'}
+        aria-pressed={expanded}
+      >
+        {#if expanded}<Minimize2 size={17} />{:else}<Maximize2 size={17} />{/if}
+      </button>
+      <button class="padbtn" onclick={clear} data-testid="pad-clear" aria-label="clear / close"><X size={18} /></button>
+    </div>
   </div>
 
   <div class="canvas-wrap">
@@ -220,16 +242,16 @@
   .candstrip { display: flex; align-items: center; gap: 0.15rem; overflow-x: auto; scrollbar-width: none; min-height: 2.4rem; flex: none; }
   .candstrip::-webkit-scrollbar { display: none; }
   /* the wrapper grows to fill remaining dock height; the canvas fills the wrapper */
-  .canvas-wrap { position: relative; display: flex; flex: 1; min-height: 200px; }
+  .canvas-wrap { position: relative; display: flex; flex: 1; min-height: 160px; }
   canvas {
     display: block;
-    /* fill the dock entirely: the whole area below the candidate strip */
+    /* the whole dock IS the drawing surface: full-bleed, no box/border. Sits directly on the dock
+       background so there is no inner frame — you write across the entire area. */
     width: 100%;
     height: 100%;
-    min-height: 200px;
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: 3px; /* less prominent rounding in the drawing window */
+    min-height: 160px;
+    background: transparent;
+    border: none;
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
@@ -237,13 +259,15 @@
     -webkit-tap-highlight-color: transparent;
     cursor: crosshair;
   }
-  .clearx {
-    margin-left: auto; flex: none;
+  /* expand + clear/close, grouped at the very right of the candidate strip */
+  .padbtns { margin-left: auto; flex: none; display: flex; gap: 0.25rem; }
+  .padbtn {
     display: inline-flex; align-items: center; justify-content: center;
     padding: 0.4rem; color: var(--muted);
     background: none; border: 1px solid var(--border); border-radius: var(--r);
   }
-  .clearx:hover { color: var(--hi); border-color: var(--border-strong); }
+  .padbtn:hover { color: var(--hi); border-color: var(--border-strong); }
+  .padbtn[aria-pressed='true'] { color: var(--hi); border-color: var(--border-strong); }
   .pad-status { color: var(--faint); font-size: 0.85rem; }
   .csep { color: var(--border-strong); flex: none; }
   .cand { font-family: var(--han); font-size: 1.7rem; padding: 0.1rem 0.5rem; background: none; border: none; color: var(--text); border-radius: var(--r); flex: none; }
