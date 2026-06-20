@@ -13,6 +13,7 @@ from . import (
     frequency,
     lexemes,
     middle_chinese,
+    omw,
     romaji,
     translations,
 )
@@ -24,6 +25,7 @@ INGEST_STEPS = [
     ("lexemes (CC-CEDICT + JMdict + Kanjidic)", lexemes.ingest),
     ("Cantonese (CC-Canto: jyutping + 粵字)", cantonese.ingest),
     ("concept layer (gloss pivot)", concepts.ingest),
+    ("concept layer (Open Multilingual Wordnet synsets)", omw.ingest),
     ("explicit equivalence edges (inline + curated)", equivalents.ingest),
     ("cross-language bridges (Wiktionary translation tables)", translations.ingest),
     ("etymology + origin badges (Wiktionary passthrough)", etymology.ingest),

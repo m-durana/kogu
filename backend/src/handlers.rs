@@ -184,7 +184,7 @@ fn build_entry(
                         (SELECT b.freq FROM lexeme b WHERE b.headword=?3 AND b.variety=m.variety) AS bare \
                  FROM sense_concept sc1 \
                  JOIN sense s1 ON s1.id=sc1.sense_id AND s1.lexeme_id=?1 AND s1.sense_order=0 \
-                 JOIN concept co ON co.id=sc1.concept_id AND co.member_count<=18 \
+                 JOIN concept co ON co.id=sc1.concept_id AND co.member_count<=40 \
                  JOIN sense_concept sc2 ON sc2.concept_id=sc1.concept_id \
                  JOIN sense s2 ON s2.id=sc2.sense_id AND s2.sense_order=0 \
                  JOIN lexeme m ON m.id=s2.lexeme_id AND m.variety IN ('zh','yue') AND m.freq IS NOT NULL \
@@ -222,7 +222,7 @@ fn build_entry(
          JOIN sense s1 ON s1.id = sc1.sense_id \
          JOIN sense s2 ON s2.id = sc2.sense_id \
          JOIN concept co ON co.id = sc1.concept_id \
-         WHERE s1.lexeme_id = ?1 AND s2.lexeme_id <> ?1 AND co.member_count <= 18 \
+         WHERE s1.lexeme_id = ?1 AND s2.lexeme_id <> ?1 AND co.member_count <= 40 \
            AND s1.sense_order = 0 AND s2.sense_order = 0 \
          GROUP BY s2.lexeme_id \
          ORDER BY spec ASC \

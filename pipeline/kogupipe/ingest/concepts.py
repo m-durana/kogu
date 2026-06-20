@@ -19,8 +19,42 @@ _STOP = {
     "as", "it", "that", "this", "with", "from", "etc", "esp", "e.g", "i.e", "one", "used",
 }
 
-# segments this generic create giant useless concepts; skip keys shared by more than this
-_MAX_LEXEMES_PER_CONCEPT = 40
+# segments this generic create giant useless concepts; skip keys shared by more than this. Raised from
+# 40: the handler now surfaces concepts up to this size (was a stricter 18), ranked by specificity, so
+# slightly broader concepts (common verbs/adjectives like "change", "support") can bridge too.
+_MAX_LEXEMES_PER_CONCEPT = 60
+
+# high-value near-synonym folding: different English wordings for the SAME concept that the exact-match
+# pivot would otherwise split (駅 "train station" vs 站 "station"; 機場 "airport" vs an "airfield" gloss).
+# Curated and conservative — only unambiguous equivalences, never hyponyms.
+_SYNONYM = {
+    "railway station": "station", "train station": "station", "railroad station": "station",
+    "bus station": "station", "bus stop": "station", "railroad": "railway",
+    "airfield": "airport", "aerodrome": "airport",
+    "automobile": "car", "motorcar": "car", "vehicle": "car",
+    "doctor": "physician", "movie": "film", "motion picture": "film",
+    "spectacles": "glasses", "eyeglasses": "glasses",
+    "mum": "mother", "mom": "mother", "mommy": "mother", "mama": "mother",
+    "dad": "father", "papa": "father",
+}
+
+# strip a single trailing plural -s so "dogs" and "dog" share a concept. Conservative: only a
+# consonant+s ending (skips gas/bus/bias and -ss), plus the -ies→-y rule. Multi-word keys get only
+# their LAST word (head noun) singularised.
+_VOWELS = set("aeiou")
+
+
+def _singularise(w: str) -> str:
+    if len(w) > 3 and w.endswith("ies"):
+        return w[:-3] + "y"
+    if (
+        len(w) > 3
+        and w.endswith("s")
+        and not w.endswith("ss")
+        and w[-2] not in _VOWELS  # consonant+s (dogs, cats), not gas/bus/bias
+    ):
+        return w[:-1]
+    return w
 
 
 def normalize_gloss_segment(seg: str) -> str | None:
@@ -29,8 +63,12 @@ def normalize_gloss_segment(seg: str) -> str | None:
     s = s.replace("/", " ").strip().lower()
     s = _WS.sub(" ", s)
     s = s.strip(" .,;:!?\"'")
-    if s.startswith("to "):
+    if s.startswith("to "):             # infinitive marker
         s = s[3:].strip()
+    if s.startswith("be "):             # copular/stative ("be loyal" ↔ "loyal")
+        s = s[3:].strip()
+    if s.endswith(" to"):               # dative complement ("loyal to" ↔ "loyal", "belong to" ↔ "belong")
+        s = s[:-3].strip()
     # drop CC-CEDICT meta markers: classifiers (CL:...), variant/see-also notations
     if s.startswith(("cl:", "see ", "variant of", "old variant", "also written")):
         return None
@@ -38,6 +76,12 @@ def normalize_gloss_segment(seg: str) -> str | None:
         return None
     if not any(c.isalpha() for c in s):
         return None
+    # singularise the head (last word) so plurals fold together
+    words = s.split()
+    if words:
+        words[-1] = _singularise(words[-1])
+        s = " ".join(words)
+    s = _SYNONYM.get(s, s)              # fold curated near-synonyms
     if s in _STOP:
         return None
     return s

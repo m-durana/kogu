@@ -4,6 +4,7 @@
   import { primaryForm, varietyLabel, regionsOf, shortGloss, cleanGloss, langTag, hanFont, placeholderAt } from './lib/display'
   import Unified from './lib/Unified.svelte'
   import EntryRow from './lib/EntryRow.svelte'
+  import LookupPanel from './lib/LookupPanel.svelte'
   import Pad from './lib/Pad.svelte'
   import Ocr from './lib/Ocr.svelte'
   import { Search, X, Brush, Camera, Bookmark, Clock, Share2, Trash2, ArrowRight, Download, Settings, SquarePlus, ExternalLink } from '@lucide/svelte'
@@ -146,13 +147,13 @@
       ? breakdown.map((c) => charMeaning(c).split(',')[0].trim()).filter(Boolean).join(' · ')
       : '',
   )
-  // open an external web lookup for the typed term — works whether or not Kogu has the word, useful for
-  // names, neologisms, and partial phrases. User-initiated only (a button), opens in a new tab.
-  function lookUp() {
-    const t = q.trim()
-    if (!t) return
-    window.open(`https://www.google.com/search?q=${encodeURIComponent(t)}`, '_blank', 'noopener')
-  }
+  // in-app lookup panel (Translate + Wiktionary) for the typed term — works whether or not Kogu has
+  // the word, useful for names, neologisms, and partial phrases.
+  let lookupOpen = $state(false)
+  // source-language hint for the translate proxy: a Han query uses its result variety; otherwise auto.
+  const lookupSl = $derived(
+    !HAN.test(q) ? 'auto' : queryLang === 'ja' ? 'ja' : queryLang === 'yue' ? 'yue' : 'zh-CN',
+  )
   function charLangs(c: CharInfo): string[] {
     const tags: string[] = []
     const has = (k: string) => c.readings.some((r) => r.kind === k && r.value)
@@ -665,14 +666,14 @@
               </li>
             {/each}
           </ul>
-          <button class="lookup" onclick={lookUp}><ExternalLink size={14} /> look “{q}” up on the web</button>
+          <button class="lookup" onclick={() => (lookupOpen = true)}><ExternalLink size={14} /> look “{q}” up</button>
         </section>
       {:else if breaking && results.length === 0}
         <!-- breakdown still loading: hold a placeholder rather than flash "nothing found" (item 3) -->
         {@render pageSkel()}
       {:else if results.length === 0}
         <div class="empty">nothing for “{q}”.</div>
-        <button class="lookup" onclick={lookUp}><ExternalLink size={14} /> look “{q}” up on the web</button>
+        <button class="lookup" onclick={() => (lookupOpen = true)}><ExternalLink size={14} /> look “{q}” up</button>
       {/if}
     {/if}
     {#if !searched && !q && panel === 'none'}
@@ -720,6 +721,8 @@
       {#if isIOS}<div class="instpoint" aria-hidden="true">▾</div>{/if}
     </div>
   {/if}
+
+  {#if lookupOpen && q.trim()}<LookupPanel term={q.trim()} sl={lookupSl} onclose={() => (lookupOpen = false)} />{/if}
 
   {#if toast}<div class="toast" role="status">{toast}</div>{/if}
 
