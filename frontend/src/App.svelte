@@ -52,12 +52,15 @@
     }
     return null
   })
-  const canSaveShare = $derived(currentItem != null && (view === 'entry' || (unified && results.length > 0)))
+  // save/share belong only on an actual word page — NOT on the History or Saved list views (where a
+  // stale `unified` from a prior search would otherwise keep them visible). Gate on the current view.
+  const onWordPage = $derived(view === 'entry' || (view === 'results' && unified && results.length > 0))
+  const canSaveShare = $derived(currentItem != null && onWordPage)
 
   // record each visited word in history, and keep the bookmark toggle in sync with what's shown
   $effect(() => {
     const it = currentItem
-    if (it && (view === 'entry' || unified)) {
+    if (it && onWordPage) {
       recordHistory(it)
       savedNow = isSaved(it.id)
     }
@@ -481,7 +484,7 @@
   }
 </script>
 
-<div class="wrap">
+<div class="wrap" class:drawing={panel === 'draw'}>
   <header class="bar">
     <h1 class="brand">
       <button class="brandbtn" onclick={goHome} aria-label="home"><span class="mark">古古</span> <span class="word">Kogu</span></button>
@@ -748,6 +751,10 @@
     position: relative;
     max-width: 680px;
     margin: 0 auto;
+  }
+  /* leave room so the bottom-docked handwriting panel doesn't cover the last results */
+  .wrap.drawing { padding-bottom: 48vh; }
+  .wrap {
     padding: calc(1.4rem + env(safe-area-inset-top)) calc(1.35rem + env(safe-area-inset-right))
       calc(4rem + env(safe-area-inset-bottom)) calc(1.35rem + env(safe-area-inset-left));
   }
@@ -831,15 +838,19 @@
   /* draw pad: a FLOATING panel just under the search row. position:absolute with no offset keeps it at
      its natural place in flow but lifts it OUT of flow, so the results list / about text render full
      height behind it and simply continue past — the pad overlays them instead of pushing them down. */
+  /* docked handwriting panel (Google Translate / PLECO style): fixed to the bottom of the screen,
+     full width, content scrolls behind it. Not a floating window. */
   .drawpanel {
-    position: absolute;
-    z-index: 20;
-    width: min(20rem, 100%);
-    /* thin minimal frame (as requested), just a subtle shadow so it still reads as floating */
-    background: var(--surface-2); border: 1px solid var(--border); border-radius: 3px;
-    box-shadow: 0 8px 22px -10px rgba(0, 0, 0, 0.5);
-    padding: 0.6rem;
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 40;
+    background: var(--surface-2);
+    border-top: 1px solid var(--border-strong);
+    box-shadow: 0 -8px 24px -12px rgba(0, 0, 0, 0.6);
+    padding: 0.6rem calc(0.8rem + env(safe-area-inset-right)) calc(0.6rem + env(safe-area-inset-bottom)) calc(0.8rem + env(safe-area-inset-left));
   }
+  /* center the pad content to the app's column width inside the full-width dock */
+  .drawpanel :global(.pad) { max-width: 680px; margin: 0 auto; }
 
   /* inline photo selection, shown directly under the search row */
   .inputpanel { margin-bottom: 1.2rem; }

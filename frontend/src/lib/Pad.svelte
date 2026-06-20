@@ -107,6 +107,23 @@
 </script>
 
 <div class="pad">
+  <!-- candidate strip on top (Google Translate / PLECO docked style); plain text split by bars -->
+  <div class="candstrip" data-testid="pad-candidates">
+    {#if candidates.length}
+      {#each candidates as ch, i}
+        {#if i}<span class="csep" aria-hidden="true">│</span>{/if}
+        <button class="cand" onclick={() => pick(ch)}>{ch}</button>
+      {/each}
+    {:else if busy}
+      <span class="pad-status">recognising…</span>
+    {:else if error}
+      <span class="pad-status">{error}</span>
+    {:else}
+      <span class="pad-status">draw a character below</span>
+    {/if}
+    <button class="clearx" onclick={clear} data-testid="pad-clear" aria-label="clear / close"><X size={18} /></button>
+  </div>
+
   <div class="canvas-wrap">
     <canvas
       bind:this={canvas}
@@ -119,38 +136,28 @@
       oncontextmenu={(e) => e.preventDefault()}
       aria-label="handwriting canvas, draw a character"
     ></canvas>
-    <button class="clearx" onclick={clear} data-testid="pad-clear" aria-label="clear"><X size={18} /></button>
   </div>
-
-  {#if candidates.length}
-    <!-- candidates as plain text divided by vertical bars (item 10), not a grid of boxed buttons -->
-    <div class="cands" data-testid="pad-candidates">
-      {#each candidates as ch, i}
-        {#if i}<span class="csep" aria-hidden="true">│</span>{/if}
-        <button class="cand" onclick={() => pick(ch)}>{ch}</button>
-      {/each}
-    </div>
-  {:else if busy}
-    <div class="pad-status">recognising…</div>
-  {:else if error}
-    <div class="pad-status">{error}</div>
-  {/if}
 </div>
 
 <style>
   .pad {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: 0.5rem;
     user-select: none;
     -webkit-user-select: none;
     -webkit-touch-callout: none;
   }
-  .canvas-wrap { position: relative; width: 100%; }
+  /* candidate strip: a single horizontally-scrollable row at the top of the dock */
+  .candstrip { display: flex; align-items: center; gap: 0.15rem; overflow-x: auto; scrollbar-width: none; min-height: 2.4rem; }
+  .candstrip::-webkit-scrollbar { display: none; }
+  .canvas-wrap { position: relative; display: flex; justify-content: center; }
   canvas {
     display: block;
-    width: 100%;
+    height: min(32vh, 300px);
+    width: auto;
     aspect-ratio: 1 / 1;
+    max-width: 100%;
     background: var(--surface);
     border: 1px solid var(--border-strong);
     border-radius: 3px; /* less prominent rounding in the drawing window */
@@ -162,15 +169,14 @@
     cursor: crosshair;
   }
   .clearx {
-    position: absolute; top: 0.5rem; right: 0.5rem;
+    margin-left: auto; flex: none;
     display: inline-flex; align-items: center; justify-content: center;
     padding: 0.4rem; color: var(--muted);
-    background: var(--bg); border: 1px solid var(--border); border-radius: var(--r);
+    background: none; border: 1px solid var(--border); border-radius: var(--r);
   }
   .clearx:hover { color: #fff; border-color: var(--border-strong); }
-  .pad-status { color: var(--faint); font-size: 0.85rem; text-align: center; }
-  .cands { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.15rem; }
-  .csep { color: var(--border-strong); }
-  .cand { font-family: var(--han); font-size: 1.7rem; padding: 0.1rem 0.4rem; background: none; border: none; color: var(--text); border-radius: var(--r); }
+  .pad-status { color: var(--faint); font-size: 0.85rem; }
+  .csep { color: var(--border-strong); flex: none; }
+  .cand { font-family: var(--han); font-size: 1.7rem; padding: 0.1rem 0.5rem; background: none; border: none; color: var(--text); border-radius: var(--r); flex: none; }
   .cand:hover { background: var(--surface); }
 </style>

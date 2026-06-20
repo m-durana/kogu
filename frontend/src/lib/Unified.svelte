@@ -424,12 +424,12 @@
   }
 
   // Block C - "related": same-meaning words in another language linked only by a shared concept
-  // (the fuzzy gloss-pivot tier, relation 'synonym'). Lower trust than the curated "written
-  // differently" bridge, so shown under a clearly hedged heading and only for multi-character words
-  // (single characters already get co-equal defs + everyday-word + the synthetic Japanese row).
+  // (the gloss-pivot + OMW-synset tier, relation 'synonym'). Lower trust than the curated "written
+  // differently" bridge, so shown under a clearly hedged heading. Shown for single characters too (駅
+  // → 站): the cross-language equivalent word is exactly what a learner wants, even for one glyph.
   // Ordered MEANING-FIRST: the closest-meaning words (most gloss overlap with this entry) lead.
   const relatedRows = $derived<Row[]>(
-    !single
+    entry
       ? (entry?.translations ?? [])
           .filter((l) => l.relation === 'synonym' && l.headword !== head)
           .map((l) => ({
@@ -711,6 +711,13 @@
     activeTab = key
     save()
   }
+  // a single toggle that re-sorts the Related and Used-in lists: default order (frequency / relevance)
+  // ⇄ grouped by language (中 → 粵 → 日). Stable, so order within a language is preserved.
+  let sortByLang = $state(false)
+  function sortRows<T extends { variety: Variety }>(rows: T[]): T[] {
+    if (!sortByLang) return rows
+    return [...rows].sort((a, b) => VORDER.indexOf(a.variety) - VORDER.indexOf(b.variety))
+  }
 
   // Bound form: a morpheme that doesn't stand alone as a word — it only carries meaning inside
   // compounds. CC-CEDICT flags these; instead of leaking the jargon into the prose we show a small
@@ -875,9 +882,9 @@
                        single speaker icon plays them — one consistent speech affordance across 中/粵/日. -->
                   <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe={(v) => (jaReadOver = v)}>{#each jaReadItems as it, i}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{it.main}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{#if canSpeak()}<button class="spk spk-sm" onclick={() => speakReading(it.main, 'ja')} aria-label="listen to {it.main}" title="listen"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{jaReadOpen ? '−' : '+'}</button>{/if}
                 {:else if r.reading}
-                  <!-- plain reading text + the speaker icon (the single, consistent speech affordance). -->
+                  <!-- plain reading text + the speaker icon (same size/style as the 日/粵 per-reading icons). -->
                   <span class="dread">{dispReading(r.variety, r.reading)}</span>
-                  {#if canSpeak()}<button class="spk" onclick={() => speakReading(r.reading, r.variety, r.form)} aria-label="listen" title="listen"><Volume2 size={15} /></button>{/if}
+                  {#if canSpeak()}<button class="spk spk-sm" onclick={() => speakReading(r.reading, r.variety, r.form)} aria-label="listen" title="listen"><Volume2 size={13} /></button>{/if}
                 {/if}
                 {#if r.variety === 'zh' && headJyutList.length && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread dreads" class:clamp={!yueReadOpen} class:faded={yueReadOver && !yueReadOpen} use:readProbe={(v) => (yueReadOver = v)}>{#each headJyutList as j, i}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{settings.romanization === 'yale' ? jyutpingToYale(j) : j}{#if canSpeak()}<button class="spk spk-sm" onclick={() => speakReading(j, 'yue', r.form)} aria-label="listen to {j}, Cantonese" title="listen (Cantonese)"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if yueReadOver}<button class="rmore" onclick={toggleYueRead} aria-label={yueReadOpen ? 'show fewer readings' : 'show more readings'}>{yueReadOpen ? '−' : '+'}</button>{/if}{/if}
               </span>
@@ -922,17 +929,18 @@
     {/if}
 
     {#if activeTab === 'related'}
+      <div class="sortrow"><button class="sortbtn" onclick={() => (sortByLang = !sortByLang)}>sort: {sortByLang ? 'by language' : 'by relevance'}</button></div>
       {#if everydayRows.length}
         <!-- the natural everyday word another language writes for this character's meaning (耳 → 耳朵) -->
-        <section class="bridge"><h3>usually written</h3><ul class="langs">{#each everydayRows as r (r.id)}{@render rowItem(r)}{/each}</ul></section>
+        <section class="bridge"><ul class="langs">{#each sortRows(everydayRows) as r (r.id)}{@render rowItem(r)}{/each}</ul></section>
       {/if}
       {#if bridgeRows.length}
         <!-- the same meaning, written differently elsewhere. Tappable pivots. -->
-        <section class="bridge"><h3>written differently</h3><ul class="langs">{#each bridgeRows as r (r.id)}{@render rowItem(r)}{/each}</ul></section>
+        <section class="bridge"><ul class="langs">{#each sortRows(bridgeRows) as r (r.id)}{@render rowItem(r)}{/each}</ul></section>
       {/if}
       {#if relatedRows.length}
         <!-- looser same-concept words in another language (lowest-confidence gloss/synset pivot) -->
-        <section class="bridge related"><h3>related</h3><ul class="langs">{#each relatedRows as r (r.id)}{@render rowItem(r)}{/each}</ul></section>
+        <section class="bridge related"><ul class="langs">{#each sortRows(relatedRows) as r (r.id)}{@render rowItem(r)}{/each}</ul></section>
       {/if}
     {/if}
 
@@ -1004,7 +1012,6 @@
          "usually written" / "written differently" bands (one list style across the app), showing the
          languages it lives in, its reading, and one meaning. -->
     <section class="chars">
-      <h3>characters</h3>
       <ul class="langs">
         {#each entry.characters as c, i (c.ch)}
           {@const glyph = headChars.length === entry.characters.length ? headChars[i] : c.ch}
@@ -1069,12 +1076,14 @@
   {/if}
 
   {#if isGlyphSearch && activeTab === 'words' && entry && compoundList.length}
+    {@const wlist = sortRows(compoundRows)}
     <section class="words">
-      <!-- the SAME rowItem style as every other entry list. Cross-script-variant words (氷 for 冰)
-           follow under a "written with a variant character" divider. -->
+      <div class="sortrow"><button class="sortbtn" onclick={() => (sortByLang = !sortByLang)}>sort: {sortByLang ? 'by language' : 'by frequency'}</button></div>
+      <!-- the SAME rowItem style as every other entry list. In frequency order, cross-script-variant
+           words (氷 for 冰) follow under a "written with a variant character" divider. -->
       <ul class="langs">
-        {#each compoundRows as r, i (r.id)}
-          {#if r.relation === 'compound-alt' && (i === 0 || compoundRows[i - 1].relation !== 'compound-alt')}
+        {#each wlist as r, i (r.id)}
+          {#if !sortByLang && r.relation === 'compound-alt' && (i === 0 || wlist[i - 1].relation !== 'compound-alt')}
             <li class="wdiv">written with a variant character</li>
           {/if}
           {@render rowItem(r)}
@@ -1208,6 +1217,10 @@
   .segb:hover:not(.on) { color: var(--text); }
   .segb.on { background: var(--surface-2); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); }
   .segsep { width: 1px; flex: none; align-self: center; height: 1.1rem; background: var(--border); }
+  /* a single toggle that re-sorts the Related / Used-in lists (default ⇄ by language) */
+  .sortrow { display: flex; justify-content: flex-end; margin: 0.7rem 0 0.2rem; }
+  .sortbtn { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); background: none; border: 1px solid var(--border); border-radius: 999px; padding: 0.22rem 0.6rem; cursor: pointer; }
+  .sortbtn:hover { color: var(--text); border-color: var(--border-strong); }
   .dim { color: var(--faint); }
 
   /* jukugo component characters now reuse the shared .langs/.lang row system (see "written

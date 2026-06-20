@@ -45,6 +45,20 @@ _ID_BASE = 1_000_000
 
 _WN_CLASS = {"n": "n", "v": "v", "a": "a", "s": "a", "r": "r"}
 
+# content words too generic to confirm a shared meaning
+_STOP = {"the", "and", "for", "with", "used", "etc", "sth", "someone", "something", "one", "that",
+         "this", "form", "kind", "type", "thing", "person", "make", "way", "part", "from", "into"}
+
+
+def _words(gloss: str | None) -> frozenset[str]:
+    """Content words of a gloss's FIRST sense segment (before ';'), for meaning-overlap checks."""
+    if not gloss:
+        return frozenset()
+    seg = gloss.split(";")[0]
+    return frozenset(
+        w for w in re.split(r"[^a-z]+", seg.lower()) if len(w) >= 3 and w not in _STOP
+    )
+
 
 def _jmdict_classes(pos_str: str | None) -> set[str]:
     """Coarse POS classes from a JMdict pos string ('adj-na', 'v5aru,vi', 'n,adv') → {n,v,a,r}."""
@@ -70,20 +84,25 @@ def ingest(conn) -> None:
         return
     _ensure_loaded()
 
-    # form → [(lexeme_id, variety, sense0_id, sense0_pos, gloss)] from EVERY surface form (trad+simp+kana)
-    form_map: dict[str, list[tuple[int, str, int, str | None, str | None]]] = defaultdict(list)
+    # form → [(lexeme_id, variety, sense0_id, sense0_pos, sense0_words)] from EVERY surface form
+    # (trad+simp+kana). sense0_words are the content words of the PRIMARY gloss — used to verify a
+    # synset bridge actually shares meaning at sense 0 (the handler only bridges sense_order=0).
+    form_map: dict[str, list[tuple[int, str, int, str | None, frozenset[str]]]] = defaultdict(list)
     rows = conn.execute(
         "SELECT sf.form, l.id, l.variety, s.id, s.pos, s.gloss_en "
         "FROM surface_form sf JOIN lexeme l ON l.id = sf.lexeme_id "
         "JOIN sense s ON s.lexeme_id = l.id AND s.sense_order = 0"
     ).fetchall()
+    label_map: dict[int, str] = {}
     for form, lid, var, sid, pos, gloss in rows:
-        form_map[form].append((lid, var, sid, pos, gloss))
+        form_map[form].append((lid, var, sid, pos, _words(gloss)))
+        if sid not in label_map and gloss:
+            seg = re.split(r"[;/]", gloss)[0].strip().strip(".,;:")
+            if seg:
+                label_map[sid] = seg[:48]
 
-    # synset offset → {lexeme_id: sense0_id}, plus the set of varieties seen and a readable label
-    matched: dict[str, dict[int, int]] = defaultdict(dict)
-    varset: dict[str, set[str]] = defaultdict(set)
-    label_of: dict[str, str] = {}
+    # synset offset → {lexeme_id: (variety, sense0_id, sense0_words)}
+    matched: dict[str, dict[int, tuple[str, int, frozenset[str]]]] = defaultdict(dict)
 
     for lexname, varieties in _LEXICONS:
         try:
@@ -101,31 +120,40 @@ def ingest(conn) -> None:
                 form = _CLEAN.sub("", lemma)
                 if not form:
                     continue
-                for lid, var, sid, spos, gloss in form_map.get(form, ()):
+                for lid, var, sid, spos, words in form_map.get(form, ()):
                     if var not in varieties:
                         continue
-                    # POS compatibility (only when the sense carries a JMdict pos): skip a clear mismatch
-                    if spos and wc:
+                    if spos and wc:  # POS mismatch guard (only when the sense carries a JMdict pos)
                         jc = _jmdict_classes(spos)
                         if jc and wc not in jc:
                             continue
-                    matched[off][lid] = sid
-                    varset[off].add(var)
-                    if off not in label_of and gloss:
-                        # a readable English label from a member's first gloss segment (≤48 chars)
-                        seg = re.split(r"[;/]", gloss)[0].strip().strip(".,;:")
-                        if seg:
-                            label_of[off] = seg[:48]
+                    matched[off][lid] = (var, sid, words)
 
     concept_rows = []
     link_rows = []
     cid = _ID_BASE
     for off, lexmap in matched.items():
-        if len(lexmap) < 2 or len(varset[off]) < 2:
-            continue  # a bridge needs ≥2 lexemes spanning ≥2 languages
+        if len(lexmap) < 2:
+            continue
+        # A synset attaches to a whole lemma, not a sense — so 站 (station+stand) matched the "stand"
+        # synset and would wrongly bridge its STATION sense to 起きる. Guard against that: keep a
+        # lexeme only if its PRIMARY gloss shares a content word with another matched lexeme's primary
+        # gloss (i.e. their sense-0 meanings genuinely overlap). A word shared by ≥2 lexemes is the
+        # consensus meaning of the synset for our data; lexemes whose sense 0 isn't about that are dropped.
+        wordcount: dict[str, int] = defaultdict(int)
+        for _var, _sid, words in lexmap.values():
+            for wd in words:
+                wordcount[wd] += 1
+        shared = {wd for wd, n in wordcount.items() if n >= 2}
+        if not shared:
+            continue
+        kept = {lid: v for lid, v in lexmap.items() if v[2] & shared}
+        if len({v[0] for v in kept.values()}) < 2:
+            continue  # still need ≥2 languages after the meaning check
         cid += 1
-        concept_rows.append((cid, label_of.get(off, off), None, "omw", len(lexmap)))
-        for sid in lexmap.values():
+        first_sid = next(iter(kept.values()))[1]
+        concept_rows.append((cid, label_map.get(first_sid, off), None, "omw", len(kept)))
+        for _v, sid, _w in kept.values():
             link_rows.append((sid, cid, 0.7))
 
     conn.executemany(
