@@ -191,9 +191,10 @@
   let lastSearched = ''
   async function doSearch(query: string, mode: NavMode = 'push') {
     const term = query.trim()
-    // already showing this exact query (e.g. tapped the row/character for the page you're on):
-    // do nothing, so the view doesn't blank and reload. Compare to the last SEARCHED term, not q.
-    if (term && term === lastSearched && searched && !loading && (results.length || entry)) return
+    // already showing this exact query ON THE RESULTS VIEW (e.g. tapped the row/character for the page
+    // you're on): do nothing, so the view doesn't blank and reload. Must check view — tapping a search
+    // from the History/Saved view needs to actually switch back to results even for the same term.
+    if (term && term === lastSearched && searched && !loading && view === 'results' && (results.length || entry)) return
     lastSearched = term
     q = query
     view = 'results'
@@ -270,6 +271,20 @@
             breakdown = infos.filter((c): c is CharInfo => !!c)
             breaking = false
           }
+        })
+      }
+      // record the SEARCH itself in history when it did NOT resolve to a single word card/entry (a
+      // list, a partial match, or a no-word query like 中宇大廈) — those have no entry to record via
+      // the visited-page effect, so they'd otherwise never appear in history. (Skip back/forward nav.)
+      if (mode !== 'none' && !unified) {
+        recordHistory({
+          id: 0,
+          headword: term,
+          reading: null,
+          variety: (results[0]?.variety ?? 'zh') as Hit['variety'],
+          gloss: results[0]?.glosses?.[0] ? cleanGloss(results[0].glosses[0]) : null,
+          ts: 0,
+          query: true,
         })
       }
     } catch (e) {
@@ -548,7 +563,7 @@
       reading={it.reading ?? ''}
       tags={[varietyLabel(it.variety)]}
       gloss={it.gloss ? shortGloss([it.gloss]) : ''}
-      onclick={() => openEntry(it.id, 'push', it.headword)}
+      onclick={() => (it.query ? doSearch(it.headword) : openEntry(it.id, 'push', it.headword))}
     />
   {/snippet}
 

@@ -11,6 +11,9 @@ export interface SavedItem {
   variety: Variety
   gloss: string | null
   ts: number
+  /** a raw SEARCH query (no single word/entry matched, e.g. 中宇大廈) — tapping it re-runs the search
+   * rather than opening an entry by id. Entry items omit this. */
+  query?: boolean
 }
 
 const SAVED = 'kogu:saved'
@@ -65,10 +68,25 @@ export function toggleSaved(item: SavedItem): boolean {
   return true
 }
 
-/** Record a visited page at the front of history (de-duped, newest first, capped). */
+/** Record a visited page OR a raw search at the front of history (de-duped, newest first, capped). */
 export function recordHistory(item: SavedItem) {
   requestPersist()
-  const list = read(HISTORY).filter((s) => s.id !== item.id)
+  let list = read(HISTORY)
+  if (item.query) {
+    // collapse the live-typing chain: drop any existing query that is a prefix of this one or vice
+    // versa (so typing 中 → 中宇 → 中宇大廈 leaves only the final term), and exact duplicates.
+    list = list.filter(
+      (s) =>
+        !(
+          s.query &&
+          (s.headword === item.headword ||
+            s.headword.startsWith(item.headword) ||
+            item.headword.startsWith(s.headword))
+        ),
+    )
+  } else {
+    list = list.filter((s) => s.query || s.id !== item.id)
+  }
   list.unshift({ ...item, ts: Date.now() })
   write(HISTORY, list.slice(0, HIST_CAP))
 }
