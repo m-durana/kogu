@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { search, entry as fetchEntry } from './lib/api'
+  import { search, entry as fetchEntry, segment as fetchSegment, type SegmentPart } from './lib/api'
   import type { Entry, Hit, CharInfo } from './lib/types'
   import { primaryForm, varietyLabel, regionsOf, shortGloss, cleanGloss, langTag, hanFont, placeholderAt } from './lib/display'
   import Unified from './lib/Unified.svelte'
@@ -36,6 +36,9 @@
   let breakdown = $state<CharInfo[]>([])
   // true while that per-character breakdown is still being fetched (suppresses a "nothing found" flash)
   let breaking = $state(false)
+  // greedy longest-word segmentation of an unknown query for the "literally" line (紅出口 → red · exit);
+  // when present it supersedes the strict character-by-character composite.
+  let segments = $state<SegmentPart[]>([])
 
   const HAN = /\p{Script=Han}/u
   // easter egg: 古古 ("old old") is the app's name, not a real word — shown when looked up (item 8)
@@ -142,14 +145,17 @@
     const g = cleanGloss(c.gloss_en ?? '')
     return g.split(';')[0].trim()
   }
-  // a LITERAL character-by-character gloss chain for a query with no whole-word match (中宇大度 →
-  // "central · roof · big · degree"). Honest hint only — a mechanical join of each character's first
-  // meaning, clearly labelled "literally", never a fabricated whole-phrase definition.
-  const compositeMeaning = $derived(
-    breakdown.length >= 2
-      ? breakdown.map((c) => charMeaning(c).split(',')[0].trim()).filter(Boolean).join(' · ')
-      : '',
-  )
+  // a LITERAL gloss chain for a query with no whole-word match, clearly labelled "literally" and never
+  // a fabricated whole-phrase definition. Prefer the backend's greedy longest-sub-word segmentation
+  // (紅出口 → "red · exit"); fall back to the strict character-by-character chain (中宇大度 → "central ·
+  // roof · big · degree") when segmentation is unavailable.
+  const compositeMeaning = $derived.by(() => {
+    const segGloss = segments.map((s) => s.gloss.trim()).filter(Boolean)
+    if (segments.length >= 2 && segGloss.length >= 2) return segGloss.join(' · ')
+    if (breakdown.length >= 2)
+      return breakdown.map((c) => charMeaning(c).split(',')[0].trim()).filter(Boolean).join(' · ')
+    return ''
+  })
   // in-app lookup panel (Translate + Wiktionary) for the typed term — works whether or not Kogu has
   // the word, useful for names, neologisms, and partial phrases.
   let lookupOpen = $state(false)
@@ -208,6 +214,7 @@
     unified = false
     breakdown = []
     breaking = false
+    segments = []
     // clear prior results so a NEW search shows the skeleton, not stale content that then swaps out
     results = []
     if (!term) {
@@ -261,6 +268,13 @@
         // component characters so every character is shown with its meaning no matter what, beneath
         // any partial-word results. Char-only entries live at /entry/{-codepoint}; fetch in parallel.
         const chars = [...new Set([...term].filter((c) => HAN.test(c)))]
+        // longest-known-sub-word segmentation for the "literally" hint (紅出口 → red · exit). Falls back
+        // to the per-character composite if it returns nothing or fails.
+        fetchSegment(term)
+          .then((s) => {
+            if (q.trim() === term) segments = s.segments
+          })
+          .catch(() => {})
         // mark a breakdown as pending so we don't flash "nothing found" before it arrives (item 3)
         breaking = true
         Promise.all(
@@ -462,6 +476,7 @@
     results = []
     breakdown = []
     breaking = false
+    segments = []
     q = ''
     lastSearched = ''
     err = ''

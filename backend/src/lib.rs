@@ -32,6 +32,7 @@ pub fn build_router(st: AppState) -> Router {
             post(ocr::ocr_handler).layer(axum::extract::DefaultBodyLimit::max(12 * 1024 * 1024)),
         )
         .route("/translate", get(handlers::translate_handler))
+        .route("/segment", get(handlers::segment_handler))
         .route("/mt", get(mt::translate_handler))
         .route("/why/:id", get(handlers::why_handler))
         .layer(CompressionLayer::new())

@@ -1560,3 +1560,67 @@ async fn mc_media_no_false_link_for_ma() {
         assert!(!ma_self.iter().any(|r| mc.contains(r)), "媽 and 馬 must NOT share an MC reading: {ma_self:?} vs {mc:?}");
     }
 }
+
+// ── /segment: maximal-munch "literally" composition (longest known sub-words) ─────────────────────
+async fn segment(q: &str) -> Value {
+    get(&format!("/segment?q={}", enc(q))).await.1
+}
+fn seg_forms(v: &Value) -> Vec<String> {
+    v["segments"].as_array().unwrap().iter().map(|s| s["form"].as_str().unwrap().to_string()).collect()
+}
+fn seg_glosses(v: &Value) -> Vec<String> {
+    v["segments"].as_array().unwrap().iter().map(|s| s["gloss"].as_str().unwrap().to_string()).collect()
+}
+
+#[tokio::test]
+async fn segment_char_plus_word() {
+    // the headline case: 紅出口 must read 紅(char "red") + 出口(word "exit"), NOT 紅·出·口.
+    let v = segment("紅出口").await;
+    assert_eq!(seg_forms(&v), vec!["紅", "出口"], "greedy split of 紅出口");
+    assert_eq!(seg_glosses(&v), vec!["red", "exit"], "composed gloss");
+    // the multi-char word carries its lexeme id; the single-char fallback does not
+    let segs = v["segments"].as_array().unwrap();
+    assert!(segs[0].get("lexeme_id").is_none(), "紅 is a character fallback (no lexeme_id)");
+    assert!(segs[1]["lexeme_id"].is_i64(), "出口 is a known word (has lexeme_id)");
+}
+
+#[tokio::test]
+async fn segment_two_word_split() {
+    // a clean 2+2 split: 機場(airport) + 出口(exit), the whole string is not itself a word.
+    let v = segment("機場出口").await;
+    assert_eq!(seg_forms(&v), vec!["機場", "出口"]);
+    assert_eq!(seg_glosses(&v), vec!["airport", "exit"]);
+}
+
+#[tokio::test]
+async fn segment_whole_string_is_one_word() {
+    // a fully-known word returns a single segment spanning it (火車 = train).
+    let v = segment("火車").await;
+    assert_eq!(seg_forms(&v), vec!["火車"]);
+    assert_eq!(seg_glosses(&v), vec!["train"]);
+}
+
+#[tokio::test]
+async fn segment_per_char_fallback() {
+    // no multi-char sub-word (紅口 is not a word): falls back to one segment per character, like today.
+    let v = segment("紅口").await;
+    assert_eq!(seg_forms(&v), vec!["紅", "口"]);
+    assert_eq!(seg_glosses(&v), vec!["red", "mouth"]);
+    for s in v["segments"].as_array().unwrap() {
+        assert!(s.get("lexeme_id").is_none(), "character fallbacks carry no lexeme_id");
+    }
+}
+
+#[tokio::test]
+async fn segment_gloss_is_cleaned() {
+    // 出口's sense-0 gloss is "an exit"; the segment gloss must be cleaned to "exit" (no article).
+    let v = segment("出口").await;
+    assert_eq!(seg_glosses(&v), vec!["exit"], "leading article stripped");
+}
+
+#[tokio::test]
+async fn segment_non_han_is_empty() {
+    // a non-Han query has nothing to compose; segments is empty (the literal line won't render).
+    let v = segment("hello").await;
+    assert_eq!(v["segments"].as_array().unwrap().len(), 0);
+}

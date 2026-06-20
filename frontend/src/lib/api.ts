@@ -62,6 +62,19 @@ export async function translate(q: string, signal?: AbortSignal): Promise<import
   return r.json()
 }
 
+export interface SegmentPart {
+  form: string
+  gloss: string
+  lexeme_id?: number
+}
+// Greedily split an unrecognized Han query into the longest known sub-words for the "literally" hint.
+export async function segment(q: string, signal?: AbortSignal): Promise<{ query: string; segments: SegmentPart[] }> {
+  const u = new URL(BASE + '/segment', location.origin)
+  u.searchParams.set('q', q)
+  const r = await fetchRetry(u, { signal }, 'segment')
+  return r.json()
+}
+
 export async function ocr(blob: Blob): Promise<import('./types').OcrResponse> {
   const r = await fetch(`${BASE}/ocr`, {
     method: 'POST',

@@ -28,7 +28,7 @@ impl Kind {
     }
 }
 
-fn is_han(ch: char) -> bool {
+pub(crate) fn is_han(ch: char) -> bool {
     let c = ch as u32;
     (0x3400..=0x9FFF).contains(&c) || (0x20000..=0x3FFFF).contains(&c) || (0xF900..=0xFAFF).contains(&c)
 }
@@ -145,7 +145,7 @@ fn fts_query(q: &str) -> Option<String> {
 
 /// Strip a gloss segment to its core: drop parentheticals, a leading "to " (verb glosses),
 /// trailing punctuation; lowercase + trim.
-fn clean_segment(seg: &str) -> String {
+pub(crate) fn clean_segment(seg: &str) -> String {
     let mut out = String::with_capacity(seg.len());
     let mut depth = 0u32;
     for c in seg.chars() {

@@ -236,6 +236,25 @@ pub struct ConceptGroup {
     pub members: Vec<LinkLite>,
 }
 
+/// /segment response: an unrecognized Han query greedily split into the longest known sub-words, each
+/// with a short gloss, so the "literally" hint reads 紅出口 → "red · exit" instead of "red · go out · mouth".
+#[derive(Serialize)]
+pub struct SegmentResponse {
+    pub query: String,
+    pub segments: Vec<SegmentPart>,
+}
+
+#[derive(Serialize)]
+pub struct SegmentPart {
+    /// the matched sub-word (one or more characters)
+    pub form: String,
+    /// its short gloss (first cleaned sense segment); empty if nothing is known for the character
+    pub gloss: String,
+    /// the lexeme this gloss came from, when the segment is a known word (null for a character fallback)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lexeme_id: Option<i64>,
+}
+
 /// /ocr response - recognized text laid out over the image for tap-to-select (DESIGN: OCR feature).
 #[derive(Serialize)]
 pub struct OcrResponse {

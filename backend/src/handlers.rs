@@ -1310,6 +1310,132 @@ fn build_translate(conn: &rusqlite::Connection, q: &str) -> rusqlite::Result<Tra
     Ok(TranslateResponse { query: q.to_string(), concepts: groups })
 }
 
+#[derive(Deserialize)]
+pub struct SegmentParams {
+    pub q: String,
+}
+
+pub async fn segment_handler(
+    State(st): State<AppState>,
+    Query(p): Query<SegmentParams>,
+) -> Result<Json<SegmentResponse>, (StatusCode, Json<Value>)> {
+    let conn = st.pool.get().map_err(internal)?;
+    let resp = build_segment(&conn, &p.q).map_err(internal)?;
+    Ok(Json(resp))
+}
+
+/// Longest plausible sub-word probed during segmentation (no real dictionary word is longer in
+/// practice, and it bounds the number of lookups per position).
+const SEG_MAXLEN: usize = 6;
+
+/// Greedy longest-match segmentation of an unrecognized Han query into known sub-words. Each maximal
+/// run of Han characters is split left-to-right, always taking the longest substring that is a real
+/// word (a `surface_form` lookup) down to length 2, then falling back to a single character. The
+/// per-segment short glosses compose the "literally" hint (紅出口 → red · exit).
+fn build_segment(conn: &rusqlite::Connection, q: &str) -> rusqlite::Result<SegmentResponse> {
+    let mut segments = Vec::new();
+    let chars: Vec<char> = q.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if !search::is_han(chars[i]) {
+            i += 1;
+            continue;
+        }
+        let mut j = i;
+        while j < chars.len() && search::is_han(chars[j]) {
+            j += 1;
+        }
+        segment_run(conn, &chars[i..j], &mut segments)?;
+        i = j;
+    }
+    Ok(SegmentResponse { query: q.to_string(), segments })
+}
+
+fn segment_run(
+    conn: &rusqlite::Connection,
+    run: &[char],
+    out: &mut Vec<SegmentPart>,
+) -> rusqlite::Result<()> {
+    let mut i = 0;
+    while i < run.len() {
+        let mut matched = false;
+        // try the longest sub-word first, down to a 2-char word
+        let maxl = (run.len() - i).min(SEG_MAXLEN);
+        let mut len = maxl;
+        while len >= 2 {
+            let sub: String = run[i..i + len].iter().collect();
+            if let Some((id, gloss)) = best_word_gloss(conn, &sub)? {
+                out.push(SegmentPart { form: sub, gloss, lexeme_id: Some(id) });
+                i += len;
+                matched = true;
+                break;
+            }
+            len -= 1;
+        }
+        if !matched {
+            // single character: use the character-table gloss (unchanged from today's breakdown so
+            // 紅 stays "red"); fall back to a single-char word gloss only if the character has none.
+            let ch = run[i];
+            let form = ch.to_string();
+            if let Some(gloss) = char_short_gloss(conn, ch)? {
+                out.push(SegmentPart { form, gloss, lexeme_id: None });
+            } else if let Some((id, gloss)) = best_word_gloss(conn, &form)? {
+                out.push(SegmentPart { form, gloss, lexeme_id: Some(id) });
+            } else {
+                out.push(SegmentPart { form, gloss: String::new(), lexeme_id: None });
+            }
+            i += 1;
+        }
+    }
+    Ok(())
+}
+
+/// The best (most frequent) word whose surface form is exactly `form`, with its cleaned sense-0 gloss.
+fn best_word_gloss(
+    conn: &rusqlite::Connection,
+    form: &str,
+) -> rusqlite::Result<Option<(i64, String)>> {
+    use rusqlite::OptionalExtension;
+    let id: Option<i64> = conn
+        .query_row(
+            "SELECT l.id FROM surface_form sf JOIN lexeme l ON l.id = sf.lexeme_id \
+             WHERE sf.form = ?1 ORDER BY l.freq DESC, l.id ASC LIMIT 1",
+            [form],
+            |r| r.get(0),
+        )
+        .optional()?;
+    let Some(id) = id else { return Ok(None) };
+    let gloss: Option<String> = conn
+        .query_row(
+            "SELECT gloss_en FROM sense WHERE lexeme_id=?1 ORDER BY sense_order LIMIT 1",
+            [id],
+            |r| r.get(0),
+        )
+        .optional()?;
+    let g = short_gloss(gloss.as_deref().unwrap_or(""));
+    if g.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some((id, g)))
+    }
+}
+
+/// Character-table gloss for a single character, shortened (the fallback used today for the breakdown).
+fn char_short_gloss(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<String>> {
+    use rusqlite::OptionalExtension;
+    let g: Option<String> = conn
+        .query_row("SELECT gloss_en FROM character WHERE cp=?1", [ch as i64], |r| r.get(0))
+        .optional()?;
+    Ok(g.map(|g| short_gloss(&g)).filter(|s| !s.is_empty()))
+}
+
+/// First cleaned sense segment of a gloss (split on ; | , then stripped/lowercased like search).
+fn short_gloss(gloss: &str) -> String {
+    let seg = gloss.split([';', '|']).next().unwrap_or(gloss);
+    let seg = seg.split(',').next().unwrap_or(seg);
+    search::clean_segment(seg)
+}
+
 fn internal<E: std::fmt::Display>(e: E) -> (StatusCode, Json<Value>) {
     (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })))
 }
