@@ -1134,11 +1134,11 @@
   .dform { font-family: var(--han); font-size: 1.15rem; }
   .dform .ftag { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); margin-right: 0.18rem; vertical-align: 0.35em; }
   .dform .fsep { color: var(--faint); margin: 0 0.18rem; }
-  /* the reading group: inline with the form for short words; its own line for long ones (.wide),
-     where flex-basis:100% forces a wrap within the wrapping .dlh and the reading gets full width. */
-  /* grow to fill the rest of the row so the ja on/kun readings line (.dreads, flex:1 1 0) has a bounded
-     width again and can clamp to one line + reveal its "+" toggle. (Without flex-grow here .drow2 sized
-     to its content, so .dreads never overflowed and the multi-reading toggle silently disappeared.) */
+  /* the reading group sits inline after the language tag and GROWS to fill the rest of the row, so the
+     ja on/kun readings line (.dreads, flex:1 1 0) has a bounded width and can clamp to one line + reveal
+     its "+" toggle. (Without flex-grow here .drow2 sized to its content, so .dreads never overflowed and
+     the multi-reading toggle silently disappeared.) Readings wrap WITHIN this box, never onto their own
+     line under the tag. */
   .drow2 { display: inline-flex; align-items: baseline; gap: 0.7rem; min-width: 0; flex: 1 1 0; }
   .dread { font-family: var(--mono); font-size: 0.9rem; color: var(--muted); }
   /* tight reading separator (the old "  ·  " ate too much space) + romaji gloss + "+N more" toggle */
