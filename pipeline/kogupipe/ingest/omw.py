@@ -20,8 +20,22 @@ try:
 except ImportError:
     wn = None
 
-# omw lexicon → which Kogu varieties its lemmas may match
+from ..db import SOURCES_DIR
+
+# omw lexicon → which Kogu varieties its lemmas may match, and the vendored LMF for offline builds
 _LEXICONS = [("omw-ja:1.4", {"ja"}), ("omw-cmn:1.4", {"zh", "yue"})]
+_VENDORED = {"omw-ja:1.4": "wn/omw-ja.xml.xz", "omw-cmn:1.4": "wn/omw-cmn.xml.xz"}
+
+
+def _ensure_loaded() -> None:
+    """Load each lexicon from the vendored LMF if it isn't already in the wn cache (offline-capable)."""
+    have = {f"{lx.id}:{lx.version}" for lx in wn.lexicons()}
+    for spec, rel in _VENDORED.items():
+        if spec in have:
+            continue
+        path = SOURCES_DIR / rel
+        if path.exists():
+            wn.add(str(path), progress_handler=None)
 # the cross-language synset key: the trailing "NNNNNNNN-p" offset (same across languages)
 _OFFSET = re.compile(r"(\d{8}-[nvars])$")
 # lemma cleanup: omw uses "+" as a morpheme boundary and "～" as a placeholder
@@ -52,8 +66,9 @@ def _jmdict_classes(pos_str: str | None) -> set[str]:
 
 def ingest(conn) -> None:
     if wn is None:
-        print("      omw: `wn` not installed — skipping (run: pip install wn && wn.download omw-ja/omw-cmn)")
+        print("      omw: `wn` not installed — skipping (pip install -r pipeline/requirements.txt)")
         return
+    _ensure_loaded()
 
     # form → [(lexeme_id, variety, sense0_id, sense0_pos, gloss)] from EVERY surface form (trad+simp+kana)
     form_map: dict[str, list[tuple[int, str, int, str | None, str | None]]] = defaultdict(list)

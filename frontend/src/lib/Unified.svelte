@@ -8,6 +8,7 @@
     showWords: boolean
     jaReadOpen: boolean
     yueReadOpen: boolean
+    activeTab: string
     boundId: number | null
     ts: number
   }
@@ -686,6 +687,31 @@
     return []
   })
 
+  // everything BELOW the definition is organised into a CJKV-style segmented control: the sections
+  // become tabs (only those with content), one panel visible at a time. Applies to single chars and
+  // words alike. Order: make-up → related → origin → used-in.
+  let activeTab = $state('')
+  const tabs = $derived.by<{ key: string; label: string }[]>(() => {
+    if (!isGlyphSearch) return []
+    const t: { key: string; label: string }[] = []
+    if ((single && headChar) || (entry && entry.characters.length))
+      t.push({ key: 'forms', label: single ? 'Structure' : 'Characters' })
+    if (everydayRows.length || bridgeRows.length || relatedRows.length)
+      t.push({ key: 'related', label: 'Related' })
+    if (originAccounts.length) t.push({ key: 'origin', label: 'Origin' })
+    if (compoundList.length) t.push({ key: 'words', label: 'Used in' })
+    else if (entry?.appears_in.length) t.push({ key: 'words', label: 'Appears in' })
+    return t
+  })
+  // keep activeTab valid as content loads (default to the first tab; never stay on a vanished one)
+  $effect(() => {
+    if (tabs.length && !tabs.some((t) => t.key === activeTab)) activeTab = tabs[0].key
+  })
+  function setTab(key: string) {
+    activeTab = key
+    save()
+  }
+
   // Bound form: a morpheme that doesn't stand alone as a word — it only carries meaning inside
   // compounds. CC-CEDICT flags these; instead of leaking the jargon into the prose we show a small
   // tappable "bound" tag whose popup explains it and lists the compounds the character lives in.
@@ -707,6 +733,7 @@
       showWords,
       jaReadOpen,
       yueReadOpen,
+      activeTab,
       boundId: boundOpen?.id ?? null,
       ts: Date.now(),
     })
@@ -751,6 +778,7 @@
       showWords = snap.showWords
       jaReadOpen = snap.jaReadOpen
       yueReadOpen = snap.yueReadOpen ?? false
+      activeTab = snap.activeTab ?? ''
       boundOpen = snap.boundId != null ? allRows.find((r) => r.id === snap.boundId) ?? null : null
     } else {
       expanded = new Set()
@@ -758,6 +786,7 @@
       showWords = false
       jaReadOpen = false
       yueReadOpen = false
+      activeTab = ''
       boundOpen = null
     }
   })
@@ -885,24 +914,26 @@
       {/if}
     </section>
 
-    {#if everydayRows.length}
-      <!-- the natural everyday word another language writes for this character's meaning (耳 → 耳朵) -->
-      <section class="bridge">
-        <h3>usually written</h3>
-        <ul class="langs">
-          {#each everydayRows as r (r.id)}{@render rowItem(r)}{/each}
-        </ul>
-      </section>
+    {#if tabs.length}
+      <!-- CJKV-style segmented control: everything below the definition lives in these tabs -->
+      <div class="seg" role="tablist" aria-label="sections">
+        {#each tabs as t, i}{#if i && tabs[i].key !== activeTab && tabs[i - 1].key !== activeTab}<span class="segsep" aria-hidden="true"></span>{/if}<button class="segb" class:on={activeTab === t.key} role="tab" aria-selected={activeTab === t.key} onclick={() => setTab(t.key)}>{t.label}</button>{/each}
+      </div>
     {/if}
 
-    {#if bridgeRows.length}
-      <!-- Block B - the bridge: the same meaning, written differently elsewhere. Tappable pivots. -->
-      <section class="bridge">
-        <h3>written differently</h3>
-        <ul class="langs">
-          {#each bridgeRows as r (r.id)}{@render rowItem(r)}{/each}
-        </ul>
-      </section>
+    {#if activeTab === 'related'}
+      {#if everydayRows.length}
+        <!-- the natural everyday word another language writes for this character's meaning (耳 → 耳朵) -->
+        <section class="bridge"><h3>usually written</h3><ul class="langs">{#each everydayRows as r (r.id)}{@render rowItem(r)}{/each}</ul></section>
+      {/if}
+      {#if bridgeRows.length}
+        <!-- the same meaning, written differently elsewhere. Tappable pivots. -->
+        <section class="bridge"><h3>written differently</h3><ul class="langs">{#each bridgeRows as r (r.id)}{@render rowItem(r)}{/each}</ul></section>
+      {/if}
+      {#if relatedRows.length}
+        <!-- looser same-concept words in another language (lowest-confidence gloss/synset pivot) -->
+        <section class="bridge related"><h3>related</h3><ul class="langs">{#each relatedRows as r (r.id)}{@render rowItem(r)}{/each}</ul></section>
+      {/if}
     {/if}
 
   {:else if listRows.length}
@@ -914,7 +945,7 @@
     </section>
   {/if}
 
-  {#if isGlyphSearch && entry && single && headChar}
+  {#if isGlyphSearch && activeTab === 'forms' && single && headChar}
     <!-- single character: a compact structure line (no repeated glyph), then the words that use it.
          (Readings used to live in their own section here; they're now folded onto the definition rows
          above — 中 pinyin / 粵 jyutping / 日 on·kun — so there's no duplicate "readings" block.) -->
@@ -968,7 +999,7 @@
         </div>
       {/if}
     </section>
-  {:else if isGlyphSearch && entry && entry.characters.length}
+  {:else if isGlyphSearch && activeTab === 'forms' && entry && entry.characters.length}
     <!-- jukugo: break the word into its component characters. Same tappable row system as the
          "usually written" / "written differently" bands (one list style across the app), showing the
          languages it lives in, its reading, and one meaning. -->
@@ -1013,79 +1044,53 @@
     </div>
   {/snippet}
 
-  {#if isGlyphSearch && originAccounts.length}
+  {#if isGlyphSearch && activeTab === 'origin' && originAccounts.length}
     <section class="origin">
-      <button class="oh" aria-expanded={showOrigin} onclick={() => setOpen('origin', !showOrigin)}>
-        origin <span class="chev">{showOrigin ? '−' : '+'}</span>
-      </button>
-      {#if showOrigin}
-        <!-- one account per language: 山's Chinese (Sinitic) AND Japanese (Japonic) origins are both
-             true and complementary, so each is labelled by variety instead of showing only one. -->
-        {#each originAccounts as acc (acc.variety)}
-          <div class="oacc">
-            {#if originAccounts.length > 1 || acc.script}
-              <div class="olang"><span class="ovar" lang={langTag(acc.variety)} style="font-family:{hanFont(acc.variety)}">{varietyLabel(acc.variety)}</span> <span class="ohw" lang={langTag(acc.variety)} style="font-family:{hanFont(acc.variety)}">{#if acc.script}<span class="ftag">{scriptShort(acc.script)}</span>{/if}{acc.headword}</span></div>
-            {/if}
-            {#if acc.note}<p class="onote">{acc.note}</p>{/if}
-            {@render etyBody(acc.text)}
+      <!-- one account per language: 山's Chinese (Sinitic) AND Japanese (Japonic) origins are both
+           true and complementary, so each is labelled by variety instead of showing only one. -->
+      {#each originAccounts as acc (acc.variety)}
+        <div class="oacc">
+          {#if originAccounts.length > 1 || acc.script}
+            <div class="olang"><span class="ovar" lang={langTag(acc.variety)} style="font-family:{hanFont(acc.variety)}">{varietyLabel(acc.variety)}</span> <span class="ohw" lang={langTag(acc.variety)} style="font-family:{hanFont(acc.variety)}">{#if acc.script}<span class="ftag">{scriptShort(acc.script)}</span>{/if}{acc.headword}</span></div>
+          {/if}
+          {#if acc.note}<p class="onote">{acc.note}</p>{/if}
+          {@render etyBody(acc.text)}
+        </div>
+      {/each}
+      {#if openTerm}
+        <div class="termpop" role="presentation" onclick={() => (openTerm = null)}>
+          <div class="termcard" role="dialog" aria-modal="true" onclick={(e) => e.stopPropagation()}>
+            <p>{openTerm}</p>
+            <button class="mclose" onclick={() => (openTerm = null)}>close</button>
           </div>
-        {/each}
-        {#if openTerm}
-          <div class="termpop" role="presentation" onclick={() => (openTerm = null)}>
-            <div class="termcard" role="dialog" aria-modal="true" onclick={(e) => e.stopPropagation()}>
-              <p>{openTerm}</p>
-              <button class="mclose" onclick={() => (openTerm = null)}>close</button>
-            </div>
-          </div>
-        {/if}
-      {/if}
-    </section>
-  {/if}
-
-  {#if isGlyphSearch && entry && compoundList.length}
-    <section class="words">
-      <button class="oh" aria-expanded={showWords} onclick={() => setOpen('words', !showWords)}>
-        used in <span class="count">{wordCount}</span> <span class="chev">{showWords ? '−' : '+'}</span>
-      </button>
-      {#if showWords}
-        <!-- the SAME rowItem style as every other entry list (item 155). Cross-script-variant words
-             (氷 for 冰) follow under a "written with a variant character" divider. -->
-        <ul class="langs">
-          {#each compoundRows as r, i (r.id)}
-            {#if r.relation === 'compound-alt' && (i === 0 || compoundRows[i - 1].relation !== 'compound-alt')}
-              <li class="wdiv">written with a variant character</li>
-            {/if}
-            {@render rowItem(r)}
-          {/each}
-        </ul>
-      {/if}
-    </section>
-  {:else if isGlyphSearch && entry && entry.appears_in.length}
-    <!-- a radical/bound component isn't a morpheme in words; show the CHARACTERS that contain it -->
-    <section class="words">
-      <button class="oh" aria-expanded={showWords} onclick={() => setOpen('words', !showWords)}>
-        appears in <span class="count">{entry.appears_in.length}</span> characters <span class="chev">{showWords ? '−' : '+'}</span>
-      </button>
-      {#if showWords}
-        <div class="chips">
-          {#each entry.appears_in as c (c.ch)}
-            <!-- rare ext-plane glyphs may render as tofu on devices without the font; the codepoint in
-                 the tooltip + a subtle marker keep them identifiable instead of a blank box (item 5) -->
-            <button class="chip" class:rare={c.rare} onclick={() => onsearch(c.ch)} title={c.rare ? `${c.gloss ?? ''} (U+${c.ch.codePointAt(0)?.toString(16).toUpperCase()})` : (c.gloss ?? '')}><Glyph ch={c.ch} font={hanFont(headVariety)} lang={langTag(headVariety)} /></button>
-          {/each}
         </div>
       {/if}
     </section>
   {/if}
 
-  {#if isGlyphSearch && relatedRows.length}
-    <!-- "related": same-concept words in another language (looser than the bridge). Kept at the very
-         bottom (after origin / used-in) since it's the lowest-confidence, gloss-pivoted tier. -->
-    <section class="bridge related">
-      <h3>related</h3>
+  {#if isGlyphSearch && activeTab === 'words' && entry && compoundList.length}
+    <section class="words">
+      <!-- the SAME rowItem style as every other entry list. Cross-script-variant words (氷 for 冰)
+           follow under a "written with a variant character" divider. -->
       <ul class="langs">
-        {#each relatedRows as r (r.id)}{@render rowItem(r)}{/each}
+        {#each compoundRows as r, i (r.id)}
+          {#if r.relation === 'compound-alt' && (i === 0 || compoundRows[i - 1].relation !== 'compound-alt')}
+            <li class="wdiv">written with a variant character</li>
+          {/if}
+          {@render rowItem(r)}
+        {/each}
       </ul>
+    </section>
+  {:else if isGlyphSearch && activeTab === 'words' && entry && entry.appears_in.length}
+    <!-- a radical/bound component isn't a morpheme in words; show the CHARACTERS that contain it -->
+    <section class="words">
+      <div class="chips">
+        {#each entry.appears_in as c (c.ch)}
+          <!-- rare ext-plane glyphs may render as tofu on devices without the font; the codepoint in
+               the tooltip + a subtle marker keep them identifiable instead of a blank box (item 5) -->
+          <button class="chip" class:rare={c.rare} onclick={() => onsearch(c.ch)} title={c.rare ? `${c.gloss ?? ''} (U+${c.ch.codePointAt(0)?.toString(16).toUpperCase()})` : (c.gloss ?? '')}><Glyph ch={c.ch} font={hanFont(headVariety)} lang={langTag(headVariety)} /></button>
+        {/each}
+      </div>
     </section>
   {/if}
 
@@ -1193,6 +1198,16 @@
   .note :global(svg) { flex: none; margin-top: 0.02rem; color: var(--muted); }
 
   h3 { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 1.9rem 0 0.8rem; }
+  /* first heading inside a tab panel sits close under the segmented control */
+  .seg + section h3, section:first-of-type > h3 { margin-top: 0.6rem; }
+
+  /* CJKV-style segmented control for the below-definition sections */
+  .seg { display: flex; align-items: stretch; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 0.22rem; margin: 1.2rem 0 0.2rem; overflow-x: auto; scrollbar-width: none; }
+  .seg::-webkit-scrollbar { display: none; }
+  .segb { flex: 1 0 auto; font-family: var(--sans); font-size: 0.9rem; color: var(--muted); background: none; border: none; padding: 0.42rem 0.95rem; border-radius: 999px; white-space: nowrap; cursor: pointer; }
+  .segb:hover:not(.on) { color: var(--text); }
+  .segb.on { background: var(--surface-2); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); }
+  .segsep { width: 1px; flex: none; align-self: center; height: 1.1rem; background: var(--border); }
   .dim { color: var(--faint); }
 
   /* jukugo component characters now reuse the shared .langs/.lang row system (see "written
@@ -1284,9 +1299,8 @@
   .soundloan { display: flex; align-items: center; gap: 0.5rem; margin: 0.1rem 0 0.5rem; flex-wrap: wrap; }
   .slnote { color: var(--muted); font-size: 0.82rem; cursor: help; }
 
-  /* words: collapsible (toggle header like origin), grouped by language with breathing room */
-  .words { margin-top: 1.6rem; }
-  .words .count { color: var(--faint); }
+  /* words: a tab panel; grouped by language with breathing room */
+  .words { margin-top: 0.4rem; }
   /* divider before the cross-script-variant words (氷 for 冰), inside the shared .langs list (item 155) */
   .wdiv { list-style: none; font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); margin: 0.7rem 0 0.3rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
   .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
@@ -1294,10 +1308,7 @@
   .chip.rare { border-style: dashed; color: var(--muted); }
   .chip:hover { border-color: var(--border-strong); }
 
-  .origin { margin-top: 1.2rem; }
-  .oh { display: inline-flex; align-items: center; gap: 0.4rem; background: none; border: none; padding: 0.2rem 0; font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
-  .oh:hover { color: var(--text); background: none; }
-  .oh .chev { font-family: var(--mono); }
+  .origin { margin-top: 0.4rem; }
   .etylist { margin-top: 0.5rem; }
   /* one flowing account: plain stacked paragraphs, no dividing rule, no fake numbering */
   .etyseg { margin-top: 0.7rem; }
