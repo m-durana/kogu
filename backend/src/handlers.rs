@@ -1171,7 +1171,10 @@ fn build_script_forms(
     let mut s = conn.prepare(&format!(
         "SELECT c.char, c.is_orthodox, e.type, e.reform_id FROM glyph_edge e \
          JOIN character c ON c.cp = e.child_cp \
-         WHERE e.parent_cp = ?1 AND e.type IN {IDENTITY_TYPES}"
+         WHERE e.parent_cp = ?1 AND e.type IN {IDENTITY_TYPES} \
+         AND NOT (e.type='simplification' AND e.reform_id='unihan-variant' \
+                  AND EXISTS(SELECT 1 FROM glyph_edge o WHERE o.parent_cp=e.parent_cp \
+                             AND o.type='simplification' AND o.reform_id='opencc'))"
     ))?;
     let rows: Vec<(String, bool, String, Option<String>)> = s
         .query_map([anchor_cp], |r| {

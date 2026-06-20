@@ -52,35 +52,19 @@ export function yueFile(tok: string): string | null {
 // A single monotonic token guards playback: every new speak() bumps it, so any in-flight fetch loop or
 // queued clip from an earlier tap bails the moment a newer tap starts.
 let token = 0
-// playback uses the Web Audio API so syllable clips can be SCHEDULED back-to-back (even slightly
-// overlapped) on one timeline — that removes the audible gap the old <Audio>-per-clip approach left
-// between syllables (each <Audio> only started after the previous fired 'ended', plus the clips'
-// own silent padding). We keep references to the scheduled sources so a new tap can stop them.
-let audioCtx: AudioContext | null = null
-let liveSources: AudioBufferSourceNode[] = []
-
-function getCtx(): AudioContext | null {
-  if (typeof window === 'undefined') return null
-  const AC = window.AudioContext || (window as any).webkitAudioContext
-  if (!AC) return null
-  if (!audioCtx) {
-    try {
-      audioCtx = new AC()
-    } catch {
-      return null
-    }
-  }
-  return audioCtx
-}
+// Playback uses plain <Audio> elements (reliable: they play on the tap's user gesture on every
+// browser). To kill the gap between syllables we (a) prefetch ALL clips in parallel up front and
+// (b) start the NEXT syllable a hair before the current one ends (overlap), so a word runs together.
+let active: HTMLAudioElement[] = []
 
 function stopAll() {
   token++
-  for (const s of liveSources) {
+  for (const a of active) {
     try {
-      s.stop()
+      a.pause()
     } catch {}
   }
-  liveSources = []
+  active = []
   if (haveSynth()) {
     try {
       window.speechSynthesis.cancel()
@@ -88,49 +72,66 @@ function stopAll() {
   }
 }
 
-async function fetchBuffer(url: string, ac: AudioContext): Promise<AudioBuffer | null> {
+async function fetchClip(url: string): Promise<string | null> {
   try {
     const res = await fetch(url)
     const type = res.headers.get('content-type') || ''
     // jyutping.org serves a 200 text/html SPA page for a missing syllable — accept only real audio.
     if (!res.ok || !type.startsWith('audio')) return null
-    return await ac.decodeAudioData(await res.arrayBuffer())
+    return URL.createObjectURL(await res.blob())
   } catch {
     return null
   }
 }
 
-// per-syllable clips are recorded slowly with silent padding; a small speed-up plus a slight overlap
-// between consecutive syllables makes a multi-syllable word flow as one utterance at a natural pace.
-const CLIP_RATE = 1.1
-const CLIP_OVERLAP = 0.07 // seconds each syllable starts before the previous one ends (trims the gap)
+// per-syllable clips are recorded slowly with silent padding; a small speed-up + starting the next
+// syllable just before the current ends makes a multi-syllable word flow at a natural pace.
+const CLIP_RATE = 1.12
+const CLIP_OVERLAP = 0.09 // seconds before a clip's end to start the next one (trims the inter-syllable gap)
 
 async function playClips(urls: string[], my: number): Promise<number> {
-  const ac = getCtx()
-  if (!ac) return 0
-  if (ac.state === 'suspended') {
-    try {
-      await ac.resume()
-    } catch {}
+  // prefetch every clip in parallel so there's no network gap between syllables
+  const objs = await Promise.all(urls.map(fetchClip))
+  if (my !== token) {
+    objs.forEach((o) => o && URL.revokeObjectURL(o))
+    return 0
   }
-  // fetch + decode every syllable IN PARALLEL, then schedule them on the audio clock back-to-back.
-  const buffers = await Promise.all(urls.map((u) => fetchBuffer(u, ac)))
-  if (my !== token) return 0
   let played = 0
-  let when = ac.currentTime + 0.03
-  for (const buf of buffers) {
-    if (my !== token) break
-    if (!buf) continue // a missing syllable: skip it, keep voicing the rest of the word
-    const src = ac.createBufferSource()
-    src.buffer = buf
-    src.playbackRate.value = CLIP_RATE
-    src.connect(ac.destination)
-    src.start(when)
-    liveSources.push(src)
+  for (let i = 0; i < objs.length; i++) {
+    if (my !== token) {
+      objs.slice(i).forEach((o) => o && URL.revokeObjectURL(o))
+      break
+    }
+    const obj = objs[i]
+    if (!obj) continue // a missing syllable: skip it, keep voicing the rest of the word
     played++
-    // advance the clock by this clip's (rate-adjusted) length minus the overlap, so the next syllable
-    // begins just before this one fades out — no silent gap between syllables.
-    when += Math.max(0.05, buf.duration / CLIP_RATE - CLIP_OVERLAP)
+    // resolve (→ start the next clip) when this one is OVERLAP-seconds from its end, but let the audio
+    // play out to its natural end and revoke its URL then.
+    await new Promise<void>((resolve) => {
+      const a = new Audio(obj)
+      a.playbackRate = CLIP_RATE
+      let advanced = false
+      const advance = () => {
+        if (!advanced) {
+          advanced = true
+          resolve()
+        }
+      }
+      a.addEventListener('timeupdate', () => {
+        if (a.duration && a.currentTime >= a.duration - CLIP_OVERLAP) advance()
+      })
+      a.addEventListener('ended', () => {
+        URL.revokeObjectURL(obj)
+        advance()
+      })
+      a.addEventListener('error', () => {
+        URL.revokeObjectURL(obj)
+        advance()
+      })
+      active.push(a)
+      if (my !== token) return advance()
+      a.play().catch(advance)
+    })
   }
   return played
 }

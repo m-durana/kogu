@@ -653,7 +653,10 @@
   // 熟語 - one flat, frequency-ranked list (language tag per row, no per-variety sectioning). Words
   // that use a CROSS-SCRIPT VARIANT of the character (relation 'compound-alt', e.g. 氷-words for 冰)
   // come after the same-glyph words under a "written differently" divider, still frequency-ranked.
-  const compoundList = $derived(entry?.compounds ?? [])
+  // exclude the character ITSELF from its own "used in" list: a single char (之) can have a standalone
+  // word-lexeme in another language that the backend also returns as a "containing word", which read as
+  // a confusing self-reference ("only used in compounds" → first compound is the same glyph).
+  const compoundList = $derived((entry?.compounds ?? []).filter((l) => l.headword !== head))
   // map the compound LinkLites onto the shared Row shape so the "used in" list renders with the SAME
   // rowItem style as every other entry list (usually-written / written-differently / characters) —
   // one singular row style across the app (item 155). The relation is kept for the variant divider.
@@ -691,7 +694,8 @@
   // title= (hover), but hover doesn't exist on touch, so tapping a term opens this small popup too.
   let openTerm = $state<string | null>(null)
   function boundCompounds(r: Row): { lexeme_id: number; headword: string; glosses: string[] }[] {
-    return (entry?.compounds ?? []).filter((l) => l.variety === r.variety).slice(0, 30)
+    // never list the character itself as one of "its" compounds (之 → 之)
+    return (entry?.compounds ?? []).filter((l) => l.variety === r.variety && l.headword !== head).slice(0, 30)
   }
 
   // ── per-word UI state cache (#101): keep panels as left when you click a link and come back ──
