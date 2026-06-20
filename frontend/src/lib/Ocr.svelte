@@ -124,8 +124,8 @@
     position: absolute; padding: 0; margin: 0; background: transparent;
     border: 1px solid rgba(244, 244, 242, 0.35); border-radius: 2px; cursor: pointer; min-width: 0;
   }
-  .cbox:hover { border-color: #fff; background: rgba(244, 244, 242, 0.12); }
-  .cbox.sel { background: rgba(244, 244, 242, 0.55); border-color: #fff; }
+  .cbox:hover { border-color: var(--hi); background: rgba(244, 244, 242, 0.12); }
+  .cbox.sel { background: rgba(244, 244, 242, 0.55); border-color: var(--hi); }
   .linetag {
     position: absolute; transform: translate(-50%, -100%); font-size: 0.6rem; padding: 0 0.25rem;
     background: var(--bg); border: 1px solid var(--border-strong); color: var(--faint); opacity: 0.7;

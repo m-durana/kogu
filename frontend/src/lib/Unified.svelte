@@ -1159,7 +1159,7 @@
   .dread .rsep { color: var(--faint); margin: 0 0.28rem; }
   /* "+" / "−" toggle, sized to match the readings so it reads as part of the line, not a tiny tag */
   .rmore { background: none; border: none; padding: 0 0.25rem; font-family: var(--mono); font-size: 0.95rem; line-height: 1; color: var(--text); cursor: pointer; flex: none; }
-  .rmore:hover { color: #fff; background: none; }
+  .rmore:hover { color: var(--hi); background: none; }
   .senses { margin: 0.5rem 0 0; padding: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 0.35rem; }
   /* collapsed: clip to ~2 lines and fade the cut, so a long definition doesn't wall off the page */
   .senses.clamp { max-height: 2.9rem; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 74%, transparent); mask-image: linear-gradient(to bottom, #000 74%, transparent); }
@@ -1170,7 +1170,7 @@
   .more { background: none; border: none; padding: 0.3rem 0; margin-top: 0.1rem; font-family: var(--mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
   /* tappable cross-reference target inside a gloss ("variant of 著" → jump to 著) */
   .xref { font-family: var(--han); color: var(--text); background: none; border: none; padding: 0; font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-  .xref:hover { color: #fff; background: none; }
+  .xref:hover { color: var(--hi); background: none; }
   .more:hover { color: var(--text); background: none; }
 
   /* "bound" tag — a bound morpheme (only used in compounds); taps open an explainer + its compounds */
@@ -1286,7 +1286,7 @@
   .cpart { display: inline; }
   .comp .part { white-space: nowrap; }
   .part { font-family: var(--han); color: var(--text); background: none; border: none; padding: 0 0.1rem; font-size: 1.25rem; line-height: 1; }
-  .part:hover { color: #fff; background: none; }
+  .part:hover { color: var(--hi); background: none; }
   .comp .dim { font-size: 0.95rem; }
   .plus { color: var(--faint); font-family: var(--mono); margin: 0 0.35rem; }
   /* a component's meaning, e.g. 木 (tree) — the "explain the parts" layer */
@@ -1339,7 +1339,7 @@
   /* clickable hanzi in origin prose: a thin SOLID underline — distinct from the DOTTED underline that
      marks abbreviation/jargon terms (.term), so the two reading cues don't get confused (item 156). */
   .ety .etylink { text-decoration: underline solid; text-decoration-thickness: 1px; text-underline-offset: 2px; text-decoration-color: var(--border-strong); background: none; padding: 0; }
-  .ety .etylink:hover { text-decoration-color: var(--text); color: #fff; background: none; }
+  .ety .etylink:hover { text-decoration-color: var(--text); color: var(--hi); background: none; }
   /* item 19: numbered ("#") Wiktionary list items */
   .etyseg.ord { margin-top: 0.3rem; }
   .ety .etynum { font-family: var(--mono); font-size: 0.8em; color: var(--faint); }
@@ -1348,7 +1348,7 @@
   /* jargon term: dotted-underline like a glossary word. Desktop gets the title= hover; tap opens the
      popup below (hover doesn't exist on touch, which is why the tooltip "didn't work on mobile"). */
   .ety .term { color: var(--text); text-decoration: underline dotted; text-underline-offset: 2px; cursor: help; background: none; border: none; padding: 0; font: inherit; }
-  .ety .term:hover { color: #fff; background: none; }
+  .ety .term:hover { color: var(--hi); background: none; }
   /* phonological reconstructions de-emphasised so the narrative reads first */
   .ety .recon { font-size: 0.78em; color: var(--faint); font-family: var(--mono); }
   .ety .recon[title] { cursor: help; }

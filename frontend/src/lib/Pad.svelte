@@ -4,7 +4,6 @@
 
   let { onpick, onclose }: { onpick: (ch: string) => void; onclose?: () => void } = $props()
 
-  const SIZE = 384 // backing resolution; CSS size scales independently
   let canvas: HTMLCanvasElement
   let drawing = $state(false)
   let strokes: Stroke[] = []
@@ -14,6 +13,12 @@
   let error = $state('')
   let t0 = 0
   let timer: ReturnType<typeof setTimeout> | undefined
+
+  // Strokes are stored in CSS pixel coordinates (same units for x and y), so the canvas can be any
+  // aspect ratio without distortion. cw/ch track the current CSS-pixel size of the canvas, which is
+  // also what gets passed to recognize() so the stroke coordinates and the bounds agree.
+  let cw = 0
+  let ch = 0
 
   // While the pad is open, drawing strokes that stray off the canvas would otherwise drag-select the
   // page text behind it. Disable text selection document-wide for as long as the pad is mounted, and
@@ -30,10 +35,57 @@
     }
   })
 
+  // Size the canvas backing store to its actual displayed pixel size (× dpr for crispness) and keep
+  // it in sync as the dock resizes / rotates. The 2d context is scaled by dpr so all drawing is done
+  // in CSS pixels, matching the stroke coordinates. Existing strokes are redrawn after every resize
+  // so a resize mid-character doesn't wipe what's already there.
+  $effect(() => {
+    const dpr = window.devicePixelRatio || 1
+    const fit = () => {
+      const w = canvas.clientWidth
+      const h = canvas.clientHeight
+      if (!w || !h) return
+      cw = w
+      ch = h
+      canvas.width = Math.round(w * dpr)
+      canvas.height = Math.round(h * dpr)
+      const c = ctx()
+      c.setTransform(dpr, 0, 0, dpr, 0, 0)
+      redraw()
+    }
+    fit()
+    const ro = new ResizeObserver(fit)
+    ro.observe(canvas)
+    return () => ro.disconnect()
+  })
+
   const ctx = () => canvas.getContext('2d')!
+  function strokeWidth(): number {
+    return Math.max(6, ch / 35)
+  }
+  function applyStrokeStyle(c: CanvasRenderingContext2D) {
+    c.strokeStyle = '#ededeb'
+    c.lineWidth = strokeWidth()
+    c.lineCap = 'round'
+    c.lineJoin = 'round'
+  }
+  // Repaint all completed strokes (used after a resize, which clears the backing store).
+  function redraw() {
+    const c = ctx()
+    c.clearRect(0, 0, cw, ch)
+    applyStrokeStyle(c)
+    for (const s of strokes) {
+      if (!s.length) continue
+      c.beginPath()
+      c.moveTo(s[0][0], s[0][1])
+      for (let i = 1; i < s.length; i++) c.lineTo(s[i][0], s[i][1])
+      c.stroke()
+    }
+  }
   function pos(e: PointerEvent): [number, number] {
     const r = canvas.getBoundingClientRect()
-    return [((e.clientX - r.left) / r.width) * SIZE, ((e.clientY - r.top) / r.height) * SIZE]
+    // CSS pixels, same units for x and y — no aspect distortion.
+    return [e.clientX - r.left, e.clientY - r.top]
   }
   function start(e: PointerEvent) {
     e.preventDefault()
@@ -56,10 +108,7 @@
     current.push([x, y, performance.now() - t0])
     const c = ctx()
     c.lineTo(x, y)
-    c.strokeStyle = '#ededeb'
-    c.lineWidth = 11
-    c.lineCap = 'round'
-    c.lineJoin = 'round'
+    applyStrokeStyle(c)
     c.stroke()
   }
   function end() {
@@ -88,14 +137,15 @@
     current = []
     candidates = []
     error = ''
-    ctx().clearRect(0, 0, SIZE, SIZE)
+    ctx().clearRect(0, 0, cw, ch)
   }
   async function run() {
     if (strokes.length === 0) return
     busy = true
     error = ''
     try {
-      const res = await recognize(SIZE, SIZE, strokes, ['zh', 'ja'])
+      // pass the real CSS-pixel bounds, matching the stroke coordinates
+      const res = await recognize(cw, ch, strokes, ['zh', 'ja'])
       candidates = res.candidates
       if (candidates.length === 0) error = 'no match, try again'
     } catch {
@@ -127,8 +177,6 @@
   <div class="canvas-wrap">
     <canvas
       bind:this={canvas}
-      width={SIZE}
-      height={SIZE}
       onpointerdown={start}
       onpointermove={move}
       onpointerup={end}
@@ -144,20 +192,25 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    /* fill the dock vertically so the canvas can grow into the available space */
+    flex: 1;
+    min-height: 0;
     user-select: none;
     -webkit-user-select: none;
     -webkit-touch-callout: none;
   }
   /* candidate strip: a single horizontally-scrollable row at the top of the dock */
-  .candstrip { display: flex; align-items: center; gap: 0.15rem; overflow-x: auto; scrollbar-width: none; min-height: 2.4rem; }
+  .candstrip { display: flex; align-items: center; gap: 0.15rem; overflow-x: auto; scrollbar-width: none; min-height: 2.4rem; flex: none; }
   .candstrip::-webkit-scrollbar { display: none; }
-  .canvas-wrap { position: relative; display: flex; justify-content: center; }
+  /* the wrapper grows to fill remaining dock height; the canvas fills the wrapper */
+  .canvas-wrap { position: relative; display: flex; flex: 1; min-height: 200px; }
   canvas {
     display: block;
-    height: min(32vh, 300px);
-    width: auto;
-    aspect-ratio: 1 / 1;
-    max-width: 100%;
+    /* fill the dock: full width, flexible height bounded for sane phone/desktop sizes */
+    width: 100%;
+    height: 100%;
+    min-height: 200px;
+    max-height: 46vh;
     background: var(--surface);
     border: 1px solid var(--border-strong);
     border-radius: 3px; /* less prominent rounding in the drawing window */
@@ -174,7 +227,7 @@
     padding: 0.4rem; color: var(--muted);
     background: none; border: 1px solid var(--border); border-radius: var(--r);
   }
-  .clearx:hover { color: #fff; border-color: var(--border-strong); }
+  .clearx:hover { color: var(--hi); border-color: var(--border-strong); }
   .pad-status { color: var(--faint); font-size: 0.85rem; }
   .csep { color: var(--border-strong); flex: none; }
   .cand { font-family: var(--han); font-size: 1.7rem; padding: 0.1rem 0.5rem; background: none; border: none; color: var(--text); border-radius: var(--r); flex: none; }

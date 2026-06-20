@@ -8,7 +8,7 @@
   import Pad from './lib/Pad.svelte'
   import Ocr from './lib/Ocr.svelte'
   import { Search, X, Brush, Camera, Bookmark, Clock, Share2, Trash2, ArrowRight, Download, Settings, SquarePlus, ExternalLink } from '@lucide/svelte'
-  import { settings, setRomanization } from './lib/settings.svelte'
+  import { settings, setRomanization, setTheme, applyTheme, THEMES } from './lib/settings.svelte'
   import { onMount } from 'svelte'
   import { getSaved, getHistory, isSaved, toggleSaved, recordHistory, clearHistory, type SavedItem } from './lib/store'
 
@@ -374,6 +374,7 @@
   }
 
   onMount(() => {
+    applyTheme() // restore the chosen design mockup on <html data-theme>
     window.addEventListener('popstate', onPop)
     // deep link: a shared #/entry/<id> (id may be negative for a char-only page) reopens that entry
     const m = location.hash.match(/^#\/entry\/(-?\d+)$/)
@@ -687,6 +688,17 @@
           {#if canInstall}<button class="installbtn" onclick={installApp} aria-label="install as web app"><Download size={14} /> Install</button>{/if}
         </p>
         <p class="intropos"><span class="intropron">/ko.gu/</span> <span class="introtag">noun</span></p>
+
+        <!-- design mockups: tap to preview a look (saved). "iOS" is the component-library style. -->
+        <div class="themepick">
+          <span class="themelabel">design</span>
+          <div class="themebtns">
+            {#each THEMES as t}
+              <button class="themebtn" class:on={settings.theme === t.id} onclick={() => setTheme(t.id)} aria-pressed={settings.theme === t.id}>{t.label}</button>
+            {/each}
+          </div>
+        </div>
+
         <p class="introgloss">A dictionary for the living Han script. One character or word is shown across <b>中文</b> (Mandarin), <b>粵語</b> (Cantonese), and <b>日本語</b> (Japanese) at once, so you can see how the same writing is read and used in each, and how the reforms pulled the forms apart.</p>
 
         <h2 class="abh">On each page</h2>
@@ -753,7 +765,7 @@
     margin: 0 auto;
   }
   /* leave room so the bottom-docked handwriting panel doesn't cover the last results */
-  .wrap.drawing { padding-bottom: 48vh; }
+  .wrap.drawing { padding-bottom: 60vh; }
   .wrap {
     padding: calc(1.4rem + env(safe-area-inset-top)) calc(1.35rem + env(safe-area-inset-right))
       calc(4rem + env(safe-area-inset-bottom)) calc(1.35rem + env(safe-area-inset-left));
@@ -817,7 +829,7 @@
     position: absolute; right: 2.5rem; top: 50%; transform: translateY(-50%);
     border: none; background: transparent; color: var(--muted); padding: 0.4rem; border-radius: var(--r); display: inline-flex;
   }
-  .clearbtn:hover { color: #fff; background: var(--surface-2); }
+  .clearbtn:hover { color: var(--hi); background: var(--surface-2); }
   /* item 1: search button to the right of the X */
   .searchbtn {
     position: absolute; right: 0.4rem; top: 50%; transform: translateY(-50%);
@@ -830,7 +842,7 @@
     max-width: 4rem; overflow: hidden;
     transition: max-width 0.22s ease, opacity 0.18s ease, margin 0.22s ease, padding 0.22s ease;
   }
-  .rowbtn:hover { color: #fff; border-color: var(--border-strong); background: var(--surface-2); }
+  .rowbtn:hover { color: var(--hi); border-color: var(--border-strong); background: var(--surface-2); }
   .rowbtn.on { color: var(--bg); background: var(--text); border-color: var(--text); }
   /* item 1: focusing the field expands it to full width; draw + camera slide away */
   .searchrow.focused .rowbtn { max-width: 0; margin-left: 0; padding: 0; opacity: 0; border-width: 0; pointer-events: none; }
@@ -844,13 +856,16 @@
     position: fixed;
     left: 0; right: 0; bottom: 0;
     z-index: 40;
+    display: flex;
+    flex-direction: column;
+    height: min(56vh, 460px); /* a real dock height so the writing canvas (flex:1) fills it */
     background: var(--surface-2);
     border-top: 1px solid var(--border-strong);
     box-shadow: 0 -8px 24px -12px rgba(0, 0, 0, 0.6);
     padding: 0.6rem calc(0.8rem + env(safe-area-inset-right)) calc(0.6rem + env(safe-area-inset-bottom)) calc(0.8rem + env(safe-area-inset-left));
   }
-  /* center the pad content to the app's column width inside the full-width dock */
-  .drawpanel :global(.pad) { max-width: 680px; margin: 0 auto; }
+  /* the pad fills the dock; centered to the app's column width */
+  .drawpanel :global(.pad) { flex: 1; min-height: 0; width: 100%; max-width: 680px; margin: 0 auto; }
 
   /* inline photo selection, shown directly under the search row */
   .inputpanel { margin-bottom: 1.2rem; }
@@ -893,6 +908,13 @@
   .intropos { margin: 0.35rem 0 1rem; display: flex; align-items: baseline; gap: 0.6rem; }
   .intropron { font-family: var(--mono); font-size: 0.95rem; color: var(--faint); }
   .introtag { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); }
+  /* design-mockup switcher */
+  .themepick { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin: 1rem 0 1.4rem; }
+  .themelabel { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--faint); }
+  .themebtns { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; }
+  .themebtn { font-family: var(--mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-pill); padding: 0.32rem 0.7rem; }
+  .themebtn:hover { color: var(--text); border-color: var(--border-strong); }
+  .themebtn.on { background: var(--text); color: var(--bg); border-color: var(--text); }
   /* install-as-web-app button (item 2) */
   /* install button sits to the right of the 古古 Kogu wordmark (item 139) */
   .installbtn { display: inline-flex; align-items: center; gap: 0.35rem; margin-left: auto; align-self: center; font-family: var(--mono); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text); background: none; border: 1px solid var(--border-strong); border-radius: var(--r); padding: 0.3rem 0.6rem; }
@@ -905,7 +927,7 @@
   .inststeps li { display: flex; align-items: center; gap: 0.6rem; font-size: 0.95rem; line-height: 1.4; color: var(--muted); }
   .inststeps b { color: var(--text); font-weight: 500; }
   .instep { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; flex: none; border: 1px solid var(--border-strong); border-radius: var(--r); color: var(--text); }
-  .instpoint { position: fixed; left: 50%; bottom: calc(0.5rem + env(safe-area-inset-bottom)); transform: translateX(-50%); color: #fff; font-size: 2rem; animation: instbob 1.1s ease-in-out infinite; }
+  .instpoint { position: fixed; left: 50%; bottom: calc(0.5rem + env(safe-area-inset-bottom)); transform: translateX(-50%); color: var(--hi); font-size: 2rem; animation: instbob 1.1s ease-in-out infinite; }
   @keyframes instbob { 0%,100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, 0.4rem); } }
   @media (prefers-reduced-motion: reduce) { .instpoint { animation: none; } }
   .introgloss { font-family: var(--sans); font-size: 1.05rem; line-height: 1.7; color: var(--text); margin: 0 0 1.6rem; }
