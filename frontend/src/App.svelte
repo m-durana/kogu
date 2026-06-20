@@ -6,7 +6,7 @@
   import EntryRow from './lib/EntryRow.svelte'
   import Pad from './lib/Pad.svelte'
   import Ocr from './lib/Ocr.svelte'
-  import { Search, X, Brush, Camera, Bookmark, Clock, Share2, Trash2, ArrowRight, Download, Settings, SquarePlus } from '@lucide/svelte'
+  import { Search, X, Brush, Camera, Bookmark, Clock, Share2, Trash2, ArrowRight, Download, Settings, SquarePlus, ExternalLink } from '@lucide/svelte'
   import { settings, setRomanization } from './lib/settings.svelte'
   import { onMount } from 'svelte'
   import { getSaved, getHistory, isSaved, toggleSaved, recordHistory, clearHistory, type SavedItem } from './lib/store'
@@ -138,6 +138,21 @@
     const g = cleanGloss(c.gloss_en ?? '')
     return g.split(';')[0].trim()
   }
+  // a LITERAL character-by-character gloss chain for a query with no whole-word match (中宇大度 →
+  // "central · roof · big · degree"). Honest hint only — a mechanical join of each character's first
+  // meaning, clearly labelled "literally", never a fabricated whole-phrase definition.
+  const compositeMeaning = $derived(
+    breakdown.length >= 2
+      ? breakdown.map((c) => charMeaning(c).split(',')[0].trim()).filter(Boolean).join(' · ')
+      : '',
+  )
+  // open an external web lookup for the typed term — works whether or not Kogu has the word, useful for
+  // names, neologisms, and partial phrases. User-initiated only (a button), opens in a new tab.
+  function lookUp() {
+    const t = q.trim()
+    if (!t) return
+    window.open(`https://www.google.com/search?q=${encodeURIComponent(t)}`, '_blank', 'noopener')
+  }
   function charLangs(c: CharInfo): string[] {
     const tags: string[] = []
     const has = (k: string) => c.readings.some((r) => r.kind === k && r.value)
@@ -235,10 +250,11 @@
           .finally(() => {
             if (q.trim() === term) enriching = false
           })
-      } else if (!results.length && HAN.test(term) && !isWildcard) {
-        // No word matched, but the query is Han - break it into its component characters so the
-        // user still gets per-character meanings and can drill into any one. Char-only entries live
-        // at /entry/{-codepoint}. Fetch the unique Han chars in parallel; ignore any that fail.
+      } else if (HAN.test(term) && !isWildcard) {
+        // The query is Han but did NOT resolve to a single word card (no match, or only a PARTIAL
+        // word was caught inside it, e.g. 中宇大度 → only 大度). Break the WHOLE query into its
+        // component characters so every character is shown with its meaning no matter what, beneath
+        // any partial-word results. Char-only entries live at /entry/{-codepoint}; fetch in parallel.
         const chars = [...new Set([...term].filter((c) => HAN.test(c)))]
         // mark a breakdown as pending so we don't flash "nothing found" before it arrives (item 3)
         breaking = true
@@ -598,14 +614,18 @@
         />
       {/each}
     </ul>
-    {#if searched && !loading && results.length === 0}
+    {#if searched && !loading}
       {#if breakdown.length}
+        <!-- every character of the query, with its meaning — shown whether the query matched no word
+             OR only a partial word (so all characters always appear). When a partial word WAS caught,
+             this is a "characters" breakdown under the results; otherwise it's the no-word page. -->
         <section class="noword" data-testid="breakdown">
           <div class="nw-head">
             <span class="nw-q">{q}</span>
             <!-- 古古 ("old old") is the app's name, not a real word: same page, just a cheekier note -->
-            <span class="nw-note">{isEasterEgg ? 'no known word, but a super cool app 😎' : 'no known word'}</span>
+            <span class="nw-note">{results.length ? 'characters' : isEasterEgg ? 'no known word, but a super cool app 😎' : 'no known word'}</span>
           </div>
+          {#if compositeMeaning}<p class="nw-lit"><span class="nw-lit-k">literally</span> {compositeMeaning}</p>{/if}
           <ul class="nw-list">
             {#each breakdown as c (c.ch)}
               <li>
@@ -621,12 +641,14 @@
               </li>
             {/each}
           </ul>
+          <button class="lookup" onclick={lookUp}><ExternalLink size={14} /> look “{q}” up on the web</button>
         </section>
-      {:else if breaking}
+      {:else if breaking && results.length === 0}
         <!-- breakdown still loading: hold a placeholder rather than flash "nothing found" (item 3) -->
         {@render pageSkel()}
-      {:else}
+      {:else if results.length === 0}
         <div class="empty">nothing for “{q}”.</div>
+        <button class="lookup" onclick={lookUp}><ExternalLink size={14} /> look “{q}” up on the web</button>
       {/if}
     {/if}
     {#if !searched && !q && panel === 'none'}
@@ -819,6 +841,12 @@
   .nw-tags { display: flex; gap: 0.3rem; }
   .nw-tag { font-family: var(--han); font-size: 0.72rem; color: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 0 0.25rem; }
   .nw-mean { color: var(--muted); font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* a literal character-by-character gloss chain for an unmatched query (honest hint, not a definition) */
+  .nw-lit { margin: 0 0 0.9rem; font-size: 0.95rem; line-height: 1.5; color: var(--muted); }
+  .nw-lit-k { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); margin-right: 0.5rem; }
+  /* "look it up on the web" — an external lookup that works regardless of whether Kogu has the word */
+  .lookup { display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 1rem; font-family: var(--mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: var(--r); padding: 0.4rem 0.7rem; }
+  .lookup:hover { color: var(--text); border-color: var(--border-strong); background: var(--surface); }
   /* About page (item 2): what Kogu is, what each section means, and the data sources */
   .about { padding: 1rem 0.2rem 2rem; max-width: 40ch; }
   .introhw { margin: 0; display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
