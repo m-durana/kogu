@@ -27,8 +27,6 @@
   let toast = $state('') // transient "Link copied" confirmation for share
   // inline input panel below the search row: 'draw' shows the pad; 'photo' shows the picked image
   let panel = $state<'none' | 'draw' | 'photo'>('none')
-  // draw pad expanded to (near) full screen via the expand button on the candidate strip
-  let padFull = $state(false)
   let ocrFile = $state<File | null>(null)
   let fileInput: HTMLInputElement
   let loading = $state(false)
@@ -544,16 +542,8 @@
 
   {#if panel === 'draw'}
     <!-- inline draw pad, directly under the search row (top of the page) so it sits where you type -->
-    <div class="drawpanel" class:full={padFull}>
-      <Pad
-        onpick={fromDraw}
-        onclose={() => {
-          panel = 'none'
-          padFull = false
-        }}
-        expanded={padFull}
-        ontoggle={() => (padFull = !padFull)}
-      />
+    <div class="drawpanel">
+      <Pad onpick={fromDraw} onclose={() => (panel = 'none')} />
     </div>
   {/if}
 
@@ -691,8 +681,9 @@
         <button class="lookup" onclick={() => (lookupOpen = true)}><ExternalLink size={14} /> look “{q}” up</button>
       {/if}
     {/if}
-    {#if !searched && !q && panel === 'none'}
-      <!-- About page: what Kogu is, what each section of an entry means, and where the data comes from -->
+    {#if !searched && !q}
+      <!-- About page: what Kogu is, what each section of an entry means, and where the data comes from.
+           Stays visible when the draw/photo panel is open (the pad is docked at the bottom over it). -->
       <div class="about">
         <p class="introhw">
           <span class="intromark">古古</span> <span class="introword">Kogu</span>
@@ -869,9 +860,7 @@
     border-top: 1px solid var(--border-strong);
     box-shadow: 0 -8px 24px -12px rgba(0, 0, 0, 0.6);
     padding: 0.6rem calc(0.8rem + env(safe-area-inset-right)) calc(0.6rem + env(safe-area-inset-bottom)) calc(0.8rem + env(safe-area-inset-left));
-    transition: height 0.22s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  .drawpanel.full { height: min(88dvh, 820px); }
   /* the pad fills the dock full width (edge to edge), not a centered box */
   .drawpanel :global(.pad) { flex: 1; min-height: 0; width: 100%; }
 

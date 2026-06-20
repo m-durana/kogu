@@ -1,21 +1,14 @@
 <script lang="ts">
   import { recognize, type Stroke } from './api'
-  import { X, Maximize2, Minimize2 } from '@lucide/svelte'
+  import { X, ChevronDown, ChevronUp } from '@lucide/svelte'
 
   // onpick(ch, replace): replace=true swaps the provisional character already in the field for `ch`
   // (Google-Translate style — the top guess auto-enters, picking another replaces it).
-  // expanded/ontoggle: drive the dock's full-screen expansion from the strip's expand button.
-  let {
-    onpick,
-    onclose,
-    expanded = false,
-    ontoggle,
-  }: {
-    onpick: (ch: string, replace: boolean) => void
-    onclose?: () => void
-    expanded?: boolean
-    ontoggle?: () => void
-  } = $props()
+  let { onpick, onclose }: { onpick: (ch: string, replace: boolean) => void; onclose?: () => void } = $props()
+
+  // The candidate strip is normally a single side-scrolling row. The expand button grows it into a
+  // wrapped grid that fills the dock, covering the canvas; retracting returns to the side-scroll row.
+  let optionsOpen = $state(false)
 
   let canvas: HTMLCanvasElement
   let drawing = $state(false)
@@ -143,6 +136,7 @@
     current = []
     candidates = []
     error = ''
+    optionsOpen = false
     ctx().clearRect(0, 0, cw, ch)
   }
   // tapping a candidate commits THIS character (replacing the auto-entered provisional) and advances:
@@ -184,30 +178,34 @@
   }
 </script>
 
-<div class="pad">
-  <!-- candidate strip on top (Google Translate / PLECO docked style); plain text split by bars -->
-  <div class="candstrip" data-testid="pad-candidates">
-    {#if candidates.length}
-      {#each candidates as ch, i}
-        {#if i}<span class="csep" aria-hidden="true">│</span>{/if}
-        <button class="cand" onclick={() => pick(ch)}>{ch}</button>
-      {/each}
-    {:else if busy}
-      <span class="pad-status">recognising…</span>
-    {:else if error}
-      <span class="pad-status">{error}</span>
-    {:else}
-      <span class="pad-status">draw a character below</span>
-    {/if}
+<div class="pad" class:optionsopen={optionsOpen}>
+  <!-- candidate strip on top (Google Translate / PLECO docked style). The candidates side-scroll in
+       their own track; the expand + clear buttons are pinned to the right and never scroll away. -->
+  <div class="candstrip">
+    <div class="candscroll" data-testid="pad-candidates">
+      {#if candidates.length}
+        {#each candidates as ch, i}
+          {#if i}<span class="csep" aria-hidden="true">│</span>{/if}
+          <button class="cand" onclick={() => pick(ch)}>{ch}</button>
+        {/each}
+      {:else if busy}
+        <span class="pad-status">recognising…</span>
+      {:else if error}
+        <span class="pad-status">{error}</span>
+      {:else}
+        <span class="pad-status">draw a character below</span>
+      {/if}
+    </div>
     <div class="padbtns">
       <button
         class="padbtn"
-        onclick={() => ontoggle?.()}
+        onclick={() => (optionsOpen = !optionsOpen)}
+        disabled={!candidates.length}
         data-testid="pad-expand"
-        aria-label={expanded ? 'shrink draw pad' : 'expand draw pad'}
-        aria-pressed={expanded}
+        aria-label={optionsOpen ? 'collapse options' : 'expand options'}
+        aria-pressed={optionsOpen}
       >
-        {#if expanded}<Minimize2 size={17} />{:else}<Maximize2 size={17} />{/if}
+        {#if optionsOpen}<ChevronUp size={18} />{:else}<ChevronDown size={18} />{/if}
       </button>
       <button class="padbtn" onclick={clear} data-testid="pad-clear" aria-label="clear / close"><X size={18} /></button>
     </div>
@@ -238,9 +236,22 @@
     -webkit-user-select: none;
     -webkit-touch-callout: none;
   }
-  /* candidate strip: a single horizontally-scrollable row at the top of the dock */
-  .candstrip { display: flex; align-items: center; gap: 0.15rem; overflow-x: auto; scrollbar-width: none; min-height: 2.4rem; flex: none; }
-  .candstrip::-webkit-scrollbar { display: none; }
+  /* candidate strip: a side-scrolling track of candidates + a pinned button group on the right */
+  .candstrip { display: flex; align-items: center; gap: 0.3rem; flex: none; }
+  /* the candidates scroll horizontally inside their own track; the buttons sit outside it (pinned) */
+  .candscroll { display: flex; align-items: center; gap: 0.15rem; overflow-x: auto; scrollbar-width: none; min-height: 2.4rem; flex: 1; min-width: 0; }
+  .candscroll::-webkit-scrollbar { display: none; }
+  /* expanded: the options grow DOWN into a wrapped grid that fills the dock and covers the canvas */
+  .pad.optionsopen .candstrip { flex: 1; min-height: 0; align-items: flex-start; }
+  .pad.optionsopen .candscroll {
+    flex-wrap: wrap; align-content: flex-start;
+    overflow-x: hidden; overflow-y: auto;
+    min-height: 0; height: 100%; padding-top: 0.15rem;
+  }
+  .pad.optionsopen .canvas-wrap { display: none; }
+  /* in the wrapped grid the inline separators don't make sense; give candidates room to be tapped */
+  .pad.optionsopen .csep { display: none; }
+  .pad.optionsopen .cand { padding: 0.35rem 0.7rem; }
   /* the wrapper grows to fill remaining dock height; the canvas fills the wrapper */
   .canvas-wrap { position: relative; display: flex; flex: 1; min-height: 160px; }
   canvas {
