@@ -18,7 +18,27 @@ import zipfile
 from ..db import SOURCES_DIR
 
 CEDICT = SOURCES_DIR / "cedict.txt.gz"
-JMDICT_ZIP = SOURCES_DIR / "jmdict-eng-common.json.zip"
+JMDICT_ZIP = SOURCES_DIR / "jmdict-eng.json.zip"
+
+# JMdict orthography tags we must not surface as a normal headword/variant: sK/sk = search-only
+# (must not display), rK = rarely-used, iK = irregular, oK = outdated kanji.
+_JM_SEARCH_ONLY = {"sK", "sk"}
+_JM_NONSTD = {"rK", "iK", "oK", "sK", "sk"}
+
+
+def _jm_tags(x: dict) -> set[str]:
+    return set(x.get("tags", []))
+
+
+def _jm_headword(kanji: list, kana: list) -> str:
+    """Pick a sensible displayed headword: the first standard kanji (not rare/irregular/search-only);
+    else, for usually-kana words, the first displayable kana; else any available form."""
+    for k in kanji:
+        if not (_jm_tags(k) & _JM_NONSTD):
+            return k["text"]
+    if kana:
+        return kana[0]["text"]
+    return kanji[0]["text"] if kanji else ""
 
 _CEDICT_RE = re.compile(r"^(\S+)\s+(\S+)\s+\[([^\]]*)\]\s+/(.*)/\s*$")
 _TONE = re.compile(r"[1-5]")
@@ -120,16 +140,21 @@ def _ingest_jmdict(conn, ids: _Ids) -> int:
         kana = w.get("kana", [])
         if not kana:
             continue
-        headword = kanji[0]["text"] if kanji else kana[0]["text"]
-        primary_reading = kana[0]["text"]
+        # drop search-only (sK/sk) forms entirely: they are meant to be matched, never displayed as
+        # a headword or orthographic variant. rK/iK/oK are kept (real, if rare) but never the headword.
+        disp_kanji = [k for k in kanji if not (_jm_tags(k) & _JM_SEARCH_ONLY)]
+        disp_kana = [kn for kn in kana if not (_jm_tags(kn) & _JM_SEARCH_ONLY)] or kana[:1]
+        headword = _jm_headword(disp_kanji, disp_kana)
+        primary_reading = disp_kana[0]["text"]
+        has_kanji_head = any(k["text"] == headword for k in disp_kanji)
         common = any(k.get("common") for k in kanji) or any(k.get("common") for k in kana)
         lid = ids.next_lex()
-        lexemes.append((lid, "ja", headword, primary_reading, 1.0 if common else 0.3, "jmdict-common"))
-        for i, k in enumerate(kanji):
-            forms.append((ids.next_sf(), lid, k["text"], "shinjitai", "JP", 1 if i == 0 else 0))
-        for i, kn in enumerate(kana):
-            # kana form is primary only for kana-only words (no kanji), first kana
-            is_primary = 1 if (not kanji and i == 0) else 0
+        lexemes.append((lid, "ja", headword, primary_reading, 1.0 if common else 0.3, "jmdict"))
+        for k in disp_kanji:
+            forms.append((ids.next_sf(), lid, k["text"], "shinjitai", "JP", 1 if k["text"] == headword else 0))
+        for kn in disp_kana:
+            # kana form is primary only when the word's headword is itself kana (usually-kana words)
+            is_primary = 1 if (not has_kanji_head and kn["text"] == headword) else 0
             forms.append((ids.next_sf(), lid, kn["text"], "kana", "JP", is_primary))
             readings.append((lid, "kana", kn["text"]))
         order = 0

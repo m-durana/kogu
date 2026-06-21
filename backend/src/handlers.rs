@@ -184,7 +184,7 @@ fn build_entry(
                         (SELECT b.freq FROM lexeme b WHERE b.headword=?3 AND b.variety=m.variety) AS bare \
                  FROM sense_concept sc1 \
                  JOIN sense s1 ON s1.id=sc1.sense_id AND s1.lexeme_id=?1 AND s1.sense_order=0 \
-                 JOIN concept co ON co.id=sc1.concept_id AND co.member_count<=40 \
+                 JOIN concept co ON co.id=sc1.concept_id AND co.member_count<=400 \
                  JOIN sense_concept sc2 ON sc2.concept_id=sc1.concept_id \
                  JOIN sense s2 ON s2.id=sc2.sense_id AND s2.sense_order=0 \
                  JOIN lexeme m ON m.id=s2.lexeme_id AND m.variety IN ('zh','yue') AND m.freq IS NOT NULL \
@@ -383,7 +383,7 @@ fn char_compounds(
     let sql = format!(
         "SELECT l.id FROM form_char fc JOIN lexeme l ON l.id = fc.lexeme_id \
          WHERE fc.cp IN ({ph}) AND l.id <> ? GROUP BY l.id \
-         ORDER BY l.freq IS NULL, l.freq DESC, MIN(fc.flen) ASC, l.id ASC LIMIT 60"
+         ORDER BY l.freq IS NULL, l.freq DESC, MIN(fc.flen) ASC, l.id ASC LIMIT 300"
     );
     let mut params: Vec<rusqlite::types::Value> =
         cps.iter().map(|c| rusqlite::types::Value::from(*c)).collect();
@@ -476,13 +476,17 @@ fn build_char_entry(conn: &rusqlite::Connection, cp: u32) -> rusqlite::Result<Op
 /// both, but zh lists "day" first; 本 = root/book in both). It only ever turns a candidate
 /// false-friend INTO a cognate, so it cannot mislabel a real false friend (手紙, 娘, 会社 share none).
 fn shares_concept(conn: &rusqlite::Connection, a: i64, b: i64) -> rusqlite::Result<bool> {
+    // Only STRONG links (confidence >= 1.0 = exact gloss-pivot / OMW) may rescue a cognate; the looser
+    // content-word "gloss-token" links (confidence 0.5) widen the Related list but must NOT flip a real
+    // false friend into a cognate on an incidental shared word.
     let n: i64 = conn.query_row(
         "SELECT EXISTS( \
            SELECT 1 FROM sense_concept x \
            JOIN sense_concept y ON y.concept_id = x.concept_id \
            JOIN sense sx ON sx.id = x.sense_id \
            JOIN sense sy ON sy.id = y.sense_id \
-           WHERE sx.lexeme_id = ?1 AND sy.lexeme_id = ?2)",
+           WHERE sx.lexeme_id = ?1 AND sy.lexeme_id = ?2 \
+             AND x.confidence >= 1.0 AND y.confidence >= 1.0)",
         [a, b],
         |r| r.get(0),
     )?;
@@ -1084,8 +1088,10 @@ fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<C
     }
     let rad_gloss = is_radical_gloss(gloss_en.as_deref());
     // a genuine bound radical flags as a radical in its gloss AND appears in almost no words of its
-    // own (彳: 3, 辵: 0). 山/木/水 carry a radical gloss too but head thousands of words → not radicals.
-    let is_radical = rad_gloss && used_count <= 3;
+    // own (彳: 4, 辵: 0). 山/木/水 carry a radical gloss too but head thousands of words → not radicals.
+    // The small threshold has slack for the full JMdict (彳 rose from 3 to 4 standalone uses); real
+    // characters sit in the hundreds-to-thousands, far above it.
+    let is_radical = rad_gloss && used_count <= 8;
     let radical_number = if rad_gloss {
         radical_gloss_number(gloss_en.as_deref()).or(radical)
     } else {
@@ -1396,10 +1402,15 @@ fn best_word_gloss(
     form: &str,
 ) -> rusqlite::Result<Option<(i64, String)>> {
     use rusqlite::OptionalExtension;
+    // Prefer the Chinese reading for the literal breakdown (it's a character-by-character Chinese
+    // gloss chain), then Cantonese, then Japanese; within a variety, most frequent first. Without the
+    // variety order a common Japanese homograph would supply the gloss (火車 → ja "burning cart" rather
+    // than zh "train").
     let id: Option<i64> = conn
         .query_row(
             "SELECT l.id FROM surface_form sf JOIN lexeme l ON l.id = sf.lexeme_id \
-             WHERE sf.form = ?1 ORDER BY l.freq DESC, l.id ASC LIMIT 1",
+             WHERE sf.form = ?1 \
+             ORDER BY CASE l.variety WHEN 'zh' THEN 0 WHEN 'yue' THEN 1 ELSE 2 END, l.freq DESC, l.id ASC LIMIT 1",
             [form],
             |r| r.get(0),
         )

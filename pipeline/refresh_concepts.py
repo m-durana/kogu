@@ -20,10 +20,10 @@ DB = os.environ.get("KOGU_DB", "data/kogu.sqlite")
 
 def main():
     conn = sqlite3.connect(DB)
-    # drop ONLY the gloss-pivot concepts (leave any omw/wiktionary/curated concepts intact)
-    gp = [r[0] for r in conn.execute("SELECT id FROM concept WHERE source='gloss-pivot'")]
-    conn.execute("DELETE FROM sense_concept WHERE concept_id IN (SELECT id FROM concept WHERE source='gloss-pivot')")
-    conn.execute("DELETE FROM concept WHERE source='gloss-pivot'")
+    # drop the gloss-derived concepts (pivot + content-word token); leave omw/wiktionary/curated intact
+    gp = [r[0] for r in conn.execute("SELECT id FROM concept WHERE source IN ('gloss-pivot','gloss-token')")]
+    conn.execute("DELETE FROM sense_concept WHERE concept_id IN (SELECT id FROM concept WHERE source IN ('gloss-pivot','gloss-token'))")
+    conn.execute("DELETE FROM concept WHERE source IN ('gloss-pivot','gloss-token')")
     # concepts.ingest assigns ids starting at 1; if other concept sources already hold low ids this
     # would collide, so shift its allocation above the current max by temporarily seeding. Simplest:
     # ingest into a clean table only when gloss-pivot was the sole source (the current state).

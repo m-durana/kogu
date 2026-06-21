@@ -33,8 +33,9 @@ class Source:
     resolver: object = field(default=None)
 
 
-def _gh_latest_asset(repo: str, prefix: str, suffix: str = ".json.zip"):
-    """Resolve the latest GitHub release asset named ``{prefix}{version}{suffix}``."""
+def _gh_latest_asset(repo: str, prefix: str, suffix: str = ".json.zip", exclude: str | None = None):
+    """Resolve the latest GitHub release asset named ``{prefix}{version}{suffix}``. ``exclude`` skips
+    assets whose name contains that substring (e.g. prefix 'jmdict-eng-' must not pick 'jmdict-eng-common-')."""
     def resolve() -> str:
         api = f"https://api.github.com/repos/{repo}/releases/latest"
         req = urllib.request.Request(api, headers={"User-Agent": UA,
@@ -42,7 +43,8 @@ def _gh_latest_asset(repo: str, prefix: str, suffix: str = ".json.zip"):
         with urllib.request.urlopen(req, timeout=30) as r:
             data = json.load(r)
         for asset in data.get("assets", []):
-            if asset["name"].startswith(prefix) and asset["name"].endswith(suffix):
+            name = asset["name"]
+            if name.startswith(prefix) and name.endswith(suffix) and (exclude is None or exclude not in name):
                 return asset["browser_download_url"]
         raise RuntimeError(f"no asset {prefix}*{suffix} in {repo} latest release")
     return resolve
@@ -62,8 +64,9 @@ SOURCES: dict[str, Source] = {
         "cedict", "https://www.mdbg.net/chinese/export/cedict/cedict_1_0_ts_utf-8_mdbg.txt.gz",
         "cedict.txt.gz", "CC-BY-SA"),
     "jmdict": Source(
-        "jmdict", "", "jmdict-eng-common.json.zip", "CC-BY-SA / EDRDG",
-        resolver=_gh_latest_asset("scriptin/jmdict-simplified", "jmdict-eng-common-")),
+        # full English JMdict (NOT the common-only subset, which dropped ~90% of Japanese entries)
+        "jmdict", "", "jmdict-eng.json.zip", "CC-BY-SA / EDRDG",
+        resolver=_gh_latest_asset("scriptin/jmdict-simplified", "jmdict-eng-", exclude="common")),
     "kanjidic": Source(
         "kanjidic", "", "kanjidic2-en.json.zip", "CC-BY-SA / EDRDG",
         resolver=_gh_latest_asset("scriptin/jmdict-simplified", "kanjidic2-en-")),

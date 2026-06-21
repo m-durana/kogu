@@ -28,11 +28,11 @@
     "url": "https://raw.githubusercontent.com/cjkvi/cjkvi-ids/master/ids.txt"
   },
   "jmdict": {
-    "filename": "jmdict-eng-common.json.zip",
+    "filename": "jmdict-eng.json.zip",
     "licence": "CC-BY-SA / EDRDG",
-    "sha256": "7615799df3c7421dbab45e8a5c4ba60828cf4fb5975dc2e432d9417bdfade3fd",
-    "size": 1426424,
-    "url": "https://github.com/scriptin/jmdict-simplified/releases/download/3.6.2%2B20260608153333/jmdict-eng-common-3.6.2%2B20260608153333.json.zip"
+    "sha256": "68c5bb4405680ff17860efd06e601b1a1d7971f8d2645914a0a28bed1387144e",
+    "size": 11405960,
+    "url": "https://github.com/scriptin/jmdict-simplified/releases/download/3.6.2%2B20260615170427/jmdict-eng-3.6.2%2B20260615170427.json.zip"
   },
   "kanjidic": {
     "filename": "kanjidic2-en.json.zip",

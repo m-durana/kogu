@@ -435,8 +435,13 @@ fn wildcard_search(
             results: vec![],
         });
     }
-    let mut stmt =
-        conn.prepare("SELECT DISTINCT lexeme_id FROM surface_form WHERE form GLOB ?1 LIMIT 800")?;
+    // match on the lexeme's PRIMARY/headword form only, so the displayed headword actually fits the
+    // pattern. (Without this, a usually-kana word with a rare kanji variant ending in 場 — 鱈場/タラバ —
+    // leaks into a "*場" search as タラバ.)
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT sf.lexeme_id FROM surface_form sf JOIN lexeme l ON l.id = sf.lexeme_id \
+         WHERE sf.form GLOB ?1 AND (sf.is_primary = 1 OR sf.form = l.headword) LIMIT 800",
+    )?;
     let ids: Vec<i64> = stmt.query_map([&pat], |r| r.get(0))?.collect::<Result<_, _>>()?;
     let mut hits: Vec<Hit> = Vec::new();
     for id in ids {
@@ -542,6 +547,11 @@ pub fn search(
             // phonetic (toneless fold) - tolerant of tone marks / numbers / no tone.
             // pinyin_plain and jyutping_plain share the same fold (letters only), so one key
             // matches Mandarin *and* Cantonese readings (jyutping was the original's blind spot).
+            // whether the query is itself a valid reading (pinyin/jyutping/romaji syllable). If so, a
+            // single-word English "gloss" that merely echoes that romanization (JMdict's 仞 "ren
+            // (ancient measure…)") is a transliteration label, not a meaning, and must not outrank the
+            // phonetic result (人). Tracked here, applied in the english pass below.
+            let mut reading_hit = false;
             let plain = pinyin_plain(q);
             if !plain.is_empty() {
                 let mut stmt = conn.prepare(
@@ -550,6 +560,9 @@ pub fn search(
                 )?;
                 let ids: Vec<i64> =
                     stmt.query_map([&plain], |r| r.get(0))?.collect::<Result<_, _>>()?;
+                if !ids.is_empty() {
+                    reading_hit = true;
+                }
                 for id in ids {
                     bump(&mut cand, id, "reading", W_READING);
                 }
@@ -562,6 +575,9 @@ pub fn search(
                 )?;
                 let ids: Vec<i64> =
                     stmt.query_map([&rp], |r| r.get(0))?.collect::<Result<_, _>>()?;
+                if !ids.is_empty() {
+                    reading_hit = true;
+                }
                 for id in ids {
                     bump(&mut cand, id, "reading", W_READING);
                 }
@@ -570,6 +586,7 @@ pub fn search(
             // so "airport" surfaces 空港/機場 above words where airport is merely incidental.
             if let Some(fq) = fts_query(q) {
                 let ql = q.trim().to_lowercase();
+                let ql_single = !ql.contains(' ');
                 let mut stmt = conn.prepare(
                     "SELECT s.lexeme_id, s.gloss_en, s.sense_order, bm25(gloss_fts) AS r \
                      FROM gloss_fts JOIN sense s ON s.id = gloss_fts.rowid \
@@ -582,11 +599,16 @@ pub fn search(
                     let (id, gloss, sense_order) = row?;
                     let quality = gloss_match_quality(&gloss, &ql);
                     let mut w = english_weight(quality);
-                    // the query IS this word's PRIMARY meaning (exact match on sense 0) — a stronger
-                    // signal than an exact match on a word's minor sense, and big enough to beat the
-                    // (unreliable) frequency tiebreak: 山 leads "mountain", not 深山 ("deep mountains"),
-                    // whose bare "mountain" sense is secondary.
-                    if quality >= 1.0 && sense_order == 0 {
+                    if quality >= 1.0 && reading_hit && ql_single {
+                        // the query is a romanization and this "gloss" is just that single token (a
+                        // transliteration label, e.g. 仞 "ren (a measure)") — demote so the phonetic
+                        // reading (人) leads, not the transliterated obscure word.
+                        w = english_weight(0.5);
+                    } else if quality >= 1.0 && sense_order == 0 {
+                        // the query IS this word's PRIMARY meaning (exact match on sense 0) — a stronger
+                        // signal than an exact match on a word's minor sense, and big enough to beat the
+                        // (unreliable) frequency tiebreak: 山 leads "mountain", not 深山 ("deep mountains"),
+                        // whose bare "mountain" sense is secondary.
                         w += FREQ_BONUS;
                     }
                     bump(&mut cand, id, "english", w);
@@ -620,7 +642,20 @@ pub fn search(
     // assemble + rank
     let mut hits: Vec<Hit> = Vec::with_capacity(cand.len());
     for (id, (mt, w)) in cand {
-        if let Some(hit) = build_hit(conn, id, mt, w, pref_script)? {
+        if let Some(mut hit) = build_hit(conn, id, mt, w, pref_script)? {
+            // Script-priority for a Han-character query: a bare glyph is written identically across
+            // languages, so the homographs tie on match-weight and frequency alone would decide. Since
+            // the full JMdict added many common Japanese single-kanji that outscore their Chinese twin
+            // on the Japanese corpus, nudge the Chinese (then Cantonese) reading ahead by a small
+            // amount — enough to win a near-tie (洗→xǐ, 火車→huǒchē "train"), never enough to override a
+            // genuinely better match. No effect on kana/Latin queries.
+            if kind == Kind::Han {
+                hit.score += match hit.variety.as_str() {
+                    "zh" => 0.06,
+                    "yue" => 0.04,
+                    _ => 0.0,
+                };
+            }
             hits.push(hit);
         }
     }
