@@ -91,7 +91,7 @@ PAGES.list = `
     <li class="row">
       <span class="row-gly">${g}</span>
       <span class="row-mid">
-        <span class="row-l1">${alt?`<span class="row-alt">${alt}</span>`:''}<span class="row-rd">${rd}</span><span class="row-tag">${tag}</span>${rg?`<span class="row-rg">${rg}</span>`:''}</span>
+        <span class="row-l1">${alt?`<span class="row-alt">${alt}</span>`:''}<span class="row-rd">${rd}</span><span class="row-tags"><span class="row-var">${tag}</span>${rg?`<span class="row-sc">${rg}</span>`:''}</span></span>
         <span class="row-gloss">${gl}</span>
       </span>
       <span class="row-chev">${CHEV}</span>
@@ -119,8 +119,8 @@ PAGES.word = `
   <nav class="tabs"><button class="tab on">Characters</button><button class="tab">Related</button><button class="tab">Origin</button></nav>
   <section class="tabpane">
     <ul class="rows tight">
-      <li class="row"><span class="row-gly">電</span><span class="row-mid"><span class="row-l1"><span class="row-rd">diàn</span><span class="row-tag">中</span><span class="row-tag">粵</span><span class="row-tag">日</span></span><span class="row-gloss">electricity; electric</span></span><span class="row-chev">${CHEV}</span></li>
-      <li class="row"><span class="row-gly">話</span><span class="row-mid"><span class="row-l1"><span class="row-rd">huà</span><span class="row-tag">中</span><span class="row-tag">粵</span><span class="row-tag">日</span></span><span class="row-gloss">speech; talk; spoken language</span></span><span class="row-chev">${CHEV}</span></li>
+      <li class="row"><span class="row-gly">電</span><span class="row-mid"><span class="row-l1"><span class="row-rd">diàn</span><span class="row-tags"><span class="row-var">中</span><span class="row-var">粵</span><span class="row-var">日</span></span></span><span class="row-gloss">electricity; electric</span></span><span class="row-chev">${CHEV}</span></li>
+      <li class="row"><span class="row-gly">話</span><span class="row-mid"><span class="row-l1"><span class="row-rd">huà</span><span class="row-tags"><span class="row-var">中</span><span class="row-var">粵</span><span class="row-var">日</span></span></span><span class="row-gloss">speech; talk; spoken language</span></span><span class="row-chev">${CHEV}</span></li>
     </ul>
   </section>
 </main>
@@ -136,13 +136,13 @@ PAGES.partial = `
 <div class="search"><span class="search-ic">${SEARCH}</span><span class="search-q">中宇大廈</span></div>
 <main class="body">
   <div class="meta">1 result</div>
-  <ul class="rows"><li class="row"><span class="row-gly">大廈</span><span class="row-mid"><span class="row-l1"><span class="row-alt">大厦</span><span class="row-rd">dà shà</span><span class="row-tag">中</span><span class="row-rg">简</span></span><span class="row-gloss">used in names of grand buildings (帝國大廈 = Empire State Building)</span></span><span class="row-chev">${CHEV}</span></li></ul>
+  <ul class="rows"><li class="row"><span class="row-gly">大廈</span><span class="row-mid"><span class="row-l1"><span class="row-alt">大厦</span><span class="row-rd">dà shà</span><span class="row-tags"><span class="row-var">中</span><span class="row-sc">简</span></span></span><span class="row-gloss">used in names of grand buildings (帝國大廈 = Empire State Building)</span></span><span class="row-chev">${CHEV}</span></li></ul>
   <section class="noword">
     <div class="nw-head"><span class="nw-q">中宇大廈</span><span class="nw-note">characters</span></div>
     <p class="nw-lit"><span class="nw-litk">literally</span> central · house · big · big&nbsp;building</p>
     <ul class="rows">
       ${[['中','央','central'],['宇','','house; eaves; universe'],['大','','big; great; vast'],['廈','厦','big building; mansion']].map(([g,alt,gl])=>`
-      <li class="row"><span class="row-gly">${g}</span><span class="row-mid"><span class="row-l1"><span class="row-tag">中</span><span class="row-tag">粵</span><span class="row-tag">日</span></span><span class="row-gloss">${gl}</span></span></li>`).join('')}
+      <li class="row"><span class="row-gly">${g}</span><span class="row-mid"><span class="row-l1"><span class="row-tags"><span class="row-var">中</span><span class="row-var">粵</span><span class="row-var">日</span></span></span><span class="row-gloss">${gl}</span></span></li>`).join('')}
     </ul>
     <button class="lookup">${EXT} look “中宇大廈” up</button>
   </section>
@@ -208,22 +208,24 @@ body{background:var(--page,#000);font-family:var(--ui);color:var(--txt)}
 .row-l1{display:flex;align-items:baseline;gap:.4rem;flex-wrap:wrap}
 .row-alt{font-family:var(--han);color:var(--txt3);font-size:.95rem}
 .row-rd{font-family:var(--mono);font-size:.78rem;color:var(--txt2)}
-.row-tag{font-family:var(--han);font-size:.7rem;color:var(--txt3);border:1px solid var(--line2);border-radius:4px;padding:.02rem .25rem}
-.row-rg{font-family:var(--mono);font-size:.58rem;color:var(--txt3);border:1px solid var(--line2);border-radius:3px;padding:.02rem .25rem}
+.row-tags{display:inline-flex;align-items:baseline;gap:.35rem}
+.row-rd + .row-tags{border-left:1px solid var(--line2);padding-left:.5rem;margin-left:.2rem}
+.row-var{font-family:var(--han);font-size:.82rem;color:var(--txt3);line-height:1}
+.row-sc{font-family:var(--mono);font-size:.62rem;color:var(--txt3)}
 .row-gloss{display:block;color:var(--txt2);font-size:.92rem;margin-top:.1rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .row-chev{margin-left:auto;color:var(--txt3);font-size:15px;display:flex}
 /* headword */
 .head{display:flex;align-items:flex-start;gap:.7rem;padding:1rem 0 .2rem}
 .head-gly{font-family:var(--han);font-weight:500;font-size:clamp(3.2rem,17vw,4.6rem);line-height:.95;color:var(--txt)}
 .head-swap{background:none;border:none;color:var(--txt3);font-size:18px;display:flex;margin-top:.6rem;cursor:pointer}
-.loanbadge{display:inline-block;font-family:var(--mono);font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;color:var(--txt2);border:1px solid var(--line2);border-radius:5px;padding:.2rem .5rem;margin:.2rem 0 .4rem}
+.loanbadge{display:block;font-family:var(--mono);font-size:.6rem;letter-spacing:.08em;text-transform:uppercase;color:var(--txt3);margin:.3rem 0 .2rem}
 /* per-language reading + sense rows — THE quiet-readings hierarchy */
 .dl{padding:.7rem 0;border-top:1px solid var(--line)}
 .head + .dl,.loanbadge + .dl{border-top:none}
 .dlh{display:flex;align-items:baseline;flex-wrap:wrap;gap:.4rem .5rem}
 .dl-tag,.dl-tag2{font-family:var(--han);font-size:1.08rem;color:var(--txt);font-weight:500}
 .dl-tag2{margin-left:.5rem}
-.dl-formtag{font-family:var(--mono);font-size:.6rem;color:var(--txt3);border:1px solid var(--line2);border-radius:3px;padding:.02rem .25rem}
+.dl-formtag{font-family:var(--mono);font-size:.62rem;color:var(--txt3)}
 .dl-form{font-family:var(--han);font-size:1.05rem;color:var(--txt2)}
 .dl-rd{font-family:var(--mono);font-size:.85rem;color:var(--txt2)}
 .dl-spk{background:none;border:none;color:var(--txt3);font-size:14px;display:inline-flex;padding:0 .1rem;cursor:pointer}
@@ -233,7 +235,9 @@ body{background:var(--page,#000);font-family:var(--ui);color:var(--txt)}
 .kdot{color:var(--txt3);margin:0 .15rem}
 .dl-more{background:none;border:1px solid var(--line2);color:var(--txt2);border-radius:5px;font-family:var(--mono);font-size:.72rem;padding:0 .35rem;margin-left:.2rem;cursor:pointer}
 .ltagline{margin:.3rem 0 0}
-.ltag{font-family:var(--mono);font-size:.56rem;letter-spacing:.06em;text-transform:uppercase;color:var(--txt3);border:1px solid var(--line2);border-radius:4px;padding:.06rem .35rem}
+.ltag{font-family:var(--mono);font-size:.58rem;letter-spacing:.08em;text-transform:uppercase;color:var(--txt3)}
+.dlh .ltag{margin-left:.2rem}
+.dlh .ltag::before{content:"· "}
 .senses{margin:.45rem 0 0}
 .senses li{display:flex;gap:.7rem;color:var(--txt);font-size:1rem;line-height:1.45;padding:.08rem 0}
 .sn{font-family:var(--mono);font-size:.78rem;color:var(--txt3);padding-top:.15rem}
