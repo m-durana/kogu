@@ -23,14 +23,16 @@
   const LANG = (c: string) => ({ zh: 'Chinese', ja: 'Japanese', yue: 'Cantonese', en: 'English', ko: 'Korean', vi: 'Vietnamese' } as Record<string, string>)[c] ?? c
 
   async function runTranslate() {
-    if (trDone) return
-    trDone = true
+    if (trDone || trLoading) return // mark done only on SUCCESS, so a failed fetch can be retried
     trLoading = true
+    trError = false
     try {
       const r = await fetch(`/api/mt?q=${encodeURIComponent(term)}&sl=${encodeURIComponent(sl)}`)
       const d = await r.json()
-      if (d.translation) translation = d.translation
-      else trError = true
+      if (d.translation) {
+        translation = d.translation
+        trDone = true
+      } else trError = true
     } catch {
       trError = true
     } finally {
@@ -54,9 +56,10 @@
   }
 
   async function runDefine() {
-    if (wkDone) return
-    wkDone = true
+    if (wkDone || wkLoading) return // mark done only on SUCCESS, so a failed lookup can be retried
     wkLoading = true
+    wkError = false
+    wkPerChar = false
     try {
       let senses = await wiktFor(term)
       if (!senses.length && [...term].length > 1) {
@@ -67,8 +70,10 @@
           if (s.length) senses.push({ pos: ch, lang: '', defs: s.flatMap((x) => x.defs).slice(0, 2) })
         }
       }
-      if (senses.length) wkSenses = senses
-      else wkError = true
+      if (senses.length) {
+        wkSenses = senses
+        wkDone = true
+      } else wkError = true
     } catch {
       wkError = true
     } finally {

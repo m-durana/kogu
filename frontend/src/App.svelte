@@ -488,6 +488,9 @@
   // tapping the logo resets everything to a clean home
   function goHome() {
     panel = 'none'
+    lookupOpen = false
+    showInstallHelp = false
+    showSettings = false
     ocrFile = null
     entry = null
     enrichEntry = null
