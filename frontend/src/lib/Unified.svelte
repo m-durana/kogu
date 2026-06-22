@@ -1131,7 +1131,7 @@
      (margins don't collapse inside the flex column, so keep both sides small + let h3's top margin lead) */
   .def { margin-bottom: 1rem; }
   .glyphrow { display: flex; align-items: flex-start; gap: 0.5rem; }
-  .glyph { font-family: var(--han); font-size: clamp(3rem, 16vw, 4.5rem); line-height: 1; margin: 0 0 1.1rem; font-weight: 500; }
+  .glyph { font-family: var(--han); font-size: clamp(2.8rem, 14vw, 3.8rem); line-height: 1; margin: 0 0 1.1rem; font-weight: 500; }
   /* tiny two-arrow switch to the TC/SC counterpart, top-right of the header glyph (item 161) */
   /* just the two-arrow icon, no box around it (item) */
   .scswitch { display: inline-flex; align-items: center; justify-content: center; margin-top: 0.45rem; padding: 0.15rem; color: var(--muted); background: none; border: none; }
@@ -1166,7 +1166,7 @@
   .senses li { position: relative; padding-left: 1.5rem; font-size: 1rem; line-height: 1.45; color: var(--text); counter-increment: s; }
   /* always number senses — including a single-sense definition — so "1." reads as a definition, not
      as loose text bumping against the language tag. */
-  .senses li::before { content: counter(s) '.'; position: absolute; left: 0; top: 0.05rem; font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
+  .senses li::before { content: counter(s) '.'; position: absolute; left: 0; top: 0.05rem; font-family: var(--mono); font-size: 0.78rem; color: var(--faint); }
   .more { background: none; border: none; padding: 0.3rem 0; margin-top: 0.1rem; font-family: var(--mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
   /* tappable cross-reference target inside a gloss ("variant of 著" → jump to 著) */
   .xref { font-family: var(--han); color: var(--text); background: none; border: none; padding: 0; font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }

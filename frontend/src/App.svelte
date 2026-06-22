@@ -815,22 +815,22 @@
   .brandbtn { display: inline-flex; align-items: baseline; gap: 0.45rem; background: none; border: none; padding: 0; }
   .brandbtn:hover { background: none; }
   /* item 6: larger top-left wordmark */
-  .brand .mark { font-family: var(--han); font-weight: 500; font-size: 2rem; letter-spacing: -0.04em; color: var(--text); }
-  .brand .word { font-family: var(--sans); font-size: 1.35rem; letter-spacing: 0.06em; color: var(--muted); }
+  .brand .mark { font-family: var(--han); font-weight: 500; font-size: 1.6rem; letter-spacing: -0.04em; color: var(--text); }
+  .brand .word { font-family: var(--sans); font-size: 1.15rem; letter-spacing: 0.04em; color: var(--muted); }
 
   .searchrow { display: flex; align-items: stretch; margin-bottom: 0.7rem; }
   .field { position: relative; flex: 1; min-width: 0; display: flex; }
   .searchicon { position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; display: flex; }
   .field input {
-    width: 100%; padding: 0.72rem 4.4rem 0.72rem 2.4rem; font-size: 1.05rem; line-height: 1.15;
+    width: 100%; padding: 0.72rem 4.4rem 0.72rem 2.4rem; font-size: 1.02rem; line-height: 1.15;
     font-family: var(--sans); color: var(--text); -webkit-appearance: none; appearance: none;
-    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+    background: var(--surface); border: 1px solid transparent; border-radius: 16px;
   }
   .field input::-webkit-search-decoration, .field input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
-  .field input:focus { border-color: var(--border-strong); background: var(--surface-2); }
+  .field input:focus { border-color: transparent; background: var(--surface-2); }
   .field input::placeholder { color: var(--faint); }
   /* loading indicator: a thin sliding bar along the bottom of the field while a search is in flight */
-  .loadbar { position: absolute; left: 1px; right: 1px; bottom: 1px; height: 2px; overflow: hidden; border-radius: 0 0 var(--r-lg) var(--r-lg); pointer-events: none; }
+  .loadbar { position: absolute; left: 1px; right: 1px; bottom: 1px; height: 2px; overflow: hidden; border-radius: 0 0 16px 16px; pointer-events: none; }
   .loadbar::after { content: ''; position: absolute; inset: 0; width: 40%; background: var(--muted); border-radius: 2px; animation: loadslide 0.9s ease-in-out infinite; }
   @keyframes loadslide { 0% { transform: translateX(-110%); } 100% { transform: translateX(360%); } }
   @media (prefers-reduced-motion: reduce) { .loadbar::after { animation-duration: 2s; } }

@@ -57,7 +57,7 @@
   .hw .alt { color: var(--faint); font-size: 0.95rem; margin-left: 0.35rem; }
   .meta-col { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }
   .line1 { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
-  .rd { font-family: var(--mono); color: var(--text); font-size: 0.8rem; }
+  .rd { font-family: var(--mono); color: var(--muted); font-size: 0.78rem; }
   /* Hybrid: variety/region as plain labels after a hairline divider, not bordered chips */
   .tags { display: inline-flex; align-items: baseline; gap: 0.35rem; }
   .rd + .tags { border-left: 1px solid var(--border-strong); padding-left: 0.5rem; margin-left: 0.05rem; }
