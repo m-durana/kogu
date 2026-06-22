@@ -358,11 +358,27 @@
     unified = false
     searched = false
     try {
-      entry = await fetchEntry(id)
+      const e = await fetchEntry(id)
+      // Stale-id guard: a saved/history id stored before a DB rebuild can now resolve to a DIFFERENT
+      // word (lexeme ids are reassigned on rebuild). If the loaded entry doesn't contain the form the
+      // user actually tapped, re-resolve by searching that form instead of showing the wrong entry.
+      if (anchor && e.headword !== anchor && !e.forms?.some((f) => f.form === anchor)) {
+        loading = false
+        await doSearch(anchor)
+        return
+      }
+      entry = e
       enriching = false
       view = 'entry'
       if (mode === 'push') history.pushState({ view: 'entry', id }, '', `#/entry/${id}`)
     } catch {
+      // a saved/history id that no longer exists (reassigned/removed by a DB rebuild): if we know the
+      // tapped form, recover by searching it instead of showing an error.
+      if (anchor) {
+        loading = false
+        await doSearch(anchor)
+        return
+      }
       err = 'could not load entry'
     } finally {
       loading = false
@@ -605,7 +621,7 @@
     <section class="listview">
       <h2 class="lvh">Saved</h2>
       {#if savedList.length}
-        <ul class="results">{#each savedList as it (it.id)}{@render savedRow(it)}{/each}</ul>
+        <ul class="results">{#each savedList as it (it.id + '|' + it.headword)}{@render savedRow(it)}{/each}</ul>
       {:else}
         <p class="empty">No saved words yet. Open a word and tap save.</p>
       {/if}
@@ -614,7 +630,7 @@
     <section class="listview">
       <h2 class="lvh">History {#if historyList.length}<button class="lvclear" onclick={wipeHistory} aria-label="clear history"><Trash2 size={14} /> clear</button>{/if}</h2>
       {#if historyList.length}
-        <ul class="results">{#each historyList as it (it.id)}{@render savedRow(it)}{/each}</ul>
+        <ul class="results">{#each historyList as it (it.id + '|' + it.headword)}{@render savedRow(it)}{/each}</ul>
       {:else}
         <p class="empty">No history yet.</p>
       {/if}
@@ -821,16 +837,17 @@
   .searchrow { display: flex; align-items: stretch; margin-bottom: 0.7rem; }
   .field { position: relative; flex: 1; min-width: 0; display: flex; }
   .searchicon { position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; display: flex; }
+  /* matches the Hybrid mockup's .search: 0.6rem block padding + 18px radius (same height→same roundness) */
   .field input {
-    width: 100%; padding: 0.72rem 4.4rem 0.72rem 2.4rem; font-size: 1.02rem; line-height: 1.15;
+    width: 100%; padding: 0.6rem 4.4rem 0.6rem 2.4rem; font-size: 1.02rem; line-height: 1.15;
     font-family: var(--sans); color: var(--text); -webkit-appearance: none; appearance: none;
-    background: var(--surface); border: 1px solid transparent; border-radius: 16px;
+    background: var(--surface); border: 1px solid transparent; border-radius: 18px;
   }
   .field input::-webkit-search-decoration, .field input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
   .field input:focus { border-color: transparent; background: var(--surface-2); }
   .field input::placeholder { color: var(--faint); }
   /* loading indicator: a thin sliding bar along the bottom of the field while a search is in flight */
-  .loadbar { position: absolute; left: 1px; right: 1px; bottom: 1px; height: 2px; overflow: hidden; border-radius: 0 0 16px 16px; pointer-events: none; }
+  .loadbar { position: absolute; left: 1px; right: 1px; bottom: 1px; height: 2px; overflow: hidden; border-radius: 0 0 18px 18px; pointer-events: none; }
   .loadbar::after { content: ''; position: absolute; inset: 0; width: 40%; background: var(--muted); border-radius: 2px; animation: loadslide 0.9s ease-in-out infinite; }
   @keyframes loadslide { 0% { transform: translateX(-110%); } 100% { transform: translateX(360%); } }
   @media (prefers-reduced-motion: reduce) { .loadbar::after { animation-duration: 2s; } }
