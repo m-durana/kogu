@@ -272,9 +272,6 @@
     // character, so this row is a co-equal block-A definition (it just displays Japan's glyph).
     const sf = headChar.script_forms
     const jaForm = sf?.branches.find((b) => b.script.includes('shinjitai'))?.form ?? sf?.orthodox ?? head
-    // only skip if Japan already has a real lexeme for the SAME glyph (don't be fooled by a
-    // different-glyph ja cognate in same_form, e.g. 電's 稲妻 - that's a bridge, not 電 itself).
-    if (rows.some((r) => r.kind === 'form' && r.variety === 'ja' && r.form === jaForm)) return null
     return {
       id: -(head.codePointAt(0) ?? 1) - 1,
       variety: 'ja',
@@ -291,7 +288,15 @@
       synthetic: true,
     }
   })
-  const allRows = $derived(synthJaRow ? [...rows, synthJaRow] : rows)
+  // When we synthesize the rich Kanjidic Japanese row for a single kanji (full on/kun + romaji), drop
+  // the plain same-glyph ja WORD rows: the full JMdict now has a 機(き)/機(はた) lexeme for almost every
+  // kanji, and showing those bare rows hid the consolidated romaji reading list. Different-glyph ja
+  // words (cognates/compounds) are unaffected.
+  const allRows = $derived.by<Row[]>(() => {
+    if (!synthJaRow) return rows
+    const dup = rows.filter((r) => !(r.variety === 'ja' && r.kind === 'form' && r.form === synthJaRow.form))
+    return [...dup, synthJaRow]
+  })
 
   // === The co-equal cross-language model ===
   // There is NO single privileged headword. A Han glyph that is a real word in two or more languages
