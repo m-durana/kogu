@@ -24,8 +24,8 @@
   <div class="bar" id="designbar">
     <span class="ttl">Kogu — mobile UI directions · 4 real pages × 6 designs (3 iOS · 3 Android)</span>
     <span class="grp">iOS</span>
-    <button data-d="ios-grouped" class="on">Grouped</button>
-    <button data-d="ios-plain">Plain</button>
+    <button data-d="ios-grouped" class="on">Editorial</button>
+    <button data-d="ios-plain">Clean</button>
     <button data-d="ios-sheet">Sheet</button>
     <span class="grp" style="margin-left:.4rem">Android</span>
     <button data-d="mat">Material</button>
@@ -42,7 +42,7 @@
   <iframe id="frame" title="design preview"></iframe>
 
 <script>
-const FONTS = '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Serif+SC:wght@300;400;500;600&family=Noto+Serif+JP:wght@400;500&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">'
+const FONTS = '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Space+Mono:wght@400;700&family=Noto+Serif+SC:wght@300;400;500;600&family=Noto+Serif+JP:wght@400;500&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">'
 const RESET = '*{box-sizing:border-box;margin:0}body{min-height:100dvh;-webkit-font-smoothing:antialiased}svg{vertical-align:-0.14em}ol,ul{list-style:none;padding:0}@keyframes up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}'
 
 // monochrome Lucide-style icons (1em → scale with font-size)
@@ -201,7 +201,7 @@ body{background:var(--page,#000);font-family:var(--ui);color:var(--txt)}
 .search-q{color:var(--txt)}
 .meta{font-family:var(--mono);font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;color:var(--txt3);padding:.9rem 0 .5rem}
 /* entry rows (lists) — glyph hero, reading quiet */
-.rows .row{display:flex;align-items:center;gap:.85rem;padding:.7rem 0;border-top:1px solid var(--line)}
+.rows .row{display:flex;align-items:center;gap:.85rem;padding:var(--dpad,.7rem) 0;border-top:1px solid var(--line)}
 .rows .row:first-child{border-top:none}
 .row-gly{font-family:var(--han);font-size:1.7rem;color:var(--txt);min-width:2.1em;line-height:1.1}
 .row-mid{flex:1;min-width:0}
@@ -215,12 +215,12 @@ body{background:var(--page,#000);font-family:var(--ui);color:var(--txt)}
 .row-gloss{display:block;color:var(--txt2);font-size:.92rem;margin-top:.1rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .row-chev{margin-left:auto;color:var(--txt3);font-size:15px;display:flex}
 /* headword */
-.head{display:flex;align-items:flex-start;gap:.7rem;padding:1rem 0 .2rem}
-.head-gly{font-family:var(--han);font-weight:500;font-size:clamp(3.2rem,17vw,4.6rem);line-height:.95;color:var(--txt)}
+.head{display:flex;align-items:flex-start;gap:.7rem;padding:var(--head-pad,1rem) 0 .2rem}
+.head-gly{font-family:var(--gly-font,var(--han));font-weight:var(--gly-w,500);font-size:var(--gly,clamp(3.2rem,17vw,4.6rem));line-height:.95;color:var(--txt);letter-spacing:var(--gly-ls,0)}
 .head-swap{background:none;border:none;color:var(--txt3);font-size:18px;display:flex;margin-top:.6rem;cursor:pointer}
 .loanbadge{display:block;font-family:var(--mono);font-size:.6rem;letter-spacing:.08em;text-transform:uppercase;color:var(--txt3);margin:.3rem 0 .2rem}
 /* per-language reading + sense rows — THE quiet-readings hierarchy */
-.dl{padding:.7rem 0;border-top:1px solid var(--line)}
+.dl{padding:var(--dpad,.7rem) 0;border-top:1px solid var(--line)}
 .head + .dl,.loanbadge + .dl{border-top:none}
 .dlh{display:flex;align-items:baseline;flex-wrap:wrap;gap:.4rem .5rem}
 .dl-tag,.dl-tag2{font-family:var(--han);font-size:1.08rem;color:var(--txt);font-weight:500}
@@ -239,7 +239,7 @@ body{background:var(--page,#000);font-family:var(--ui);color:var(--txt)}
 .dlh .ltag{margin-left:.2rem}
 .dlh .ltag::before{content:"· "}
 .senses{margin:.45rem 0 0}
-.senses li{display:flex;gap:.7rem;color:var(--txt);font-size:1rem;line-height:1.45;padding:.08rem 0}
+.senses li{display:flex;gap:.7rem;color:var(--txt);font-family:var(--body-font,var(--ui));font-size:var(--sense,1rem);line-height:var(--lh,1.45);padding:.08rem 0}
 .sn{font-family:var(--mono);font-size:.78rem;color:var(--txt3);padding-top:.15rem}
 /* tabs (themed) */
 .tabs{display:flex;margin:1.4rem 0 .2rem}
@@ -254,13 +254,13 @@ body{background:var(--page,#000);font-family:var(--ui);color:var(--txt)}
 .sf{font-family:var(--han);font-size:1.9rem;color:var(--txt);display:inline-flex;align-items:baseline;gap:.3rem}
 .sf-t{font-family:var(--mono);font-size:.6rem;color:var(--txt3);align-self:flex-start}
 .sf-arr{color:var(--txt3);font-size:17px;display:flex}
-.note2{color:var(--txt2);font-size:.9rem;line-height:1.5;margin:.5rem 0 0}
+.note2{color:var(--txt2);font-family:var(--body-font,var(--ui));font-size:.9rem;line-height:var(--lh,1.5);margin:.5rem 0 0}
 .made{display:flex;gap:1.4rem;margin:.3rem 0 0;flex-wrap:wrap}
 .part{display:flex;align-items:center;gap:.6rem}
 .part-gly{font-family:var(--han);font-size:1.9rem;color:var(--txt)}
 .part-role{font-size:.85rem;color:var(--txt2)}
 .part-role b{font-family:var(--mono);font-size:.58rem;letter-spacing:.06em;text-transform:uppercase;color:var(--txt3);font-weight:400;display:block}
-.phonowhy{color:var(--txt2);font-size:.9rem;line-height:1.55;margin:.9rem 0 0}
+.phonowhy{color:var(--txt2);font-family:var(--body-font,var(--ui));font-size:.9rem;line-height:var(--lh,1.55);margin:.9rem 0 0}
 .mc{font-family:var(--mono);font-weight:700;color:var(--txt);font-size:.85rem}
 .strokes{font-family:var(--mono);font-size:.78rem;color:var(--txt3);margin:1rem 0 0}
 .nw-head{display:flex;align-items:baseline;gap:.7rem;margin:1.3rem 0 .1rem}
@@ -272,50 +272,56 @@ body{background:var(--page,#000);font-family:var(--ui);color:var(--txt)}
 .lookup{display:inline-flex;align-items:center;gap:.4rem;margin:1rem 0 0;font-family:var(--mono);font-size:.68rem;color:var(--txt2);background:none;border:1px solid var(--line2);border-radius:var(--field-r);padding:.45rem .8rem;cursor:pointer}
 .fab{display:none}
 
-/* defaults (overridden per theme) */
+/* defaults (overridden per theme); type/density/shape are now per-design levers, not just color */
 body{--ui:system-ui,sans-serif;--han:"Noto Serif SC",serif;--mono:"Space Mono",ui-monospace,monospace;
+  --body-font:var(--ui);--gly-font:var(--han);--gly:clamp(3.2rem,17vw,4.6rem);--gly-w:500;--gly-ls:0;
+  --sense:1rem;--lh:1.45;--dpad:.7rem;--head-pad:1rem;
   --page:#000;--bg:#000;--txt:#fff;--txt2:rgba(235,235,245,.6);--txt3:rgba(235,235,245,.32);
   --line:#222;--line2:#3a3a40;--topbg:transparent;--topblur:none;--topline:none;--field:#1c1c1e;--field-r:18px;--mx:1rem}
 
-/* ════ iOS shared ════ */
+/* ════ iOS shared (SF) ════ */
 body.ios-grouped,body.ios-plain,body.ios-sheet{--ui:-apple-system,"SF Pro Display","SF Pro Text",system-ui,sans-serif;
   --page:#000;--bg:#000;--txt:#fff;--txt2:rgba(235,235,245,.6);--txt3:rgba(235,235,245,.3);--line2:#3a3a3c}
 
-/* iOS A — Grouped inset cards + segmented control */
-body.ios-grouped{--line:transparent;--topbg:rgba(0,0,0,.55);--topblur:blur(20px) saturate(1.6)}
-body.ios-grouped .dl,body.ios-grouped .tabpane{background:#1C1C1E;border-radius:12px;padding-left:.9rem;padding-right:.9rem;border:none}
-body.ios-grouped .dl{margin-top:.5rem}
-body.ios-grouped .head{padding-left:.1rem}
-body.ios-grouped .tabs{background:rgba(118,118,128,.24);border-radius:9px;padding:2px;margin-top:1.5rem}
-body.ios-grouped .tab{border-radius:7px;font-size:.8rem;padding:.4rem .2rem}
-body.ios-grouped .tab.on{background:#636366;box-shadow:0 1px 3px rgba(0,0,0,.35)}
-body.ios-grouped .rows .row{border-top-color:rgba(84,84,88,.55)}
-body.ios-grouped .tabpane{margin-top:.5rem}
+/* iOS · EDITORIAL — serif-forward, airy, flat with hairlines, big light display glyph (magazine) */
+body.ios-grouped{--body-font:"Newsreader",Georgia,serif;--gly:clamp(4rem,21vw,5.8rem);--gly-w:400;--gly-ls:.01em;
+  --sense:1.2rem;--lh:1.6;--dpad:1rem;--head-pad:1.3rem;--line:rgba(84,84,88,.4);
+  --topbg:rgba(0,0,0,.5);--topblur:blur(20px) saturate(1.6)}
+body.ios-grouped .brand-l{font-style:italic}
+body.ios-grouped .tabs{gap:1.7rem;border-bottom:.5px solid rgba(84,84,88,.5)}
+body.ios-grouped .tab{flex:0 0 auto;font-family:"Newsreader",serif;font-size:1.1rem;padding:.7rem 0}
+body.ios-grouped .tab.on{font-weight:500}
+body.ios-grouped .tab.on::after{content:"";position:absolute;left:0;right:0;bottom:-.5px;height:1.5px;background:#fff}
+body.ios-grouped .seclab{font-family:"Newsreader",serif;font-style:italic;text-transform:none;letter-spacing:.01em;font-size:1rem;color:var(--txt2)}
+body.ios-grouped .note2,body.ios-grouped .phonowhy{font-size:1.02rem}
 
-/* iOS B — Plain large-title, translucent bar, underline tabs */
-body.ios-plain{--line:rgba(84,84,88,.5);--topbg:rgba(18,18,20,.55);--topblur:blur(22px) saturate(1.6);--topline:.5px solid rgba(84,84,88,.6)}
-body.ios-plain .head-gly{font-size:clamp(2.6rem,13vw,3.6rem)}
+/* iOS · CLEAN — canonical SF system look, flat edge-to-edge, underline tabs, medium density */
+body.ios-plain{--line:rgba(84,84,88,.5);--topbg:rgba(18,18,20,.55);--topblur:blur(22px) saturate(1.6);
+  --topline:.5px solid rgba(84,84,88,.6);--gly:clamp(2.8rem,14vw,3.8rem)}
 body.ios-plain .tabs{border-bottom:.5px solid rgba(84,84,88,.6);gap:1.4rem}
 body.ios-plain .tab{flex:0 0 auto;padding:.75rem 0;font-size:.95rem}
 body.ios-plain .tab.on{font-weight:600}
 body.ios-plain .tab.on::after{content:"";position:absolute;left:0;right:0;bottom:-.5px;height:2px;background:#fff;border-radius:2px}
 
-/* iOS C — Sheet: grabber, rounded top, pill tabs, carousels */
-body.ios-sheet{--page:#000;--bg:#1C1C1E;--line:rgba(84,84,88,.5);--field:#2C2C2E}
-body.ios-sheet .app{border-radius:14px 14px 0 0;margin-top:1.6rem;min-height:96dvh}
+/* iOS · SHEET — spatial card world: grabber, glyph tile, rounded cards everywhere, pill tabs */
+body.ios-sheet{--page:#000;--bg:#1C1C1E;--line:rgba(84,84,88,.45);--field:#2C2C2E;--dpad:.85rem;--sense:1.05rem;--gly:clamp(3rem,15vw,4rem)}
+body.ios-sheet .app{border-radius:16px 16px 0 0;margin-top:1.6rem;min-height:96dvh}
 body.ios-sheet .grab{display:block;width:36px;height:5px;border-radius:3px;background:rgba(235,235,245,.3);margin:.5rem auto 0}
 body.ios-sheet .top{background:transparent;border:none}
-body.ios-sheet .tabs{background:rgba(118,118,128,.24);border-radius:18px;padding:2px;margin-top:1.5rem}
-body.ios-sheet .tab{border-radius:16px;font-size:.82rem;padding:.45rem .2rem}
+body.ios-sheet .head-gly{background:#2C2C2E;border-radius:20px;padding:.45rem 1rem;line-height:1}
+body.ios-sheet .dl{background:#2C2C2E;border-radius:16px;padding:.85rem 1rem;margin-top:.6rem;border:none}
+body.ios-sheet .tabpane{background:#2C2C2E;border-radius:16px;padding:1rem 1.1rem;margin-top:.7rem}
+body.ios-sheet .tabs{background:rgba(118,118,128,.24);border-radius:18px;padding:2px;margin-top:1.3rem}
+body.ios-sheet .tab{border-radius:16px;font-size:.82rem;padding:.5rem .2rem}
 body.ios-sheet .tab.on{background:#636366;box-shadow:0 1px 3px rgba(0,0,0,.35)}
-body.ios-sheet .dl,body.ios-sheet .tabpane .rows .row{border-top-color:rgba(84,84,88,.5)}
+body.ios-sheet .tabpane .rows .row{border-top-color:rgba(84,84,88,.4)}
 
-/* ════ Android shared (Material 3 neutral tonal, white = primary) ════ */
+/* ════ Android shared (Roboto, Material 3 neutral tonal, white = primary) ════ */
 body.mat,body.exp,body.cmp{--ui:"Roboto",system-ui,sans-serif;
   --page:#0F0F0F;--bg:#0F0F0F;--txt:#E3E3E3;--txt2:#C7C7C7;--txt3:#8e8e8e;--line:#262626;--line2:#484848;--field:#1E1E1E;--field-r:28px}
 
-/* Android A — Material 3 standard: app bar, underline tabs, FAB */
-body.mat{--topbg:#1E1E1E}
+/* Android · MATERIAL — standard M3: app bar, underline indicator, medium density, FAB */
+body.mat{--topbg:#1E1E1E;--gly:clamp(3rem,15vw,4rem)}
 body.mat .top{gap:.2rem}
 body.mat .brand{flex:1}
 body.mat .tabs{border-bottom:1px solid #484848}
@@ -324,36 +330,33 @@ body.mat .tab.on::after{content:"";position:absolute;left:18%;right:18%;bottom:0
 body.mat .ib-ios{display:none}body.mat .ib-and{display:inline-flex}
 body.mat .fab{display:flex;position:fixed;right:max(16px,calc(50% - 260px + 16px));bottom:16px;width:56px;height:56px;border-radius:16px;background:#484848;color:#E3E3E3;align-items:center;justify-content:center;font-size:22px;border:none;box-shadow:0 4px 10px rgba(0,0,0,.5)}
 
-/* Android B — Material 3 Expressive: rounded app bar, segmented buttons, card-list, extended FAB */
-body.exp{--bg:#0F0F0F;--line:transparent}
-body.exp .top{background:#1E1E1E;border-radius:0 0 28px 28px;padding-bottom:1.1rem}
+/* Android · EXPRESSIVE — bold/maximalist: oversized type, extra-large 28px shapes, heavy, generous */
+body.exp{--bg:#0F0F0F;--line:transparent;--gly:clamp(4rem,20vw,5.6rem);--gly-w:500;
+  --sense:1.15rem;--lh:1.6;--dpad:1rem;--head-pad:1.2rem}
+body.exp .top{background:#1E1E1E;border-radius:0 0 28px 28px;padding-bottom:1.2rem}
+body.exp .brand{font-size:1.6rem}
 body.exp .ib-ios{display:none}body.exp .ib-and{display:inline-flex}
-body.exp .head-gly{font-size:clamp(3rem,16vw,4.2rem)}
-body.exp .dl{background:#1A1A1A;border-radius:20px;padding:.9rem 1.1rem;margin-top:.7rem;border:none}
-body.exp .tabs{border:1px solid #919191;border-radius:50px;overflow:hidden;margin-top:1.5rem}
-body.exp .tab{border-right:1px solid #484848;font-weight:500;font-size:.8rem}
+body.exp .dl{background:#1A1A1A;border-radius:28px;padding:1.1rem 1.3rem;margin-top:.8rem;border:none}
+body.exp .tabs{border:1px solid #919191;border-radius:50px;overflow:hidden;margin-top:1.6rem}
+body.exp .tab{border-right:1px solid #484848;font-weight:600;font-size:.82rem;padding:.7rem .2rem}
 body.exp .tab:last-child{border-right:none}
 body.exp .tab.on{background:#484848}
-body.exp .tabpane{background:#1A1A1A;border-radius:24px;padding:1.1rem 1.2rem;margin-top:.8rem}
+body.exp .tabpane{background:#1A1A1A;border-radius:28px;padding:1.3rem 1.4rem;margin-top:.9rem}
 body.exp .tabpane .rows .row{border-top-color:#2a2a2a}
 body.exp .fab{display:inline-flex;position:fixed;right:max(16px,calc(50% - 260px + 16px));bottom:16px;align-items:center;gap:.5rem;height:56px;padding:0 1.3rem;border-radius:16px;background:#E3E3E3;color:#000;font-size:.85rem;font-weight:600;border:none;box-shadow:0 4px 12px rgba(0,0,0,.55)}
 body.exp .fab::after{content:"Save"}
 
-/* Android C — Material 3 Compact: dense, utilitarian, bottom nav, tighter type */
-body.cmp{--topbg:#161616;--mx:.85rem}
+/* Android · COMPACT — dense/utilitarian: small type, tight rhythm, square-ish, mono accents */
+body.cmp{--topbg:#161616;--mx:.85rem;--gly:clamp(2.4rem,12vw,3.1rem);--sense:.9rem;--lh:1.35;--dpad:.42rem;--head-pad:.6rem;--field-r:8px}
 body.cmp .top{padding-top:.5rem;padding-bottom:.5rem;gap:.2rem}
-body.cmp .brand{flex:1;font-size:1.2rem}
-body.cmp .head{padding:.7rem 0 .1rem}
-body.cmp .head-gly{font-size:clamp(2.6rem,13vw,3.4rem)}
-body.cmp .dl{padding:.5rem 0}
-body.cmp .senses li{font-size:.94rem;padding:.04rem 0}
-body.cmp .rows .row{padding:.5rem 0}
-body.cmp .row-gly{font-size:1.5rem;min-width:1.9em}
+body.cmp .brand{flex:1;font-size:1.15rem}
+body.cmp .row-gly{font-size:1.4rem;min-width:1.8em}
+body.cmp .dl-tag,body.cmp .dl-tag2{font-size:1rem}
+body.cmp .seclab{font-size:.56rem;letter-spacing:.16em}
 body.cmp .ib-ios{display:none}body.cmp .ib-and{display:inline-flex}
-body.cmp .tabs{border-bottom:1px solid #333;margin-top:1rem}
-body.cmp .tab{font-size:.76rem;font-weight:500;padding:.6rem .15rem}
+body.cmp .tabs{border-bottom:1px solid #333;margin-top:.9rem}
+body.cmp .tab{font-size:.74rem;font-weight:500;padding:.55rem .15rem}
 body.cmp .tab.on::after{content:"";position:absolute;left:10%;right:10%;bottom:0;height:2px;background:#fff}
-body.cmp .body{padding-bottom:4.5rem}
 `
 
 const designs = ['ios-grouped','ios-plain','ios-sheet','mat','exp','cmp']
