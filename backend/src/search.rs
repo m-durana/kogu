@@ -348,7 +348,7 @@ pub fn suggest(conn: &Connection, q: &str, limit: usize) -> rusqlite::Result<Sug
         collect_suggest(
             conn,
             "SELECT l.headword, l.reading, l.variety FROM surface_form sf JOIN lexeme l ON l.id = sf.lexeme_id \
-             WHERE sf.form LIKE ?1 ESCAPE '\\' \
+             WHERE sf.form LIKE ?1 ESCAPE '\\' AND sf.rare = 0 \
              ORDER BY l.freq IS NULL, l.freq DESC, length(sf.form), l.id LIMIT ?2",
             &format!("{}%", escape_like(q)),
             cap,
@@ -489,7 +489,9 @@ pub fn search(
     // exact written-form match - works for ANY typed string (機場, 甘い, 食べる, あまい, …).
     // (Mixed kanji+kana words classify as Kana but their written form lives in surface_form.)
     {
-        let mut stmt = conn.prepare("SELECT lexeme_id FROM surface_form WHERE form = ?1")?;
+        // rare=0: a rare/irregular/search-only JMdict form must not exact-match (it would shadow the
+        // synthetic character page for a kokuji like 込 that's only a rare alt-form of some word).
+        let mut stmt = conn.prepare("SELECT lexeme_id FROM surface_form WHERE form = ?1 AND rare = 0")?;
         let ids: Vec<i64> = stmt.query_map([q], |r| r.get(0))?.collect::<Result<_, _>>()?;
         for id in ids {
             bump(&mut cand, id, "exact", W_EXACT);
@@ -537,7 +539,7 @@ pub fn search(
             if q.chars().count() >= 2 {
                 let sp = format!("{q}%");
                 let mut stmt =
-                    conn.prepare("SELECT lexeme_id FROM surface_form WHERE form LIKE ?1 LIMIT 200")?;
+                    conn.prepare("SELECT lexeme_id FROM surface_form WHERE form LIKE ?1 AND rare = 0 LIMIT 200")?;
                 let ids: Vec<i64> =
                     stmt.query_map([&sp], |r| r.get(0))?.collect::<Result<_, _>>()?;
                 for id in ids {
@@ -631,7 +633,7 @@ pub fn search(
     // beyond 24 chars skip the fallback (the frontend still shows the per-character breakdown).
     if !has_whole && (3..=24).contains(&qchars.len()) && matches!(kind, Kind::Han | Kind::Kana) {
         let n = qchars.len();
-        let mut stmt = conn.prepare("SELECT lexeme_id FROM surface_form WHERE form = ?1")?;
+        let mut stmt = conn.prepare("SELECT lexeme_id FROM surface_form WHERE form = ?1 AND rare = 0")?;
         for len in (2..n).rev() {
             for start in 0..=(n - len) {
                 let sub: String = qchars[start..start + len].iter().collect();
@@ -764,7 +766,8 @@ fn build_hit(
     };
 
     let mut fstmt = conn.prepare(
-        "SELECT form, script, region, is_primary FROM surface_form WHERE lexeme_id = ?1",
+        // rare=0: rare/irregular/search-only JMdict forms stay matchable but are not shown as variants
+        "SELECT form, script, region, is_primary FROM surface_form WHERE lexeme_id = ?1 AND rare = 0",
     )?;
     let forms: Vec<Form> = fstmt
         .query_map([id], |r| {

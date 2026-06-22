@@ -89,7 +89,8 @@ fn build_entry(
 
     // forms
     let mut s = conn.prepare(
-        "SELECT form, script, region, is_primary FROM surface_form WHERE lexeme_id=?1 ORDER BY is_primary DESC",
+        // rare=0: rare/irregular/search-only JMdict forms stay matchable but are not shown as variants
+        "SELECT form, script, region, is_primary FROM surface_form WHERE lexeme_id=?1 AND rare=0 ORDER BY is_primary DESC",
     )?;
     let forms: Vec<Form> = s
         .query_map([id], |r| {

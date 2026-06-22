@@ -115,7 +115,8 @@ CREATE TABLE surface_form (
     form        TEXT NOT NULL,
     script      TEXT NOT NULL,           -- 'trad','simp','shinjitai','kana','mixed','other'
     region      TEXT REFERENCES region(code),
-    is_primary  INTEGER NOT NULL DEFAULT 0
+    is_primary  INTEGER NOT NULL DEFAULT 0,
+    rare        INTEGER NOT NULL DEFAULT 0  -- JMdict rK/iK/oK/sK: searchable, but not shown as a normal form
 );
 CREATE INDEX idx_surface_form_lexeme ON surface_form(lexeme_id);
 CREATE INDEX idx_surface_form_form   ON surface_form(form);

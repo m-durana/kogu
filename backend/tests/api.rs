@@ -1651,3 +1651,20 @@ async fn segment_parenthetical_sense_word() {
     let v = segment("下挫").await;
     assert_eq!(seg_forms(&v), vec!["下挫"]);
 }
+
+#[tokio::test]
+async fn rare_forms_hidden_from_display() {
+    // 会う's rare alt-form 遇う (JMdict rK) must NOT show among its displayed forms (it stays its own
+    // searchable entry, just not a normal variant of 会う).
+    let v = search("会う").await;
+    let hit = v["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["headword"] == "会う")
+        .expect("会う present");
+    let forms: Vec<String> =
+        hit["forms"].as_array().unwrap().iter().map(|f| f["form"].as_str().unwrap().to_string()).collect();
+    assert!(forms.contains(&"会う".to_string()), "primary form present");
+    assert!(!forms.contains(&"遇う".to_string()), "rare rK form 遇う must be hidden: {forms:?}");
+}

@@ -24,6 +24,9 @@ JMDICT_ZIP = SOURCES_DIR / "jmdict-eng.json.zip"
 # (must not display), rK = rarely-used, iK = irregular, oK = outdated kanji.
 _JM_SEARCH_ONLY = {"sK", "sk"}
 _JM_NONSTD = {"rK", "iK", "oK", "sK", "sk"}
+# kanji forms that should be searchable but NOT shown as a normal orthographic variant (rare, irregular,
+# outdated, or search-only). Marked rare=1 in surface_form; the display layer filters them out.
+_JM_RARE = {"rK", "iK", "oK", "sK"}
 
 
 def _jm_tags(x: dict) -> set[str]:
@@ -140,22 +143,23 @@ def _ingest_jmdict(conn, ids: _Ids) -> int:
         kana = w.get("kana", [])
         if not kana:
             continue
-        # drop search-only (sK/sk) forms entirely: they are meant to be matched, never displayed as
-        # a headword or orthographic variant. rK/iK/oK are kept (real, if rare) but never the headword.
-        disp_kanji = [k for k in kanji if not (_jm_tags(k) & _JM_SEARCH_ONLY)]
+        # Keep ALL kanji forms searchable, but flag rare/irregular/search-only ones (rK/iK/oK/sK) as
+        # `rare=1` so the display layer hides them (they leaked as if normal orthography: 遇う, 愛しい,
+        # １ヶ月). The headword is still a standard (non-rare) form. Search-only kana (sk) stay dropped.
         disp_kana = [kn for kn in kana if not (_jm_tags(kn) & _JM_SEARCH_ONLY)] or kana[:1]
-        headword = _jm_headword(disp_kanji, disp_kana)
+        headword = _jm_headword(kanji, disp_kana)
         primary_reading = disp_kana[0]["text"]
-        has_kanji_head = any(k["text"] == headword for k in disp_kanji)
+        has_kanji_head = any(k["text"] == headword for k in kanji)
         common = any(k.get("common") for k in kanji) or any(k.get("common") for k in kana)
         lid = ids.next_lex()
         lexemes.append((lid, "ja", headword, primary_reading, 1.0 if common else 0.3, "jmdict"))
-        for k in disp_kanji:
-            forms.append((ids.next_sf(), lid, k["text"], "shinjitai", "JP", 1 if k["text"] == headword else 0))
+        for k in kanji:
+            rare = 1 if (_jm_tags(k) & _JM_RARE) else 0
+            forms.append((ids.next_sf(), lid, k["text"], "shinjitai", "JP", 1 if k["text"] == headword else 0, rare))
         for kn in disp_kana:
             # kana form is primary only when the word's headword is itself kana (usually-kana words)
             is_primary = 1 if (not has_kanji_head and kn["text"] == headword) else 0
-            forms.append((ids.next_sf(), lid, kn["text"], "kana", "JP", is_primary))
+            forms.append((ids.next_sf(), lid, kn["text"], "kana", "JP", is_primary, 0))
             readings.append((lid, "kana", kn["text"]))
         order = 0
         for s in w.get("sense", []):
@@ -167,7 +171,7 @@ def _ingest_jmdict(conn, ids: _Ids) -> int:
             order += 1
         n += 1
     conn.executemany("INSERT INTO lexeme(id,variety,headword,reading,freq,freq_source) VALUES (?,?,?,?,?,?)", lexemes)
-    conn.executemany("INSERT INTO surface_form(id,lexeme_id,form,script,region,is_primary) VALUES (?,?,?,?,?,?)", forms)
+    conn.executemany("INSERT INTO surface_form(id,lexeme_id,form,script,region,is_primary,rare) VALUES (?,?,?,?,?,?,?)", forms)
     conn.executemany("INSERT OR IGNORE INTO lexeme_reading(lexeme_id,kind,value) VALUES (?,?,?)", readings)
     conn.executemany("INSERT INTO sense(id,lexeme_id,pos,gloss_en,sense_order) VALUES (?,?,?,?,?)", senses)
     return n

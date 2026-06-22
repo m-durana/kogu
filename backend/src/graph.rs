@@ -86,8 +86,10 @@ impl VariantGraph {
 
         let mut g = VariantGraph { class_of, form_index: HashMap::new() };
 
-        // --- build the backbone-key index from every surface form ---
-        let mut stmt = conn.prepare("SELECT form, lexeme_id FROM surface_form")?;
+        // --- build the backbone-key index from every DISPLAYED surface form (rare=0) ---
+        // rare/search-only forms (rK/iK/oK/sK) must not bridge cross-script or shadow a kokuji's
+        // character page (込 is only an sK alt-form of 込み — it should still resolve to its own glyph).
+        let mut stmt = conn.prepare("SELECT form, lexeme_id FROM surface_form WHERE rare = 0")?;
         let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?;
         for row in rows {
             let (form, lexeme_id) = row?;
