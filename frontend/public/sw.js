@@ -8,7 +8,7 @@
 // requests (hashed /assets, /api, fonts) are NOT intercepted, so there is no per-request SW cold-boot
 // cost and we don't re-enable the SW-controlled-fetch freeze class. Online relaunch still fetches the
 // live index.html (instant deploys preserved); the cached shell is used only when the network fails.
-const VERSION = 'kogu-v23'
+const VERSION = 'kogu-v25'
 const SHELL_CACHE = `${VERSION}-shell`
 const AUDIO_CACHE = 'kogu-audio-v1'
 const SHELL_URL = '/index.html'

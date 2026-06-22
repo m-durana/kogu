@@ -18,7 +18,7 @@
 
 <script lang="ts">
   import type { CharInfo, Entry, Hit, ReadingKV, Variety } from './types'
-  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, isAlwaysBound, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle, scriptShort, scSwitchTarget, scriptChangeNote, scriptChangeFromForms, jyutpingToYale, mcSoundLink, regionTags, expandSenses } from './display'
+  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, isAlwaysBound, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle, scriptShort, scSwitchTarget, scriptChangeNote, scriptChangeFromForms, jyutpingToYale, mcSoundLink, regionTags, expandSenses, formatReading } from './display'
   import { speakReading, canSpeak } from './speech'
   import { settings } from './settings.svelte'
   import ScriptForms from './ScriptForms.svelte'
@@ -27,11 +27,9 @@
   import EntryRow from './EntryRow.svelte'
   import { AlertTriangle, Volume2, ArrowLeftRight } from '@lucide/svelte'
 
-  // a reading shown in the user's chosen romanisation: pinyin tone-marks for 中, jyutping or Yale for 粵
+  // a reading shown in the user's chosen romanisation (shared with the result/saved lists via display.ts)
   function dispReading(variety: string, reading: string): string {
-    if (variety === 'zh') return pinyinMarks(reading)
-    if (variety === 'yue') return settings.romanization === 'yale' ? jyutpingToYale(reading) : reading
-    return reading
+    return formatReading(variety, reading, settings.romanization === 'yale')
   }
   import { readingRomaji } from './romaji'
 
@@ -253,7 +251,9 @@
   // Japanese" signal, so we synthesize a co-equal 日本語 definition row from the character's own data.
   // (冇 has no on/kun → no synthetic row; its nominal Mandarin pinyin stays suppressed.)
   const synthJaRow = $derived.by<Row | null>(() => {
-    if (!single || !headChar) return null
+    // a bound Kangxi radical (彳, 氵) is a component, not a Japanese word — don't synthesize a co-equal
+    // 日本語 definition row for it (its okurigana kun reading would otherwise trip the gate below).
+    if (!single || !headChar || headChar.is_radical) return null
     const on = headChar.readings.filter((r) => r.kind === 'onyomi' && isKana(r.value)).map((r) => r.value)
     const kun = headChar.readings.filter((r) => r.kind === 'kunyomi' && isKana(r.value)).map((r) => r.value)
     if (!on.length && !kun.length) return null
@@ -644,7 +644,7 @@
     const p = c.readings.filter((r) => r.kind === 'pinyin').map((r) => r.value)
     if (p.length) return pinyinMarks(p[0])
     const j = c.readings.filter((r) => r.kind === 'jyutping').map((r) => r.value)
-    if (j.length) return j[0]
+    if (j.length) return settings.romanization === 'yale' ? jyutpingToYale(j[0]) : j[0]
     const k = c.readings.filter((r) => (r.kind === 'onyomi' || r.kind === 'kunyomi') && isKana(r.value)).map((r) => r.value)
     return k.slice(0, 3).join('  ')
   }
@@ -666,20 +666,30 @@
   // map the compound LinkLites onto the shared Row shape so the "used in" list renders with the SAME
   // rowItem style as every other entry list (usually-written / written-differently / characters) —
   // one singular row style across the app (item 155). The relation is kept for the variant divider.
-  const compoundRows = $derived(
-    compoundList.map((l) => ({
-      id: l.lexeme_id,
-      variety: l.variety as Variety,
-      form: l.headword,
-      alt: null,
-      formScript: '',
-      altScript: '',
-      reading: l.reading ?? '',
-      glosses: l.glosses,
-      relation: l.relation,
-      kind: 'form' as const,
-    })),
-  )
+  const compoundRows = $derived.by(() => {
+    // dedupe by form+variety+reading: the full JMdict ships near-identical sense-lexemes (大陸 "mainland
+    // China" + "continent", 大家 ×3) that would otherwise render as duplicate-looking rows.
+    const seenc = new Set<string>()
+    return compoundList
+      .filter((l) => {
+        const k = `${l.variety}|${l.headword}|${l.reading ?? ''}`
+        if (seenc.has(k)) return false
+        seenc.add(k)
+        return true
+      })
+      .map((l) => ({
+        id: l.lexeme_id,
+        variety: l.variety as Variety,
+        form: l.headword,
+        alt: null,
+        formScript: '',
+        altScript: '',
+        reading: l.reading ?? '',
+        glosses: l.glosses,
+        relation: l.relation,
+        kind: 'form' as const,
+      }))
+  })
   let showOrigin = $state(false)
   let showWords = $state(false)
   const wordCount = $derived(compoundList.length)
@@ -835,7 +845,7 @@
       glyph={r.form}
       font={hanFont(r.variety)}
       lang={langTag(r.variety)}
-      reading={r.variety === 'zh' ? pinyinMarks(r.reading) : r.reading}
+      reading={dispReading(r.variety, r.reading)}
       tags={[varietyLabel(r.variety)]}
       gloss={briefGloss(r.glosses)}
       onclick={() => onsearch(r.form)}

@@ -49,15 +49,25 @@ export function getSaved(): SavedItem[] {
 export function getHistory(): SavedItem[] {
   return read(HISTORY)
 }
-export function isSaved(id: number): boolean {
-  return read(SAVED).some((s) => s.id === id)
+// Stable identity across DB rebuilds: lexeme ids are REASSIGNED on a rebuild, so matching saved/history
+// entries by id can show the wrong word as bookmarked and silently unsave an unrelated one. Match by
+// content instead — written form + variety + reading (or just the form, for a raw search query).
+type ItemKey = Pick<SavedItem, 'headword' | 'variety' | 'reading' | 'query'>
+function sameEntry(a: ItemKey, b: ItemKey): boolean {
+  if (!!a.query !== !!b.query) return false
+  if (a.query) return a.headword === b.headword
+  return a.headword === b.headword && a.variety === b.variety && (a.reading ?? '') === (b.reading ?? '')
+}
+
+export function isSaved(item: ItemKey): boolean {
+  return read(SAVED).some((s) => sameEntry(s, item))
 }
 
 /** Toggle a bookmark; returns the new saved-state (true = now saved). */
 export function toggleSaved(item: SavedItem): boolean {
   requestPersist()
   const list = read(SAVED)
-  const i = list.findIndex((s) => s.id === item.id)
+  const i = list.findIndex((s) => sameEntry(s, item))
   if (i >= 0) {
     list.splice(i, 1)
     write(SAVED, list)
@@ -73,19 +83,18 @@ export function recordHistory(item: SavedItem) {
   requestPersist()
   let list = read(HISTORY)
   if (item.query) {
-    // collapse the live-typing chain: drop any existing query that is a prefix of this one or vice
-    // versa (so typing 中 → 中宇 → 中宇大廈 leaves only the final term), and exact duplicates.
-    list = list.filter(
-      (s) =>
-        !(
-          s.query &&
-          (s.headword === item.headword ||
-            s.headword.startsWith(item.headword) ||
-            item.headword.startsWith(s.headword))
-        ),
-    )
+    // drop an exact duplicate query anywhere…
+    list = list.filter((s) => !(s.query && s.headword === item.headword))
+    // …and collapse ONLY the consecutive live-typing chain: if the most-recent entry is a prefix of
+    // this one (or vice versa) — 中 → 中宇 → 中宇大廈 — drop just it. Older distinct searches survive
+    // (a later 中國 no longer wipes an earlier standalone 中).
+    const head = list[0]
+    if (head?.query && (head.headword.startsWith(item.headword) || item.headword.startsWith(head.headword))) {
+      list = list.slice(1)
+    }
   } else {
-    list = list.filter((s) => s.query || s.id !== item.id)
+    // dedup visited entries by content, not id (an id reused after a rebuild must not double-record).
+    list = list.filter((s) => s.query || !sameEntry(s, item))
   }
   list.unshift({ ...item, ts: Date.now() })
   write(HISTORY, list.slice(0, HIST_CAP))

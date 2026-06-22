@@ -1,7 +1,7 @@
 <script lang="ts">
   import { search, entry as fetchEntry, segment as fetchSegment, type SegmentPart } from './lib/api'
   import type { Entry, Hit, CharInfo } from './lib/types'
-  import { primaryForm, varietyLabel, regionsOf, shortGloss, cleanGloss, langTag, hanFont, placeholderAt } from './lib/display'
+  import { primaryForm, varietyLabel, regionsOf, shortGloss, cleanGloss, langTag, hanFont, placeholderAt, formatReading } from './lib/display'
   import Unified from './lib/Unified.svelte'
   import EntryRow from './lib/EntryRow.svelte'
   import LookupPanel from './lib/LookupPanel.svelte'
@@ -65,7 +65,7 @@
     const it = currentItem
     if (it && onWordPage) {
       recordHistory(it)
-      savedNow = isSaved(it.id)
+      savedNow = isSaved(it)
     }
   })
 
@@ -370,7 +370,9 @@
       entry = e
       enriching = false
       view = 'entry'
-      if (mode === 'push') history.pushState({ view: 'entry', id }, '', `#/entry/${id}`)
+      // store the headword in history state so Back/Forward to this entry can re-resolve if the id
+      // went stale after a DB rebuild (see the openEntry stale-id guard above).
+      if (mode === 'push') history.pushState({ view: 'entry', id, hw: e.headword }, '', `#/entry/${id}`)
     } catch {
       // a saved/history id that no longer exists (reassigned/removed by a DB rebuild): if we know the
       // tapped form, recover by searching it instead of showing an error.
@@ -386,7 +388,7 @@
   }
 
   function onPop(e: PopStateEvent) {
-    const st = e.state as { view?: string; id?: number; q?: string } | null
+    const st = e.state as { view?: string; id?: number; q?: string; hw?: string } | null
     if (st?.view === 'saved') {
       savedList = getSaved()
       view = 'saved'
@@ -394,7 +396,7 @@
       historyList = getHistory()
       view = 'history'
     } else if (st?.view === 'entry' && st.id != null) {
-      openEntry(st.id, 'none')
+      openEntry(st.id, 'none', st.hw ?? '')
     } else {
       view = 'results'
       entry = null
@@ -410,6 +412,8 @@
     const m = location.hash.match(/^#\/entry\/(-?\d+)$/)
     const term = new URLSearchParams(location.search).get('q')
     if (m) openEntry(Number(m[1]), 'replace')
+    else if (location.hash === '#/saved') openSaved()
+    else if (location.hash === '#/history') openHistory()
     else if (term) doSearch(term, 'replace')
     else history.replaceState({ view: 'results', q: '' }, '', location.pathname)
     // rotate the placeholder every 2s (only matters while the field is empty); honour reduced-motion
@@ -598,7 +602,7 @@
       glyph={it.headword}
       font={hanFont(it.variety)}
       lang={langTag(it.variety)}
-      reading={it.reading ?? ''}
+      reading={formatReading(it.variety, it.reading, settings.romanization === 'yale')}
       tags={[varietyLabel(it.variety)]}
       gloss={it.gloss ? shortGloss([it.gloss]) : ''}
       onclick={() => (it.query ? doSearch(it.headword) : openEntry(it.id, 'push', it.headword))}
@@ -668,7 +672,7 @@
           font={hanFont(r.variety)}
           lang={langTag(r.variety)}
           alt={d?.alternate?.form ?? null}
-          reading={r.reading ?? ''}
+          reading={formatReading(r.variety, r.reading, settings.romanization === 'yale')}
           tags={[varietyLabel(r.variety)]}
           regions={regionsOf(r).filter((rg) => rg === 'TW' || rg === 'HK')}
           gloss={shortGloss(r.glosses)}

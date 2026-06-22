@@ -1045,3 +1045,23 @@ describe('etymology abbreviations - irregular plurals + rare works (coverage gap
     expect(abbrs('quoted in the Liji').some((t: any) => t.title.includes('Confucian'))).toBe(true)
   })
 })
+
+describe('gloss cleaning: radical-number & kokuji boilerplate (stress-test fixes)', () => {
+  it('strips radical-number notes, paren-wrapped or bare', () => {
+    expect(cleanGloss('step with the left foot (Kangxi radical 60)')).toBe('step with the left foot')
+    expect(cleanGloss('water; radical number 85')).toBe('water')
+    expect(cleanGloss('step with left foot; rad. no 60')).toBe('step with left foot')
+  })
+  it('drops the (kokuji) metadata tag', () => {
+    expect(cleanGloss('mountain peak; mountain pass; (kokuji)')).toBe('mountain peak; mountain pass')
+  })
+  it('does NOT eat an ordinary numeric parenthetical', () => {
+    expect(cleanGloss('chapter (5)')).toBe('chapter (5)')
+  })
+  it('isMinorGloss flags radical/kokuji-only senses', () => {
+    expect(isMinorGloss('Kangxi radical 60')).toBe(true)
+    expect(isMinorGloss('radical number 85')).toBe(true)
+    expect(isMinorGloss('(kokuji)')).toBe(true)
+    expect(isMinorGloss('water')).toBe(false)
+  })
+})

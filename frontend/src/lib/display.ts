@@ -196,6 +196,16 @@ export function jyutpingToYale(reading: string): string {
   return reading.split(/\s+/).map(jyutpingSyllableToYale).join(' ')
 }
 
+// A reading shown in the user's chosen romanisation, for ANY list row or entry: pinyin tone-marks for
+// 中, jyutping or Yale for 粵 (per the setting), kana left as-is for 日. The single source so result/
+// saved/history rows and the entry's Related/Used-in/Characters rows all match the headword.
+export function formatReading(variety: string, reading: string | null | undefined, yale: boolean): string {
+  if (!reading) return ''
+  if (variety === 'zh') return pinyinMarks(reading)
+  if (variety === 'yue') return yale ? jyutpingToYale(reading) : reading
+  return reading
+}
+
 // recognized script abbreviations (TC = Traditional Chinese, SC = Simplified Chinese), English until
 // localization. JP = Japanese shinjitai, var = z-variant.
 const SCRIPT_TAG: Record<string, string> = {
@@ -430,6 +440,14 @@ export function cleanGloss(g: string): string {
   // trailing borrowed-source note ("…(from Japanese 入 "iri")") — metadata, not meaning; drop it but
   // keep the actual sense before it (馬鹿 "idiot (from Japanese)" → "idiot").
   s = s.replace(/[,;]?\s*\(from (?:Japanese|English|French|German|Latin|Korean|Chinese|Sanskrit|Mongolian|Manchu)\b[^)]*\)\s*$/i, '')
+  // metadata tags / radical-number boilerplate are not meanings: 働 "…; (kokuji)" → drop tag;
+  // 氵 "water; radical number 85" → "water"; 彳 "…; rad. no 60" → drop; "going man radical (no. 60)".
+  s = s.replace(/[;,]?\s*\(?\s*kokuji\s*\)?/gi, '')
+  // paren-wrapped radical note ("(Kangxi radical 60)", "(radical 60)", "(no. 60)") — keyword-anchored
+  // so it never eats an ordinary numeric parenthetical like "(5)".
+  s = s.replace(/\s*[;,]?\s*\(\s*(?:kangxi\s+)?(?:radical|rad\.?|no\.?)\s*(?:number|no\.?)?\s*\d+\s*\)/gi, '')
+  // bare radical-number boilerplate ("radical number 85", "Kangxi radical 144", "rad. no 60")
+  s = s.replace(/[;,]?\s*(?:kangxi\s+)?(?:radical|rad\.?)\s*(?:number|no\.?)?\s*\d+/gi, '')
   s = s.replace(/\(\s*\)/g, '') // empty parens left behind
   s = s.replace(/\s*;\s*/g, '; ') // normalise sense separators
   s = s.replace(/(?:;\s*)+/g, '; ')
@@ -481,7 +499,10 @@ export function isMinorGloss(g: string): boolean {
   return (
     /^(surname\b|old variant of|variant of|used in|see\b|abbr\b)/.test(s) ||
     s.includes('radical in chinese characters') ||
-    s.includes('kangxi radical')
+    s.includes('kangxi radical') ||
+    /radical\s*(?:number|no\b)/.test(s) ||
+    /\(no\.\s*\d+\)/.test(s) ||
+    s === 'kokuji'
   )
 }
 
