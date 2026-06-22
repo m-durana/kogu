@@ -122,8 +122,8 @@
 </div>
 
 <style>
-  .lpbg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 60; }
-  .lp { width: min(30rem, 100%); max-height: 80vh; overflow-y: auto; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--r-lg); padding: 1rem 1.1rem 0.9rem; }
+  .lpbg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 60; }
+  .lp { width: min(30rem, 100%); max-height: 80vh; overflow-y: auto; background: var(--surface-2); border: 0.5px solid var(--border-strong); border-radius: 16px; box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.7); padding: 1rem 1.1rem 0.9rem; }
   .lph { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin-bottom: 0.7rem; }
   .lpterm { font-family: var(--han); font-size: 1.6rem; line-height: 1.1; color: var(--text); }
   .lpx { display: inline-flex; background: none; border: none; color: var(--muted); padding: 0.2rem; border-radius: var(--r); }

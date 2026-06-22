@@ -897,9 +897,9 @@
                        single speaker icon plays them — one consistent speech affordance across 中/粵/日. -->
                   <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe={(v) => (jaReadOver = v)}>{#each jaReadItems as it, i}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{it.main}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{#if canSpeak()}<button class="spk spk-sm" onclick={() => speakReading(it.main, 'ja')} aria-label="listen to {it.main}" title="listen"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{jaReadOpen ? '−' : '+'}</button>{/if}
                 {:else if r.reading}
-                  <!-- plain reading text + the speaker icon (same size/style as the 日/粵 per-reading icons). -->
-                  <span class="dread">{dispReading(r.variety, r.reading)}</span>
-                  {#if canSpeak()}<button class="spk spk-sm" onclick={() => speakReading(r.reading, r.variety, r.form)} aria-label="listen" title="listen"><Volume2 size={13} /></button>{/if}
+                  <!-- plain reading text + speaker, wrapped in .rdg so the speaker sits tight to the
+                       reading EXACTLY like the 日/粵 per-reading icons (not pushed away by .drow2's gap). -->
+                  <span class="dread"><span class="rdg">{dispReading(r.variety, r.reading)}{#if canSpeak()}<button class="spk spk-sm" onclick={() => speakReading(r.reading, r.variety, r.form)} aria-label="listen" title="listen"><Volume2 size={13} /></button>{/if}</span></span>
                 {/if}
                 {#if r.variety === 'zh' && headJyutList.length && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread dreads" class:clamp={!yueReadOpen} class:faded={yueReadOver && !yueReadOpen} use:readProbe={(v) => (yueReadOver = v)}>{#each headJyutList as j, i}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{settings.romanization === 'yale' ? jyutpingToYale(j) : j}{#if canSpeak()}<button class="spk spk-sm" onclick={() => speakReading(j, 'yue', r.form)} aria-label="listen to {j}, Cantonese" title="listen (Cantonese)"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if yueReadOver}<button class="rmore" onclick={toggleYueRead} aria-label={yueReadOpen ? 'show fewer readings' : 'show more readings'}>{yueReadOpen ? '−' : '+'}</button>{/if}{/if}
               </span>
@@ -1192,8 +1192,8 @@
   /* item 16: make the "bound" tag clearly visible (it marks a morpheme that only lives in compounds) */
 
   /* bound-form popup — minimal monochrome dialog */
-  .mbg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 50; }
-  .modal { width: min(28rem, 100%); max-height: 80vh; overflow-y: auto; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: calc(var(--r) * 1.5); padding: 1.2rem 1.2rem 1rem; }
+  .mbg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 50; }
+  .modal { width: min(28rem, 100%); max-height: 80vh; overflow-y: auto; background: var(--surface-2); border: 0.5px solid var(--border-strong); border-radius: 16px; box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.7); padding: 1.2rem 1.2rem 1rem; }
   .mh { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
   .mglyph { font-family: var(--han); font-size: 1.9rem; line-height: 1; }
   .mtag { font-family: var(--mono); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
@@ -1273,10 +1273,12 @@
   .spk-sm { padding: 0 0.1rem; vertical-align: -0.15em; margin-left: 0.1rem; }
   .rtagline { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; margin: 0.2rem 0 0; padding-left: 1.6rem; }
   /* one unified style for every small row tag: radical, rarely used, uncommon, only/often in compounds */
-  .ltag { font-family: var(--mono); font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); background: none; border: none; padding: 0; line-height: 1.5; }
-  .ltag.rad { color: var(--muted); }
-  .ltag.tappable { cursor: pointer; text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
-  .ltag.tappable:hover { color: var(--text); background: none; }
+  /* soft filled pill — noticeable (uncommon / only-in-compounds shouldn't be missed) without the harsh
+     outlined box used on row variety tags */
+  .ltag { font-family: var(--mono); font-size: 0.56rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); background: var(--surface-2); border: none; border-radius: 999px; padding: 0.12rem 0.5rem; line-height: 1.5; }
+  .ltag.rad { color: var(--text); }
+  .ltag.tappable { cursor: pointer; }
+  .ltag.tappable:hover { color: var(--text); background: var(--border-strong); }
   /* per-language origin account label (中 山 / 日 山) */
   .oacc { margin-top: 1rem; }
   .oacc:first-of-type { margin-top: 0; }
@@ -1371,8 +1373,8 @@
   .ety .recon[title] { cursor: help; }
 
   /* tapped-term explanation — a small centred card (mobile-friendly; no hover needed) */
-  .termpop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 50; }
-  .termcard { width: min(24rem, 100%); background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: calc(var(--r) * 1.5); padding: 1.1rem 1.1rem 0.9rem; }
+  .termpop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 50; }
+  .termcard { width: min(24rem, 100%); background: var(--surface-2); border: 0.5px solid var(--border-strong); border-radius: 16px; box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.7); padding: 1.1rem 1.1rem 0.9rem; }
   .termcard p { margin: 0; font-size: 0.95rem; line-height: 1.5; color: var(--text); }
 
   /* loading skeleton - reserves the lower sections' space so they don't pop in */

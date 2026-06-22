@@ -90,19 +90,24 @@ const CLIP_RATE = 1.12
 const CLIP_OVERLAP = 0.09 // seconds before a clip's end to start the next one (trims the inter-syllable gap)
 
 async function playClips(urls: string[], my: number): Promise<number> {
-  // prefetch every clip in parallel so there's no network gap between syllables
-  const objs = await Promise.all(urls.map(fetchClip))
-  if (my !== token) {
-    objs.forEach((o) => o && URL.revokeObjectURL(o))
-    return 0
-  }
+  // Kick off ALL fetches in parallel, but play each clip the MOMENT its own fetch resolves — the first
+  // syllable starts as soon as it's ready instead of blocking on the slowest clip (that all-or-nothing
+  // wait was the multi-second delay before playback began). Remaining clips keep loading during
+  // playback, so a multi-syllable word still runs together with no gap.
+  const objsP = urls.map(fetchClip)
+  const revokeFrom = (i: number) => objsP.slice(i).forEach((p) => p.then((o) => o && URL.revokeObjectURL(o)))
   let played = 0
-  for (let i = 0; i < objs.length; i++) {
+  for (let i = 0; i < objsP.length; i++) {
     if (my !== token) {
-      objs.slice(i).forEach((o) => o && URL.revokeObjectURL(o))
+      revokeFrom(i)
       break
     }
-    const obj = objs[i]
+    const obj = await objsP[i]
+    if (my !== token) {
+      if (obj) URL.revokeObjectURL(obj)
+      revokeFrom(i + 1)
+      break
+    }
     if (!obj) continue // a missing syllable: skip it, keep voicing the rest of the word
     played++
     // resolve (→ start the next clip) when this one is OVERLAP-seconds from its end, but let the audio

@@ -807,7 +807,7 @@
   .bar { margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
   /* item 7: history + saved buttons to the right of the wordmark (enlarged) */
   .navbtns { display: flex; gap: 0.3rem; }
-  .navbtn { display: inline-flex; align-items: center; justify-content: center; width: 2.9rem; height: 2.9rem; background: none; border: none; border-radius: var(--r); color: var(--muted); }
+  .navbtn { display: inline-flex; align-items: center; justify-content: center; width: 2.9rem; height: 2.9rem; background: none; border: none; border-radius: 50%; color: var(--muted); }
   .navbtn:hover { color: var(--text); background: var(--surface); }
   .navbtn.on { color: var(--text); }
   /* per-page save/share: icon-only, on the right edge, pulled up level with the big character */
@@ -823,8 +823,8 @@
   /* transient "Link copied" toast for share fallback */
   .toast { position: fixed; left: 50%; bottom: calc(2rem + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--surface-2, #1c1c1f); color: var(--text); border: 1px solid var(--border-strong); border-radius: 999px; padding: 0.5rem 1rem; font-size: 0.85rem; z-index: 60; }
   /* settings panel */
-  .setbg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 70; }
-  .setcard { width: min(22rem, 100%); background: var(--surface-2, #1c1c1f); border: 1px solid var(--border-strong); border-radius: var(--r-lg); padding: 1.1rem 1.1rem 0.9rem; }
+  .setbg { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 70; }
+  .setcard { width: min(22rem, 100%); background: var(--surface-2, #1c1c1f); border: 0.5px solid var(--border-strong); border-radius: 16px; box-shadow: 0 12px 40px -12px rgba(0,0,0,0.7); padding: 1.1rem 1.1rem 0.9rem; }
   .seth { font-family: var(--sans); font-size: 1.1rem; font-weight: 500; color: var(--text); margin: 0 0 0.9rem; }
   .setrow { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
   .setlabel { font-size: 0.9rem; color: var(--muted); }
@@ -871,16 +871,18 @@
     border: none; background: transparent; color: var(--muted); padding: 0.4rem; border-radius: var(--r); display: inline-flex;
   }
   .searchbtn:hover { color: var(--text); background: var(--surface-2); }
+  /* circular icon buttons, matching the round nav buttons */
   .rowbtn {
-    flex: none; display: inline-flex; align-items: center; justify-content: center; padding: 0 0.75rem; margin-left: 0.4rem;
-    color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
-    max-width: 4rem; overflow: hidden;
-    transition: max-width 0.22s ease, opacity 0.18s ease, margin 0.22s ease, padding 0.22s ease;
+    flex: none; display: inline-flex; align-items: center; justify-content: center; align-self: center;
+    width: 2.9rem; height: 2.9rem; margin-left: 0.4rem;
+    color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 50%;
+    overflow: hidden;
+    transition: width 0.22s ease, opacity 0.18s ease, margin 0.22s ease, border-width 0.22s ease;
   }
   .rowbtn:hover { color: var(--hi); border-color: var(--border-strong); background: var(--surface-2); }
   .rowbtn.on { color: var(--bg); background: var(--text); border-color: var(--text); }
   /* item 1: focusing the field expands it to full width; draw + camera slide away */
-  .searchrow.focused .rowbtn { max-width: 0; margin-left: 0; padding: 0; opacity: 0; border-width: 0; pointer-events: none; }
+  .searchrow.focused .rowbtn { width: 0; margin-left: 0; opacity: 0; border-width: 0; pointer-events: none; }
   @media (prefers-reduced-motion: reduce) { .rowbtn { transition: none; } }
   /* draw pad: a FLOATING panel just under the search row. position:absolute with no offset keeps it at
      its natural place in flow but lifts it OUT of flow, so the results list / about text render full
@@ -954,8 +956,8 @@
   .installbtn { display: inline-flex; align-items: center; gap: 0.35rem; margin-left: auto; align-self: center; font-family: var(--mono); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text); background: none; border: 1px solid var(--border-strong); border-radius: var(--r); padding: 0.3rem 0.6rem; }
   .installbtn:hover { background: var(--surface); }
   /* guided add-to-home-screen overlay */
-  .instbg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.72); z-index: 80; display: flex; align-items: center; justify-content: center; padding: 1.2rem; }
-  .instcard { width: min(22rem, 100%); background: var(--surface-2, #1c1c1f); border: 1px solid var(--border-strong); border-radius: var(--r-lg); padding: 1.1rem; }
+  .instbg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4); z-index: 80; display: flex; align-items: center; justify-content: center; padding: 1.2rem; }
+  .instcard { width: min(22rem, 100%); background: var(--surface-2, #1c1c1f); border: 0.5px solid var(--border-strong); border-radius: 16px; box-shadow: 0 12px 40px -12px rgba(0,0,0,0.7); padding: 1.1rem; }
   .insth { font-family: var(--sans); font-size: 1.1rem; font-weight: 500; color: var(--text); margin: 0 0 0.8rem; }
   .inststeps { margin: 0 0 1rem; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.7rem; }
   .inststeps li { display: flex; align-items: center; gap: 0.6rem; font-size: 0.95rem; line-height: 1.4; color: var(--muted); }
