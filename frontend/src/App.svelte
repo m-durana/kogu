@@ -130,13 +130,14 @@
 
   // Render typed CJK in the same regional serif as the headword it resolves to (a Japanese word's 誤
   // shouldn't show the Simplified-Chinese glyph in the box while the headword shows the Japanese one).
-  // Latin stays Newsreader; the CJK fallback follows the top hit's variety once results arrive.
+  // Latin is system sans; the CJK fallback follows the top hit's variety once results arrive.
   const queryLang = $derived(results[0]?.variety ?? 'zh')
+  // sans Latin (matching the UI), but keep the script-correct Han face so a typed kanji/粵字 renders right
   const inputFont = $derived(
     queryLang === 'ja'
-      ? '"Newsreader", Georgia, var(--han-ja), serif'
+      ? '-apple-system, system-ui, var(--han-ja), sans-serif'
       : queryLang === 'yue'
-        ? '"Newsreader", Georgia, var(--han-tc), serif'
+        ? '-apple-system, system-ui, var(--han-tc), sans-serif'
         : 'var(--sans)',
   )
 

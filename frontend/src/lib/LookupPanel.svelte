@@ -129,7 +129,7 @@
   .lptabs button.on { background: var(--text); color: var(--bg); }
   .lpbody { min-height: 3rem; }
   .lpdim { color: var(--faint); font-size: 0.92rem; }
-  .lptr { font-size: 1.3rem; line-height: 1.4; color: var(--text); margin: 0; font-family: var(--serif, Newsreader), Georgia, serif; }
+  .lptr { font-size: 1.3rem; line-height: 1.4; color: var(--text); margin: 0; font-family: var(--sans); }
   .lpsrc { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); margin: 0.4rem 0 0; }
   .lpnote { color: var(--faint); font-size: 0.82rem; font-style: italic; margin: 0 0 0.7rem; }
   .lpsense { margin-bottom: 0.8rem; }

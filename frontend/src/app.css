@@ -17,14 +17,15 @@
   --ja: var(--text);
   --yue: var(--text);
 
-  /* Kogu brand type: Newsreader (serif body/wordmark), Space Mono (labels). Han uses ONE consistent
-     serif - Noto Serif SC (loaded, unicode-range subset so only shown glyphs download) - so every CJK
-     glyph (incl. 粵 and Japanese) renders in the same face/weight instead of a per-glyph system
-     fallback that made 粵 bold and Chinese/Japanese mismatch. System serifs are the pre-load fallback. */
+  /* Kogu brand type ("Hybrid" direction): system sans for Latin UI text, Space Mono for labels/readings,
+     and Noto Serif SC for every Han glyph (the headword/glyphs stay serif — the brand's one constant).
+     Han uses ONE consistent serif so every CJK glyph (incl. 粵 and Japanese) renders in the same
+     face/weight instead of a per-glyph system fallback that made 粵 bold and Chinese/Japanese mismatch. */
   --mono: "Space Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  /* The Latin brand serif has NO CJK glyphs, so append --han: CJK typed in the search box renders in
-     the same Noto serif as the headword (was falling back to a mismatched system CJK serif). */
-  --sans: "Newsreader", Georgia, "Times New Roman", var(--han), serif;
+  /* System sans (SF on Apple, Segoe/Roboto elsewhere). Append --han so CJK typed in the search box still
+     renders in the Noto serif Han face rather than a mismatched system CJK font. */
+  --sans: -apple-system, "SF Pro Text", "SF Pro Display", system-ui, "Segoe UI", Roboto, Helvetica,
+    Arial, var(--han), sans-serif;
   /* Google's Noto Serif SC webfont only covers BMP CJK; Ext A/B glyphs (the tofu boxes) need a system
      font that has them. Append PingFang SC (Apple: Ext A + partial B), Noto/Source Han Sans CJK
      (Linux/Android), and SimSun-ExtB / Microsoft YaHei (Windows Ext B) before the generic fallback. */
