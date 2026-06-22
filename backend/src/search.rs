@@ -389,7 +389,9 @@ pub fn suggest(conn: &Connection, q: &str, limit: usize) -> rusqlite::Result<Sug
                 "SELECT l.headword, l.reading, l.variety FROM gloss_fts \
                  JOIN sense s ON s.id = gloss_fts.rowid JOIN lexeme l ON l.id = s.lexeme_id \
                  WHERE gloss_fts MATCH ?1 ORDER BY bm25(gloss_fts), l.freq IS NULL, l.freq DESC LIMIT ?2",
-                &format!("{term}*"),
+                // quote the term so a bare FTS5 keyword (OR / NOT / AND) is a literal, not an operator
+                // (`OR*` is an FTS syntax error → 500). term is already alphanumeric-only.
+                &format!("\"{term}\"*"),
                 cap,
                 &mut out,
                 &mut seen,
@@ -624,7 +626,10 @@ pub fn search(
     // so ordinary lookups aren't polluted with their own sub-words. Longest substrings rank highest.
     let has_whole = cand.values().any(|(mt, _)| *mt == "exact" || *mt == "variant");
     let qchars: Vec<char> = q.chars().collect();
-    if !has_whole && qchars.len() >= 3 && matches!(kind, Kind::Han | Kind::Kana) {
+    // cap the substring scan length: it is O(n²) in query length (every start × every length), so a
+    // very long unresolved Han/kana string could take seconds. A real word glued to a name is short;
+    // beyond 24 chars skip the fallback (the frontend still shows the per-character breakdown).
+    if !has_whole && (3..=24).contains(&qchars.len()) && matches!(kind, Kind::Han | Kind::Kana) {
         let n = qchars.len();
         let mut stmt = conn.prepare("SELECT lexeme_id FROM surface_form WHERE form = ?1")?;
         for len in (2..n).rev() {

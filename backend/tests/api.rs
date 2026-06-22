@@ -1624,3 +1624,30 @@ async fn segment_non_han_is_empty() {
     let v = segment("hello").await;
     assert_eq!(v["segments"].as_array().unwrap().len(), 0);
 }
+
+// ── stress-test regressions: no 500s on edge inputs ──────────────────────────────────────────────
+#[tokio::test]
+async fn segment_null_gloss_char_no_500() {
+    // 㐃 (U+3403) is a Han char whose character-table gloss_en is NULL; segmenting must not 500.
+    let (st, v) = get(&format!("/segment?q={}", enc("㐃"))).await;
+    assert_eq!(st, StatusCode::OK, "segment of a NULL-gloss char must be 200, not 500");
+    assert_eq!(seg_forms(&v), vec!["㐃"]);
+}
+
+#[tokio::test]
+async fn suggest_fts_keyword_no_500() {
+    // bare FTS5 keywords as autocomplete input must not crash (OR* was an FTS syntax error → 500).
+    for q in ["OR", "NOT", "AND", "NEAR"] {
+        let (st, _) = get(&format!("/suggest?q={}", enc(q))).await;
+        assert_eq!(st, StatusCode::OK, "/suggest?q={q} should be 200");
+    }
+}
+
+#[tokio::test]
+async fn segment_parenthetical_sense_word() {
+    // 下挫's sense-0 gloss is wholly parenthetical ("(of sales, prices etc) to fall"); the segmenter
+    // must recover a usable gloss (strip the balanced paren, or fall to a later sense) and keep it as
+    // ONE known word, not split into 下·挫.
+    let v = segment("下挫").await;
+    assert_eq!(seg_forms(&v), vec!["下挫"]);
+}

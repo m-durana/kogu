@@ -216,7 +216,10 @@ fn build_entry(
 
     // prefer tight (specific) concepts; skip hopelessly generic ones to cut polysemy noise
     let mut s = conn.prepare(
-        "SELECT s2.lexeme_id, co.label_en, MIN(co.member_count) AS spec \
+        // rank exact-gloss / OMW links (confidence 1.0 / 0.7) above content-word token links (0.5) so
+        // the looser token relations trail rather than lead — keeps the wider coverage without the noise
+        // leading the list.
+        "SELECT s2.lexeme_id, co.label_en, MIN(co.member_count) AS spec, MAX(sc2.confidence) AS conf \
          FROM sense_concept sc1 \
          JOIN sense_concept sc2 ON sc2.concept_id = sc1.concept_id \
          JOIN sense s1 ON s1.id = sc1.sense_id \
@@ -225,7 +228,7 @@ fn build_entry(
          WHERE s1.lexeme_id = ?1 AND s2.lexeme_id <> ?1 AND co.member_count <= 40 \
            AND s1.sense_order = 0 AND s2.sense_order = 0 \
          GROUP BY s2.lexeme_id \
-         ORDER BY spec ASC \
+         ORDER BY conf DESC, spec ASC \
          LIMIT 120",
     )?;
     let rows: Vec<(i64, String)> =
@@ -1299,8 +1302,10 @@ fn build_translate(conn: &rusqlite::Connection, q: &str) -> rusqlite::Result<Tra
     let mut groups = Vec::new();
     for (cid, label) in concepts {
         let mut ms = conn.prepare(
+            // English lookup should be precise: only exact-gloss / OMW members (confidence >= 0.7),
+            // not the looser content-word token links (0.5) that add cross-topic noise.
             "SELECT DISTINCT s.lexeme_id FROM sense_concept sc \
-             JOIN sense s ON s.id = sc.sense_id WHERE sc.concept_id = ?1 LIMIT 40",
+             JOIN sense s ON s.id = sc.sense_id WHERE sc.concept_id = ?1 AND sc.confidence >= 0.7 LIMIT 40",
         )?;
         let ids: Vec<i64> = ms.query_map([cid], |r| r.get(0))?.collect::<Result<_, _>>()?;
         let mut members = Vec::new();
@@ -1416,14 +1421,15 @@ fn best_word_gloss(
         )
         .optional()?;
     let Some(id) = id else { return Ok(None) };
-    let gloss: Option<String> = conn
-        .query_row(
-            "SELECT gloss_en FROM sense WHERE lexeme_id=?1 ORDER BY sense_order LIMIT 1",
-            [id],
-            |r| r.get(0),
-        )
-        .optional()?;
-    let g = short_gloss(gloss.as_deref().unwrap_or(""));
+    // try several senses: some words' sense 0 is wholly parenthetical / function-word (大廈, 下挫) and
+    // cleans to empty — fall through to the next sense so the word still segments as a known word.
+    let mut s = conn.prepare("SELECT gloss_en FROM sense WHERE lexeme_id=?1 ORDER BY sense_order LIMIT 8")?;
+    let g = s
+        .query_map([id], |r| r.get::<_, Option<String>>(0))?
+        .filter_map(|r| r.ok().flatten())
+        .map(|gl| short_gloss(&gl))
+        .find(|x| !x.is_empty())
+        .unwrap_or_default();
     if g.is_empty() {
         Ok(None)
     } else {
@@ -1434,17 +1440,28 @@ fn best_word_gloss(
 /// Character-table gloss for a single character, shortened (the fallback used today for the breakdown).
 fn char_short_gloss(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<String>> {
     use rusqlite::OptionalExtension;
-    let g: Option<String> = conn
-        .query_row("SELECT gloss_en FROM character WHERE cp=?1", [ch as i64], |r| r.get(0))
+    // the row may EXIST with a NULL gloss_en (≈80k characters), so bind the column as Option<String>
+    // — `.optional()` only catches missing rows, not a NULL in a present row (that would 500).
+    let g: Option<Option<String>> = conn
+        .query_row("SELECT gloss_en FROM character WHERE cp=?1", [ch as i64], |r| {
+            r.get::<_, Option<String>>(0)
+        })
         .optional()?;
-    Ok(g.map(|g| short_gloss(&g)).filter(|s| !s.is_empty()))
+    Ok(g.flatten().map(|g| short_gloss(&g)).filter(|s| !s.is_empty()))
 }
 
-/// First cleaned sense segment of a gloss (split on ; | , then stripped/lowercased like search).
+/// First NON-EMPTY cleaned sense segment of a gloss (split on ; | , then stripped/lowercased like
+/// search). Skips wholly-parenthetical/function-word leading segments instead of returning empty.
 fn short_gloss(gloss: &str) -> String {
-    let seg = gloss.split([';', '|']).next().unwrap_or(gloss);
-    let seg = seg.split(',').next().unwrap_or(seg);
-    search::clean_segment(seg)
+    for seg in gloss.split([';', '|']) {
+        // clean the WHOLE segment first (so a balanced parenthetical "(of sales…) to fall" strips to
+        // "to fall"), THEN take the first comma clause for brevity.
+        let cleaned = search::clean_segment(seg);
+        if !cleaned.is_empty() {
+            return cleaned.split(',').next().unwrap_or(&cleaned).trim().to_string();
+        }
+    }
+    String::new()
 }
 
 fn internal<E: std::fmt::Display>(e: E) -> (StatusCode, Json<Value>) {
