@@ -22,10 +22,11 @@
 </head>
 <body>
   <div class="bar" id="designbar">
-    <span class="ttl">Kogu — mobile UI directions · 4 real pages × 6 designs (3 iOS · 3 Android)</span>
+    <span class="ttl">Kogu — mobile UI directions · 4 real pages × 7 designs (4 iOS · 3 Android)</span>
     <span class="grp">iOS</span>
     <button data-d="ios-grouped" class="on">Editorial</button>
     <button data-d="ios-plain">Clean</button>
+    <button data-d="hybrid">Hybrid</button>
     <button data-d="ios-sheet">Sheet</button>
     <span class="grp" style="margin-left:.4rem">Android</span>
     <button data-d="mat">Material</button>
@@ -280,7 +281,7 @@ body{--ui:system-ui,sans-serif;--han:"Noto Serif SC",serif;--mono:"Space Mono",u
   --line:#222;--line2:#3a3a40;--topbg:transparent;--topblur:none;--topline:none;--field:#1c1c1e;--field-r:18px;--mx:1rem}
 
 /* ════ iOS shared (SF) ════ */
-body.ios-grouped,body.ios-plain,body.ios-sheet{--ui:-apple-system,"SF Pro Display","SF Pro Text",system-ui,sans-serif;
+body.ios-grouped,body.ios-plain,body.ios-sheet,body.hybrid{--ui:-apple-system,"SF Pro Display","SF Pro Text",system-ui,sans-serif;
   --page:#000;--bg:#000;--txt:#fff;--txt2:rgba(235,235,245,.6);--txt3:rgba(235,235,245,.3);--line2:#3a3a3c}
 
 /* iOS · EDITORIAL — serif-forward, airy, flat with hairlines, big light display glyph (magazine) */
@@ -315,6 +316,14 @@ body.ios-sheet .tabs{background:rgba(118,118,128,.24);border-radius:18px;padding
 body.ios-sheet .tab{border-radius:16px;font-size:.82rem;padding:.5rem .2rem}
 body.ios-sheet .tab.on{background:#636366;box-shadow:0 1px 3px rgba(0,0,0,.35)}
 body.ios-sheet .tabpane .rows .row{border-top-color:rgba(84,84,88,.4)}
+
+/* iOS · HYBRID — Editorial's airy layout & coloring, but Clean's SF type (font + sizes) */
+body.hybrid{--gly:clamp(2.8rem,14vw,3.8rem);--dpad:1rem;--head-pad:1.3rem;--line:rgba(84,84,88,.4);
+  --topbg:rgba(0,0,0,.5);--topblur:blur(20px) saturate(1.6)}
+body.hybrid .tabs{gap:1.7rem;border-bottom:.5px solid rgba(84,84,88,.5)}
+body.hybrid .tab{flex:0 0 auto;font-size:.95rem;padding:.7rem 0}
+body.hybrid .tab.on{font-weight:600}
+body.hybrid .tab.on::after{content:"";position:absolute;left:0;right:0;bottom:-.5px;height:1.5px;background:#fff}
 
 /* ════ Android shared (Roboto, Material 3 neutral tonal, white = primary) ════ */
 body.mat,body.exp,body.cmp{--ui:"Roboto",system-ui,sans-serif;
@@ -359,7 +368,7 @@ body.cmp .tab{font-size:.74rem;font-weight:500;padding:.55rem .15rem}
 body.cmp .tab.on::after{content:"";position:absolute;left:10%;right:10%;bottom:0;height:2px;background:#fff}
 `
 
-const designs = ['ios-grouped','ios-plain','ios-sheet','mat','exp','cmp']
+const designs = ['ios-grouped','ios-plain','hybrid','ios-sheet','mat','exp','cmp']
 let curD = 'ios-grouped', curP = 'char'
 const frame = document.getElementById('frame')
 function render(){
