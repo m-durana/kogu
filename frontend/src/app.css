@@ -1,17 +1,19 @@
-/* kogu - minimal, sharp (zero radius), dark. Angular "kanji" aesthetic. */
+/* kogu — "Hybrid" design language: iOS-dark, monochrome, soft hairlines, gently rounded. */
 :root {
-  --bg: #0b0b0c;
-  --surface: #141416;
-  --surface-2: #1b1b1e;
-  --border: #2a2a2e;
-  --border-strong: #3a3a40;
-  --text: #ededeb;
-  --muted: #b4b4ba;
-  --faint: #9c9ca3;
+  /* iOS-dark palette: true black canvas, elevated greys, white ink, translucent secondary inks
+     (so they composite correctly over any surface), low-contrast hairlines. */
+  --bg: #000000;
+  --surface: #1c1c1e;
+  --surface-2: #2c2c2e;
+  --border: rgba(84, 84, 88, 0.4);
+  --border-strong: rgba(84, 84, 88, 0.65);
+  --text: #ffffff;
+  --muted: rgba(235, 235, 245, 0.6);
+  --faint: rgba(235, 235, 245, 0.32);
   /* monochrome only - no colour. "accent" = brightest grey/white for emphasis. */
   --accent: #f4f4f2;
-  --accent-dim: #3a3a40;
-  /* "highlight" = the brightest ink for hover emphasis (white on dark themes, ink on light ones) */
+  --accent-dim: #3a3a3c;
+  /* "highlight" = the brightest ink for hover emphasis */
   --hi: #ffffff;
   --zh: var(--text);
   --ja: var(--text);
@@ -36,9 +38,9 @@
   --han-ja: "Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", "Hiragino Sans", "Noto Sans CJK JP", var(--han);
   --han-tc: "Noto Serif TC", "Songti TC", "PingFang TC", "Noto Sans CJK TC", var(--han);
 
-  /* subtle rounding (kept restrained, monochrome) */
-  --r: 5px;
-  --r-lg: 7px;
+  /* gentle iOS rounding */
+  --r: 8px;
+  --r-lg: 13px;
   --r-pill: 980px;
 
   color-scheme: dark;

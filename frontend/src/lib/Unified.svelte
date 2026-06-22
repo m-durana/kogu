@@ -1129,7 +1129,7 @@
      writes it, co-equally. No language is the hero; the glyph is. */
   /* matches .bridge so def→next-heading spacing is identical whether a bridge band follows or not
      (margins don't collapse inside the flex column, so keep both sides small + let h3's top margin lead) */
-  .def { margin-bottom: 0.6rem; }
+  .def { margin-bottom: 1rem; }
   .glyphrow { display: flex; align-items: flex-start; gap: 0.5rem; }
   .glyph { font-family: var(--han); font-size: clamp(3rem, 16vw, 4.5rem); line-height: 1; margin: 0 0 1.1rem; font-weight: 500; }
   /* tiny two-arrow switch to the TC/SC counterpart, top-right of the header glyph (item 161) */
@@ -1138,8 +1138,8 @@
   .scswitch:hover { color: var(--text); background: none; }
   /* small country tag(s) for a region-exclusive word (Taiwan/Hong Kong) — sits up by the headword */
   .regiontags { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.55rem; }
-  .rtag { font-family: var(--mono); font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); border: 1px solid var(--border-strong); border-radius: var(--r); padding: 0.08rem 0.42rem; line-height: 1.5; }
-  .defs { display: flex; flex-direction: column; gap: 0.8rem; }
+  .rtag { font-family: var(--mono); font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); line-height: 1.5; }
+  .defs { display: flex; flex-direction: column; gap: 1.1rem; }
   .dlh { display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap; }
   /* the language leads (it's the heading of the definition); the reading is secondary */
   .dvar { font-family: var(--han); font-size: 1.1rem; color: var(--text); font-weight: 500; letter-spacing: 0.02em; }
@@ -1211,12 +1211,14 @@
   .seg + section h3, section:first-of-type > h3 { margin-top: 0.6rem; }
 
   /* CJKV-style segmented control for the below-definition sections */
-  .seg { display: flex; align-items: stretch; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 0.22rem; margin: 1.2rem 0 0.2rem; overflow-x: auto; scrollbar-width: none; }
+  /* Hybrid: underline tabs (not a segmented pill) — a hairline rule with a white indicator. */
+  .seg { display: flex; align-items: stretch; gap: 1.5rem; border-bottom: 0.5px solid var(--border); margin: 1.5rem 0 0.2rem; overflow-x: auto; scrollbar-width: none; }
   .seg::-webkit-scrollbar { display: none; }
-  .segb { flex: 1 0 auto; font-family: var(--sans); font-size: 0.9rem; color: var(--muted); background: none; border: none; padding: 0.42rem 0.95rem; border-radius: 999px; white-space: nowrap; cursor: pointer; }
+  .segb { flex: 0 0 auto; font-family: var(--sans); font-size: 0.95rem; color: var(--muted); background: none; border: none; padding: 0.7rem 0; white-space: nowrap; cursor: pointer; position: relative; }
   .segb:hover:not(.on) { color: var(--text); }
-  .segb.on { background: var(--surface-2); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); }
-  .segsep { width: 1px; flex: none; align-self: center; height: 1.1rem; background: var(--border); }
+  .segb.on { color: var(--text); font-weight: 600; }
+  .segb.on::after { content: ""; position: absolute; left: 0; right: 0; bottom: -0.5px; height: 2px; background: var(--text); border-radius: 2px; }
+  .segsep { display: none; }
   /* a single toggle that re-sorts the Related / Used-in lists (default ⇄ by language) */
   .sortrow { display: flex; justify-content: flex-end; margin: 0.7rem 0 0.2rem; }
   .sortbtn { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); background: none; border: 1px solid var(--border); border-radius: 999px; padding: 0.22rem 0.6rem; cursor: pointer; }
@@ -1256,10 +1258,10 @@
   .spk-sm { padding: 0 0.1rem; vertical-align: -0.15em; margin-left: 0.1rem; }
   .rtagline { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; margin: 0.2rem 0 0; padding-left: 1.6rem; }
   /* one unified style for every small row tag: radical, rarely used, uncommon, only/often in compounds */
-  .ltag { font-family: var(--mono); font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); background: none; border: 1px solid var(--border); border-radius: var(--r); padding: 0.06rem 0.42rem; line-height: 1.5; }
-  .ltag.rad { color: var(--muted); border-color: var(--border-strong); }
-  .ltag.tappable { cursor: pointer; }
-  .ltag.tappable:hover { color: var(--text); border-color: var(--border-strong); background: var(--surface); }
+  .ltag { font-family: var(--mono); font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); background: none; border: none; padding: 0; line-height: 1.5; }
+  .ltag.rad { color: var(--muted); }
+  .ltag.tappable { cursor: pointer; text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
+  .ltag.tappable:hover { color: var(--text); background: none; }
   /* per-language origin account label (中 山 / 日 山) */
   .oacc { margin-top: 1rem; }
   .oacc:first-of-type { margin-top: 0; }

@@ -37,8 +37,7 @@
     <span class="meta-col">
       <span class="line1">
         {#if reading}<span class="rd">{reading}</span>{/if}
-        {#each tags as t}<span class="var">{t}</span>{/each}
-        {#each regions as rg}<span class="rg">{rg}</span>{/each}
+        {#if tags.length || regions.length}<span class="tags">{#each tags as t}<span class="var">{t}</span>{/each}{#each regions as rg}<span class="rg">{rg}</span>{/each}</span>{/if}
       </span>
       {#if gloss}<span class="gl">{gloss}</span>{/if}
     </span>
@@ -59,7 +58,10 @@
   .meta-col { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }
   .line1 { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
   .rd { font-family: var(--mono); color: var(--text); font-size: 0.8rem; }
-  .var { font-family: var(--han); font-size: 0.72rem; color: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 0 0.25rem; }
-  .rg { font-size: 0.6rem; color: var(--faint); border: 1px solid var(--border); border-radius: 4px; padding: 0 0.2rem; font-family: var(--mono); }
+  /* Hybrid: variety/region as plain labels after a hairline divider, not bordered chips */
+  .tags { display: inline-flex; align-items: baseline; gap: 0.35rem; }
+  .rd + .tags { border-left: 1px solid var(--border-strong); padding-left: 0.5rem; margin-left: 0.05rem; }
+  .var { font-family: var(--han); font-size: 0.78rem; color: var(--faint); }
+  .rg { font-size: 0.62rem; color: var(--faint); font-family: var(--mono); }
   .gl { color: var(--muted); font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

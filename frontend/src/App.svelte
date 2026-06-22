@@ -778,8 +778,8 @@
   /* leave room so the bottom-docked handwriting panel doesn't cover the last results */
   .wrap.drawing { padding-bottom: 52dvh; }
   .wrap {
-    padding: calc(1.4rem + env(safe-area-inset-top)) calc(1.35rem + env(safe-area-inset-right))
-      calc(4rem + env(safe-area-inset-bottom)) calc(1.35rem + env(safe-area-inset-left));
+    padding: calc(1.7rem + env(safe-area-inset-top)) calc(1.5rem + env(safe-area-inset-right))
+      calc(4rem + env(safe-area-inset-bottom)) calc(1.5rem + env(safe-area-inset-left));
   }
   .bar { margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
   /* item 7: history + saved buttons to the right of the wordmark (enlarged) */
