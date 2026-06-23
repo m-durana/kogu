@@ -14,6 +14,7 @@ export interface Hit {
   variety: Variety
   headword: string
   reading: string | null
+  accent?: string | null // Japanese pitch accent (Kanjium) on the kana reading, ja only
   forms: Form[]
   glosses: string[]
   match_type: string
@@ -109,6 +110,7 @@ export interface LinkLite {
   variety: Variety
   headword: string
   reading: string | null
+  accent?: string | null // Japanese pitch accent (Kanjium) on the kana reading, ja only
   glosses: string[]
   relation: string // 'cognate' | 'false-friend' | 'synonym'
   concept: string | null

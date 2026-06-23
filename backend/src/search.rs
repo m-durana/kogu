@@ -740,6 +740,7 @@ fn char_only_hit(conn: &Connection, ch: char) -> rusqlite::Result<Option<Hit>> {
         variety: variety.to_string(),
         headword: ch.to_string(),
         reading,
+        accent: None, // a char-only hit has no word lexeme; the char page derives accent in char_info
         forms: vec![Form { form: ch.to_string(), script: "other".into(), region: None, is_primary: true }],
         glosses: gloss.into_iter().collect(),
         match_type: "exact".into(),
@@ -796,11 +797,13 @@ fn build_hit(
         }
     }
 
+    let accent = crate::model::ja_reading_accent(conn, id, &variety, reading.as_deref());
     Ok(Some(Hit {
         lexeme_id: id,
         variety,
         headword,
         reading,
+        accent,
         forms,
         glosses,
         match_type: match_type.to_string(),

@@ -16,6 +16,7 @@ Runs on 127.0.0.1:4120 (loopback only); see kogu-tts.service. Single bounded dep
 """
 from __future__ import annotations
 
+import contextlib
 import copy
 import hashlib
 import io
@@ -33,7 +34,9 @@ import pyopenjtalk
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("KOGU_TTS_PORT", "4120"))
 CACHE_DIR = os.environ.get("KOGU_TTS_CACHE", "/mnt/HC_Volume_102319212/kogu-tts/cache")
-CACHE_MAX_FILES = 20000  # ~10-15 KB each -> a few hundred MB ceiling; oldest evicted past this
+CACHE_MAX_FILES = 45000  # ~10-15 KB each -> ~500 MB ceiling; oldest evicted past this. Sized to hold
+# the prerendered common-word warm set (tts/prerender.py) plus the on-demand long tail without evicting
+# the warm set. Keep comfortably under the data volume's free space.
 MP3_BITRATE = "64k"
 KANA_RE = re.compile(r"^[぀-ヿㇰ-ㇿｦ-ﾟー]+$")
 
@@ -45,24 +48,40 @@ def _cache_path(kana: str, accent: str | None) -> str:
     return os.path.join(CACHE_DIR, key + ".mp3")
 
 
+@contextlib.contextmanager
+def _muted_c_stderr():
+    """OpenJTalk prints benign C-level warnings straight to fd 2 (e.g. "Accent must be positive value"
+    for heiban=0, which still applies correctly). Mute just the native calls so they don't flood the
+    journal — Python exceptions are unaffected (they don't go through fd 2)."""
+    saved, devnull = os.dup(2), os.open(os.devnull, os.O_WRONLY)
+    try:
+        os.dup2(devnull, 2)
+        yield
+    finally:
+        os.dup2(saved, 2)
+        os.close(devnull)
+        os.close(saved)
+
+
 def _synth_wav(kana: str, accent: str | None) -> bytes:
     """Synthesize kana to 16-bit mono WAV bytes, forcing the accent nucleus when given."""
-    njd = pyopenjtalk.run_frontend(kana)
-    if accent is not None and njd:
-        try:
-            n = int(accent)
-        except ValueError:
-            n = None
-        if n is not None and n >= 0:
-            njd = copy.deepcopy(njd)
-            njd[0]["acc"] = n
-            # a multi-token reading (rare for a single dictionary entry): chain the rest into ONE
-            # accent phrase so the single Kanjium nucleus governs the whole word.
-            for e in njd[1:]:
-                e["acc"] = 0
-                e["chain_flag"] = 1
-    labels = pyopenjtalk.make_label(njd)
-    x, sr = pyopenjtalk.synthesize(labels)
+    with _muted_c_stderr():
+        njd = pyopenjtalk.run_frontend(kana)
+        if accent is not None and njd:
+            try:
+                n = int(accent)
+            except ValueError:
+                n = None
+            if n is not None and n >= 0:
+                njd = copy.deepcopy(njd)
+                njd[0]["acc"] = n
+                # a multi-token reading (rare for a single dictionary entry): chain the rest into ONE
+                # accent phrase so the single Kanjium nucleus governs the whole word.
+                for e in njd[1:]:
+                    e["acc"] = 0
+                    e["chain_flag"] = 1
+        labels = pyopenjtalk.make_label(njd)
+        x, sr = pyopenjtalk.synthesize(labels)
     pcm = np.clip(x, -32768, 32767).astype("<i2")
     buf = io.BytesIO()
     with wave.open(buf, "wb") as w:

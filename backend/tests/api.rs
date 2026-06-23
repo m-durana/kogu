@@ -682,6 +682,20 @@ async fn single_kanji_char_reading_has_pitch_accent() {
     assert_eq!(accent, Some("1"), "箸 kun reading はし should carry atamadaka (1) from the word lexeme");
 }
 
+// C7. a cross-listed ja word (空港 also exists in zh) carries its Kanjium accent on the search hit,
+// not only on a direct ja entry — so the forced-accent synth + contour work everywhere it's shown.
+#[tokio::test]
+async fn cross_listed_ja_hit_has_accent() {
+    let v = search("空港").await;
+    let ja = v["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["variety"] == "ja" && r["headword"] == "空港")
+        .expect("ja 空港 in results");
+    assert_eq!(ja["accent"].as_str(), Some("0"), "空港 くうこう should be heiban (0) on the hit");
+}
+
 // C6. the ja TTS proxy rejects empty / over-long input before reaching the synth sidecar.
 #[tokio::test]
 async fn tts_ja_rejects_bad_input() {

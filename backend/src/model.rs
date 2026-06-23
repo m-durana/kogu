@@ -29,6 +29,10 @@ pub struct Hit {
     pub variety: String,        // zh | yue | ja
     pub headword: String,
     pub reading: Option<String>,
+    /// Japanese pitch accent (Kanjium) for the kana reading, ja only; drives the synth + contour even
+    /// when this word is shown as a cross-listed row under another variety's entry.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub accent: Option<String>,
     pub forms: Vec<Form>,
     pub glosses: Vec<String>,
     pub match_type: String,     // exact | variant | reading | english
@@ -215,12 +219,37 @@ pub struct WhyResponse {
     pub characters: Vec<CharInfo>,
 }
 
+/// Kanjium pitch accent for a Japanese lexeme's kana reading (None for non-ja or when absent). Prefers
+/// the kana that equals the lexeme's primary `reading`, so a homograph gets its own word's accent. Used
+/// to give cross-listed ja rows (same_form / hit) the same forced accent + contour as a direct lookup.
+pub fn ja_reading_accent(
+    conn: &rusqlite::Connection,
+    lexeme_id: i64,
+    variety: &str,
+    reading: Option<&str>,
+) -> Option<String> {
+    if variety != "ja" {
+        return None;
+    }
+    conn.query_row(
+        "SELECT accent FROM lexeme_reading WHERE lexeme_id=?1 AND kind='kana' AND accent IS NOT NULL \
+         ORDER BY (value = ?2) DESC LIMIT 1",
+        rusqlite::params![lexeme_id, reading],
+        |r| r.get::<_, Option<String>>(0),
+    )
+    .ok()
+    .flatten()
+}
+
 #[derive(Serialize)]
 pub struct LinkLite {
     pub lexeme_id: i64,
     pub variety: String,
     pub headword: String,
     pub reading: Option<String>,
+    /// Japanese pitch accent (Kanjium) for the kana reading, ja only (see [`Hit::accent`]).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub accent: Option<String>,
     pub glosses: Vec<String>,
     /// relation to the anchor word: "cognate" | "false-friend" | "synonym"
     pub relation: String,
