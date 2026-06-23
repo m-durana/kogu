@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle, reformLabel, scriptChangeNote, scriptChangeFromForms, scSwitchTarget, glyphWikiUrl, SEARCH_PLACEHOLDERS, placeholderAt, isAlwaysBound, jyutpingToYale, mcSoundLink, regionTags, expandSenses } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle, reformLabel, scriptChangeNote, scriptChangeFromForms, scSwitchTarget, glyphWikiUrl, SEARCH_PLACEHOLDERS, placeholderAt, isAlwaysBound, jyutpingToYale, mcSoundLink, regionTags, expandSenses, pitchPattern, moraSplit } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -1063,5 +1063,64 @@ describe('gloss cleaning: radical-number & kokuji boilerplate (stress-test fixes
     expect(isMinorGloss('radical number 85')).toBe(true)
     expect(isMinorGloss('(kokuji)')).toBe(true)
     expect(isMinorGloss('water')).toBe(false)
+  })
+})
+
+describe('pitchPattern - Japanese pitch accent contour', () => {
+  // mora counting: small ya/yu/yo bind to the previous kana
+  it('moraSplit merges small ya/yu/yo into one mora', () => {
+    expect(moraSplit('きょう')).toEqual(['きょ', 'う']) // kyo-u = 2 morae
+    expect(moraSplit('しゃしん')).toEqual(['しゃ', 'し', 'ん']) // sha-shi-n = 3 morae
+    expect(moraSplit('はし')).toEqual(['は', 'し'])
+  })
+
+  // heiban (0): mora 1 low, the rest high, no drop. 端 はし.
+  it('heiban: low then high, no downstep', () => {
+    const p = pitchPattern('はし', '0')!
+    expect(p.kind).toBe('heiban')
+    expect(p.highs).toEqual([false, true])
+    expect(p.downstep).toBeNull()
+  })
+
+  // atamadaka (1): mora 1 high, the rest low. 箸 はし, 雨 あめ.
+  it('atamadaka: high then low, downstep after mora 1', () => {
+    const p = pitchPattern('はし', '1')!
+    expect(p.kind).toBe('atamadaka')
+    expect(p.highs).toEqual([true, false])
+    expect(p.downstep).toBe(1)
+  })
+
+  // nakadaka (1<n<len): rise after mora 1, high through mora n, then drop. みかん = 0 normally; use
+  // a synthetic 3-mora word with accent 2 (low-high-low).
+  it('nakadaka: rise, plateau, then drop inside the word', () => {
+    const p = pitchPattern('あいう', '2')!
+    expect(p.kind).toBe('nakadaka')
+    expect(p.highs).toEqual([false, true, false])
+    expect(p.downstep).toBe(2)
+  })
+
+  // odaka (n == len): rise after mora 1, high to the end, drop onto a FOLLOWING particle. 橋 はし = 2.
+  it('odaka: high to the end, downstep at word boundary', () => {
+    const p = pitchPattern('はし', '2')!
+    expect(p.kind).toBe('odaka')
+    expect(p.highs).toEqual([false, true]) // both morae of the word high; the drop is after はし
+    expect(p.downstep).toBe(2)
+  })
+
+  // multi-accent string uses the first value.
+  it('multi-accent uses the first value', () => {
+    const p = pitchPattern('すし', '2,1')!
+    expect(p.downstep).toBe(2)
+    expect(p.kind).toBe('odaka')
+  })
+
+  // graceful nulls: no accent, empty kana, non-numeric, or downstep past the end.
+  it('returns null for missing / invalid input', () => {
+    expect(pitchPattern('はし', null)).toBeNull()
+    expect(pitchPattern('はし', undefined)).toBeNull()
+    expect(pitchPattern('はし', '')).toBeNull()
+    expect(pitchPattern('', '1')).toBeNull()
+    expect(pitchPattern('はし', 'x')).toBeNull()
+    expect(pitchPattern('はし', '5')).toBeNull() // downstep past 2-mora word
   })
 })

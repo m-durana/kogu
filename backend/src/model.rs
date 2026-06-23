@@ -100,6 +100,11 @@ pub struct CharLite {
 pub struct ReadingKV {
     pub kind: String,
     pub value: String,
+    /// Japanese pitch accent (Kanjium, CC BY-SA 4.0) on a ja kind='kana' reading: the downstep mora
+    /// index as a string ("0"=heiban, "1"=atamadaka, n=drop after mora n; a multi-accent word keeps
+    /// the comma list "2,1"). Omitted (null) for every reading without Kanjium accent data.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub accent: Option<String>,
 }
 
 #[derive(Serialize)]

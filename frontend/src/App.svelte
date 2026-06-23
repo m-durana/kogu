@@ -748,6 +748,7 @@
         <ul class="absrc">
           <li><b>CC-CEDICT</b> and <b>CC-Canto</b>: Mandarin and Cantonese words and readings</li>
           <li><b>JMdict</b> and <b>Kanjidic</b>: Japanese words and kanji readings</li>
+          <li><b><a href="https://github.com/mifunetoshiro/kanjium" target="_blank" rel="noopener">Kanjium</a></b> (CC BY-SA 4.0): Japanese pitch accent</li>
           <li><b>Unihan</b> and <b>cjkvi-ids</b>: characters, stroke data, and how they decompose</li>
           <li><b>Wiktionary</b>: etymologies and phono-semantic component roles</li>
         </ul>

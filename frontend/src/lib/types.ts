@@ -29,6 +29,10 @@ export interface SearchResponse {
 export interface ReadingKV {
   kind: string
   value: string
+  /** Japanese pitch accent (Kanjium) on a ja kind='kana' reading: the downstep mora index as a string
+   * ("0"=heiban, "1"=atamadaka, n=drop after mora n; a multi-accent word keeps the comma list "2,1").
+   * Absent for every reading without Kanjium accent data. */
+  accent?: string | null
 }
 export interface VariantEdge {
   parent: string

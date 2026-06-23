@@ -647,6 +647,41 @@ async fn shared_vocab_has_jyutping() {
     assert!(has, "學校 should carry a jyutping reading");
 }
 
+// C4. a ja kana reading carries its Kanjium pitch accent (箸 はし → atamadaka, downstep "1").
+#[tokio::test]
+async fn ja_kana_reading_has_pitch_accent() {
+    let hit = entry_of(&search("箸").await, "ja", "箸");
+    let id = hit["lexeme_id"].as_i64().unwrap();
+    let e = get(&format!("/entry/{id}")).await.1;
+    let accent = e["readings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["kind"] == "kana" && r["value"] == "はし")
+        .and_then(|r| r["accent"].as_str());
+    assert_eq!(accent, Some("1"), "箸/はし should be atamadaka (downstep 1)");
+}
+
+// C5. a SINGLE kanji's kana on/kun reading also carries the word-level Kanjium accent, so a single-
+// character entry (箸/橋/端 — the minimal pairs) shows the pitch contour, not just multi-kanji words.
+#[tokio::test]
+async fn single_kanji_char_reading_has_pitch_accent() {
+    let e = entry_top("箸").await;
+    let ch = e["characters"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["ch"] == "箸")
+        .expect("箸 in the character breakdown");
+    let accent = ch["readings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["value"] == "はし")
+        .and_then(|r| r["accent"].as_str());
+    assert_eq!(accent, Some("1"), "箸 kun reading はし should carry atamadaka (1) from the word lexeme");
+}
+
 // E5. entry endpoint returns full structure; unknown id is 404.
 #[tokio::test]
 async fn entry_and_404() {

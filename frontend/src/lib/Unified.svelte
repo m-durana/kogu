@@ -18,7 +18,7 @@
 
 <script lang="ts">
   import type { CharInfo, Entry, Hit, ReadingKV, Variety } from './types'
-  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, isAlwaysBound, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle, scriptShort, scSwitchTarget, scriptChangeNote, scriptChangeFromForms, jyutpingToYale, mcSoundLink, regionTags, expandSenses, formatReading } from './display'
+  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, isAlwaysBound, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle, scriptShort, scSwitchTarget, scriptChangeNote, scriptChangeFromForms, jyutpingToYale, mcSoundLink, regionTags, expandSenses, formatReading, pitchPattern, moraSplit } from './display'
   import { speakReading, canSpeak } from './speech'
   import { settings } from './settings.svelte'
   import ScriptForms from './ScriptForms.svelte'
@@ -30,6 +30,22 @@
   // a reading shown in the user's chosen romanisation (shared with the result/saved lists via display.ts)
   function dispReading(variety: string, reading: string): string {
     return formatReading(variety, reading, settings.romanization === 'yale')
+  }
+  // Japanese pitch-accent contour for a ja kana reading: per-mora cells flagged high/low, with the
+  // mora after which the pitch drops (the downstep). Returns null when there's no usable accent, so the
+  // plain reading renders unchanged. Monochrome overline + tick is drawn from these cells in the markup.
+  type PitchCell = { mora: string; high: boolean; drop: boolean }
+  function pitchCells(reading: string, accent: string | null | undefined): PitchCell[] | null {
+    const p = pitchPattern(reading, accent)
+    if (!p) return null
+    const morae = moraSplit(reading)
+    // odaka: the drop lands on a FOLLOWING particle (downstep === length) — there is no in-word tick,
+    // but the whole word is high; render the tick at the trailing edge of the last mora.
+    return morae.map((mora, i) => ({
+      mora,
+      high: p.highs[i],
+      drop: p.downstep !== null && i + 1 === p.downstep,
+    }))
   }
   import { readingRomaji } from './romaji'
 
@@ -64,6 +80,13 @@
     }
     return ''
   }
+  // Japanese pitch accent (Kanjium) for the FIRST kana reading — the one readingFor() displays on the
+  // ja row. Only ja kana readings carry an accent; everything else returns null (no contour shown).
+  function accentFor(variety: string, readings: ReadingKV[]): string | null {
+    if (variety !== 'ja') return null
+    const kana = readings.find((r) => r.kind === 'kana')
+    return kana?.accent ?? null
+  }
 
   const relById = $derived(new Map((entry?.same_form ?? []).map((l) => [l.lexeme_id, l.relation])))
   function relFor(id: number): string {
@@ -79,6 +102,7 @@
     formScript: string
     altScript: string
     reading: string
+    accent?: string | null // Japanese pitch accent (Kanjium) for the displayed ja kana reading
     glosses: string[]
     relation: string
     kind: 'form' | 'equiv' // same characters, vs a meaning-equivalent written differently
@@ -117,6 +141,7 @@
         formScript: d?.primary.script ?? '',
         altScript: d?.alternate?.script ?? '',
         reading: readingFor(entry.variety, entry.readings),
+        accent: accentFor(entry.variety, entry.readings),
         glosses: entry.senses.map((s) => s.gloss_en),
         relation: 'self',
         kind: 'form',
@@ -551,12 +576,12 @@
   // exist (こころざし). When a character has several ja words (生: なま/いきる/セイ…) they stay as
   // separate per-word rows instead, so the full list isn't duplicated across them.
   const singleJaRow = $derived(single && defRows.filter((r) => r.variety === 'ja').length === 1)
-  const jaReadItems = $derived.by<{ main: string; sub: string }[]>(() => {
+  const jaReadItems = $derived.by<{ main: string; sub: string; accent: string | null }[]>(() => {
     if (!single || !headChar) return []
     const mk = (kind: string) =>
       headChar!.readings
         .filter((r) => r.kind === kind && isKana(r.value))
-        .map((r) => ({ main: r.value, sub: readingRomaji(kind as 'onyomi' | 'kunyomi', r.value) }))
+        .map((r) => ({ main: r.value, sub: readingRomaji(kind as 'onyomi' | 'kunyomi', r.value), accent: r.accent ?? null }))
     return [...mk('onyomi'), ...mk('kunyomi')]
   })
 
@@ -895,11 +920,14 @@
                        (kana + romaji), clamped to one line with a "+" (and horizontally scrollable). A
                        REAL ja word-row shows its OWN reading instead. The readings are plain text; the
                        single speaker icon plays them — one consistent speech affordance across 中/粵/日. -->
-                  <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe={(v) => (jaReadOver = v)}>{#each jaReadItems as it, i}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{it.main}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{#if canSpeak()}<button class="spk spk-sm" onclick={() => speakReading(it.main, 'ja')} aria-label="listen to {it.main}" title="listen"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{jaReadOpen ? '−' : '+'}</button>{/if}
+                  <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe={(v) => (jaReadOver = v)}>{#each jaReadItems as it, i}{@const cells = pitchCells(it.main, it.accent)}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{#if cells}<span class="pitch" title="pitch accent (Kanjium)">{#each cells as c}<span class="pmora" class:phigh={c.high} class:pdrop={c.drop}>{c.mora}</span>{/each}</span>{:else}{it.main}{/if}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{#if canSpeak()}<button class="spk spk-sm" onclick={() => speakReading(it.main, 'ja')} aria-label="listen to {it.main}" title="listen"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{jaReadOpen ? '−' : '+'}</button>{/if}
                 {:else if r.reading}
+                  {@const cells = r.variety === 'ja' ? pitchCells(r.reading, r.accent) : null}
                   <!-- plain reading text + speaker, wrapped in .rdg so the speaker sits tight to the
-                       reading EXACTLY like the 日/粵 per-reading icons (not pushed away by .drow2's gap). -->
-                  <span class="dread"><span class="rdg">{dispReading(r.variety, r.reading)}{#if canSpeak()}<button class="spk spk-sm" onclick={() => speakReading(r.reading, r.variety, r.form)} aria-label="listen" title="listen"><Volume2 size={13} /></button>{/if}</span></span>
+                       reading EXACTLY like the 日/粵 per-reading icons (not pushed away by .drow2's gap).
+                       For a Japanese kana reading with Kanjium accent data, the reading renders as a
+                       monochrome pitch contour (overline over high morae + a downstep tick) instead. -->
+                  <span class="dread"><span class="rdg">{#if cells}<span class="pitch" title="pitch accent (Kanjium)">{#each cells as c}<span class="pmora" class:phigh={c.high} class:pdrop={c.drop}>{c.mora}</span>{/each}</span>{:else}{dispReading(r.variety, r.reading)}{/if}{#if canSpeak()}<button class="spk spk-sm" onclick={() => speakReading(r.reading, r.variety, r.form)} aria-label="listen" title="listen"><Volume2 size={13} /></button>{/if}</span></span>
                 {/if}
                 {#if r.variety === 'zh' && headJyutList.length && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread dreads" class:clamp={!yueReadOpen} class:faded={yueReadOver && !yueReadOpen} use:readProbe={(v) => (yueReadOver = v)}>{#each headJyutList as j, i}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{settings.romanization === 'yale' ? jyutpingToYale(j) : j}{#if canSpeak()}<button class="spk spk-sm" onclick={() => speakReading(j, 'yue', r.form)} aria-label="listen to {j}, Cantonese" title="listen (Cantonese)"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if yueReadOver}<button class="rmore" onclick={toggleYueRead} aria-label={yueReadOpen ? 'show fewer readings' : 'show more readings'}>{yueReadOpen ? '−' : '+'}</button>{/if}{/if}
               </span>
@@ -1170,6 +1198,18 @@
      line under the tag. */
   .drow2 { display: inline-flex; align-items: baseline; gap: 0.7rem; min-width: 0; flex: 1 1 0; }
   .dread { font-family: var(--mono); font-size: 0.9rem; color: var(--muted); }
+  /* Japanese pitch-accent contour (Kanjium): a subtle MONOCHROME overline over the high morae with a
+     downstep tick where the pitch falls. No accent colour — the app is strictly monochrome; the line
+     uses currentColor at low opacity so it reads as a quiet annotation, not a second reading. */
+  .pitch { display: inline-flex; }
+  .pitch .pmora { position: relative; padding-top: 1px; }
+  /* high mora: an overline (the "high plateau"); kept thin and faint so it doesn't shout. */
+  .pitch .pmora.phigh { box-shadow: inset 0 1px 0 0 color-mix(in srgb, currentColor 55%, transparent); }
+  /* downstep: a short vertical tick at the trailing edge of the last high mora (the fall). */
+  .pitch .pmora.pdrop::after {
+    content: ''; position: absolute; top: 0; right: -0.5px; height: 0.5em; width: 1px;
+    background: color-mix(in srgb, currentColor 55%, transparent);
+  }
   /* tight reading separator (the old "  ·  " ate too much space) + romaji gloss + "+N more" toggle */
   .dread .rsep { color: var(--faint); margin: 0 0.28rem; }
   /* "+" / "−" toggle, sized to match the readings so it reads as part of the line, not a tiny tag */

@@ -89,6 +89,10 @@ SOURCES: dict[str, Source] = {
     "freq-ja": Source(
         "freq-ja", "https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2016/ja/ja_50k.txt",
         "freq_ja.txt", "MIT"),
+    # Japanese pitch accent (Kanjium) - per-word mora downstep index; drives the kana-row pitch contour.
+    "kanjium-accents": Source(
+        "kanjium-accents", "https://raw.githubusercontent.com/mifunetoshiro/kanjium/master/data/accents.txt",
+        "accents.txt", "CC-BY-SA"),
 }
 
 

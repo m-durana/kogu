@@ -103,13 +103,14 @@ fn build_entry(
         })?
         .collect::<Result<_, _>>()?;
 
-    // readings (hide internal normalisation forms)
+    // readings (hide internal normalisation forms). `accent` is the Japanese pitch accent on a ja
+    // kana reading (Kanjium, CC BY-SA 4.0); NULL for every other reading.
     let mut s = conn.prepare(
-        "SELECT kind, value FROM lexeme_reading WHERE lexeme_id=?1 \
+        "SELECT kind, value, accent FROM lexeme_reading WHERE lexeme_id=?1 \
          AND kind NOT IN ('pinyin_num','pinyin_plain','jyutping_plain')",
     )?;
     let readings: Vec<ReadingKV> = s
-        .query_map([id], |r| Ok(ReadingKV { kind: r.get(0)?, value: r.get(1)? }))?
+        .query_map([id], |r| Ok(ReadingKV { kind: r.get(0)?, value: r.get(1)?, accent: r.get(2)? }))?
         .collect::<Result<_, _>>()?;
 
     // senses
@@ -1035,9 +1036,39 @@ fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<C
     // ORDER BY ord so a polyphonic character's customary reading comes first (ord 0), then the rest;
     // on/kun/mc rows default to ord 0 and fall back to value order, unchanged.
     let mut s = conn.prepare("SELECT kind, value FROM char_reading WHERE cp=?1 ORDER BY kind, ord, value")?;
-    let readings: Vec<ReadingKV> = s
-        .query_map([cp], |r| Ok(ReadingKV { kind: r.get(0)?, value: r.get(1)? }))?
+    let mut readings: Vec<ReadingKV> = s
+        .query_map([cp], |r| Ok(ReadingKV { kind: r.get(0)?, value: r.get(1)?, accent: None }))?
         .collect::<Result<_, _>>()?;
+
+    // Japanese pitch accent (Kanjium) for this character's kana on/kun readings: a single-character
+    // Japanese WORD (e.g. 箸 = はし) carries its accent on the word's lexeme_reading, not on the
+    // character. Surface it onto the matching kun/on reading so a SINGLE-KANJI entry shows the pitch
+    // contour too (箸 はし atamadaka vs 橋 はし odaka vs 端 はし heiban), not just multi-kanji words.
+    let ch_s = ch.to_string();
+    let mut accent_by_kana: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut s = conn.prepare(
+        "SELECT lr.value, lr.accent FROM lexeme_reading lr \
+         JOIN surface_form sf ON sf.lexeme_id = lr.lexeme_id \
+         JOIN lexeme l ON l.id = lr.lexeme_id \
+         WHERE l.variety='ja' AND lr.kind='kana' AND lr.accent IS NOT NULL AND sf.form = ?1",
+    )?;
+    let arows = s.query_map([&ch_s], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+    for row in arows {
+        let (kana, accent) = row?;
+        accent_by_kana.entry(kana).or_insert(accent);
+    }
+    if !accent_by_kana.is_empty() {
+        for rk in readings.iter_mut() {
+            if rk.kind != "kunyomi" && rk.kind != "onyomi" {
+                continue;
+            }
+            // kun readings carry okurigana markers (こころざ.す, -がわ); the word kana is plain.
+            let key: String = rk.value.chars().filter(|c| *c != '.' && *c != '-').collect();
+            if let Some(a) = accent_by_kana.get(&key) {
+                rk.accent = Some(a.clone());
+            }
+        }
+    }
 
     // identity edges to orthodox parents (the orthographic "why": chain + which reform produced it)
     let mut s = conn.prepare(

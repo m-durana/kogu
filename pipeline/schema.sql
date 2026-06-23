@@ -126,6 +126,11 @@ CREATE TABLE lexeme_reading (
     lexeme_id   INTEGER NOT NULL REFERENCES lexeme(id),
     kind        TEXT NOT NULL,           -- 'pinyin','jyutping','kana','romaji','zhuyin'
     value       TEXT NOT NULL,
+    -- Japanese pitch accent (Kanjium accents.txt, CC BY-SA 4.0) on the ja kind='kana' rows: the
+    -- downstep mora index as a string ("0"=heiban/no drop, "1"=atamadaka, n=drop after mora n).
+    -- Multi-accent words keep the full comma list ("2,1"); the serving layer reads the first. NULL =
+    -- no Kanjium entry. Only ever set for ja kana rows; the column is meaningless for other kinds.
+    accent      TEXT,
     PRIMARY KEY (lexeme_id, kind, value)
 ) WITHOUT ROWID;
 CREATE INDEX idx_lexeme_reading_value ON lexeme_reading(kind, value);

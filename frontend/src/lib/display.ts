@@ -1014,6 +1014,74 @@ export function furiganaTokens(text: string): FuriToken[] {
   return out
 }
 
+// === Japanese pitch accent (Kanjium) ===
+// The backend carries the downstep mora index ("accent") on a ja kana reading. Tokyo-dialect pitch is
+// a binary high/low contour determined entirely by that one number and the mora count:
+//   0  heiban   — mora 1 low, all the rest high, no drop (a following particle stays high)
+//   1  atamadaka — mora 1 high, all the rest low
+//   n (1<n<len)  nakadaka — rises after mora 1, stays high through mora n, then drops
+//   n == len     odaka   — rises after mora 1, high to the end, drops onto the FOLLOWING particle
+// These helpers are pure so they can be unit-tested directly and rendered as a monochrome overline
+// with a downstep tick in the UI.
+
+// Small ya/yu/yo (and the small vowels) bind to the PREVIOUS kana into one mora; the long-vowel mark
+// ー, the sokuon っ and the moraic ん each count as their own mora (standard pitch-accent counting).
+const SMALL_KANA = new Set([
+  'ゃ', 'ゅ', 'ょ', 'ァ', 'ィ', 'ゥ', 'ェ', 'ォ', 'ャ', 'ュ', 'ョ',
+  'ぁ', 'ぃ', 'ぅ', 'ぇ', 'ぉ', 'ゎ', 'ヮ',
+])
+
+/** Split a kana string into morae (small ya/yu/yo merge into the preceding mora). */
+export function moraSplit(kana: string): string[] {
+  const out: string[] = []
+  for (const ch of kana) {
+    if (SMALL_KANA.has(ch) && out.length) out[out.length - 1] += ch
+    else out.push(ch)
+  }
+  return out
+}
+
+export interface PitchPattern {
+  /** one entry per mora: true = high, false = low */
+  highs: boolean[]
+  /** 0-based index of the mora AFTER which the pitch drops, or null when there is no drop (heiban).
+   * Equal to highs.length for odaka (the drop lands on a following particle, outside the word). */
+  downstep: number | null
+  /** the parsed accent class, for labelling / tooltips */
+  kind: 'heiban' | 'atamadaka' | 'nakadaka' | 'odaka'
+}
+
+/** Per-mora high/low contour for a kana reading under a Kanjium downstep index. Returns null when
+ * there's no kana, no accent value, or the accent isn't a usable non-negative integer. A multi-accent
+ * string ("2,1") uses its FIRST value (the commonest). Follows standard Tokyo pitch rules. */
+export function pitchPattern(kana: string, accent: string | number | null | undefined): PitchPattern | null {
+  if (!kana) return null
+  if (accent === null || accent === undefined || accent === '') return null
+  const first = String(accent).split(',')[0].trim()
+  if (!/^\d+$/.test(first)) return null
+  const n = parseInt(first, 10)
+  const morae = moraSplit(kana)
+  const len = morae.length
+  if (len === 0) return null
+  if (n > len) return null // malformed: downstep past the end of the word
+
+  const highs = new Array<boolean>(len)
+  if (n === 0) {
+    // heiban: mora 1 low, rest high, no drop
+    for (let i = 0; i < len; i++) highs[i] = i !== 0
+    return { highs, downstep: null, kind: 'heiban' }
+  }
+  if (n === 1) {
+    // atamadaka: mora 1 high, rest low
+    for (let i = 0; i < len; i++) highs[i] = i === 0
+    return { highs, downstep: 1, kind: 'atamadaka' }
+  }
+  // nakadaka / odaka: low on mora 1, high from mora 2 through mora n, low after
+  for (let i = 0; i < len; i++) highs[i] = i !== 0 && i < n
+  const kind = n === len ? 'odaka' : 'nakadaka'
+  return { highs, downstep: n, kind }
+}
+
 /** OCR selection -> text, always in document (line, char) order regardless of tap order. */
 export function ocrSelectedText(
   lines: { chars: { ch: string }[] }[],

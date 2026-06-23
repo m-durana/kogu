@@ -4,6 +4,7 @@ Each step is ``(name, fn)`` where ``fn(conn)`` reads from ``sources/`` and write
 Order matters: backbone characters before lexemes (FKs / readings reference characters).
 """
 from . import (
+    accents,
     backbone,
     cantonese,
     components,
@@ -31,4 +32,5 @@ INGEST_STEPS = [
     ("etymology + origin badges (Wiktionary passthrough)", etymology.ingest),
     ("word frequency (OpenSubtitles zh/ja)", frequency.ingest),
     ("romaji reading index", romaji.ingest),
+    ("Japanese pitch accent (Kanjium, CC BY-SA 4.0)", accents.ingest),
 ]
