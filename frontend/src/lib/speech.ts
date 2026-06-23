@@ -89,6 +89,37 @@ async function fetchClip(url: string): Promise<string | null> {
 const CLIP_RATE = 1.12
 const CLIP_OVERLAP = 0.09 // seconds before a clip's end to start the next one (trims the inter-syllable gap)
 
+// Play one clip (object URL). Resolves when it's OVERLAP-seconds from its end (so a caller can start
+// the next clip and they run together), but lets the audio play out to its natural end and revokes the
+// URL then. `rate` lets per-syllable zh/yue clips speed up while a whole-word ja synth plays at 1.0.
+function playOne(obj: string, my: number, rate: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const a = new Audio(obj)
+    a.playbackRate = rate
+    let advanced = false
+    const advance = () => {
+      if (!advanced) {
+        advanced = true
+        resolve()
+      }
+    }
+    a.addEventListener('timeupdate', () => {
+      if (a.duration && a.currentTime >= a.duration - CLIP_OVERLAP) advance()
+    })
+    a.addEventListener('ended', () => {
+      URL.revokeObjectURL(obj)
+      advance()
+    })
+    a.addEventListener('error', () => {
+      URL.revokeObjectURL(obj)
+      advance()
+    })
+    active.push(a)
+    if (my !== token) return advance()
+    a.play().catch(advance)
+  })
+}
+
 async function playClips(urls: string[], my: number): Promise<number> {
   // Kick off ALL fetches in parallel, but play each clip the MOMENT its own fetch resolves — the first
   // syllable starts as soon as it's ready instead of blocking on the slowest clip (that all-or-nothing
@@ -110,33 +141,7 @@ async function playClips(urls: string[], my: number): Promise<number> {
     }
     if (!obj) continue // a missing syllable: skip it, keep voicing the rest of the word
     played++
-    // resolve (→ start the next clip) when this one is OVERLAP-seconds from its end, but let the audio
-    // play out to its natural end and revoke its URL then.
-    await new Promise<void>((resolve) => {
-      const a = new Audio(obj)
-      a.playbackRate = CLIP_RATE
-      let advanced = false
-      const advance = () => {
-        if (!advanced) {
-          advanced = true
-          resolve()
-        }
-      }
-      a.addEventListener('timeupdate', () => {
-        if (a.duration && a.currentTime >= a.duration - CLIP_OVERLAP) advance()
-      })
-      a.addEventListener('ended', () => {
-        URL.revokeObjectURL(obj)
-        advance()
-      })
-      a.addEventListener('error', () => {
-        URL.revokeObjectURL(obj)
-        advance()
-      })
-      active.push(a)
-      if (my !== token) return advance()
-      a.play().catch(advance)
-    })
+    await playOne(obj, my, CLIP_RATE)
   }
   return played
 }
@@ -157,22 +162,44 @@ function speakSynth(text: string, variety: string): void {
 }
 
 const KANA = /^[぀-ヿー\s]+$/
-function speakJa(reading: string | null | undefined, fallback?: string): void {
-  // feed the kana yomi so the SHOWN reading is spoken; if the reading isn't plain kana (furigana
-  // markup, romaji), fall back to the word itself.
-  const text = reading && KANA.test(reading) ? reading.replace(/\s+/g, '') : fallback || reading || ''
-  speakSynth(text, 'ja')
+// Japanese: the browser voice can't honour pitch accent, so synthesize the kana with the local
+// OpenJTalk service (/api/tts/ja) which FORCES the stored Kanjium downstep. The returned mp3 plays
+// through the same <Audio> + service-worker-cache path as the zh/yue clips. Any failure (offline,
+// service down, non-kana reading) falls back to the OS voice, exactly like the clip path.
+async function speakJa(reading: string | null | undefined, fallback: string | undefined, accent: string | null | undefined, my: number): Promise<void> {
+  const kana = reading && KANA.test(reading) ? reading.replace(/\s+/g, '') : ''
+  if (!kana) {
+    speakSynth(fallback || reading || '', 'ja')
+    return
+  }
+  const a = accent != null && accent !== '' ? `&accent=${encodeURIComponent(accent)}` : ''
+  const obj = await fetchClip(`/api/tts/ja?kana=${encodeURIComponent(kana)}${a}`)
+  if (my !== token) {
+    if (obj) URL.revokeObjectURL(obj)
+    return
+  }
+  if (!obj) {
+    speakSynth(kana, 'ja') // service unavailable → OS voice on the kana
+    return
+  }
+  await playOne(obj, my, 1.0)
 }
 
 /** Speak one reading in its variety's voice. `reading` is the numbered pinyin / jyutping / kana shown
- * on the row; `fallbackText` is the Han word, used when clips are unavailable. */
-export function speakReading(reading: string | null | undefined, variety: string, fallbackText?: string): void {
+ * on the row; `fallbackText` is the Han word, used when clips are unavailable. `accent` is the Japanese
+ * Kanjium downstep index (ja only), forwarded to the synth so the pitch accent is correct. */
+export function speakReading(
+  reading: string | null | undefined,
+  variety: string,
+  fallbackText?: string,
+  accent?: string | null,
+): void {
   if (!canSpeak()) return
   stopAll()
   const my = token
 
   if (variety === 'ja') {
-    speakJa(reading, fallbackText)
+    void speakJa(reading, fallbackText, accent, my)
     return
   }
 

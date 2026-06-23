@@ -682,6 +682,16 @@ async fn single_kanji_char_reading_has_pitch_accent() {
     assert_eq!(accent, Some("1"), "箸 kun reading はし should carry atamadaka (1) from the word lexeme");
 }
 
+// C6. the ja TTS proxy rejects empty / over-long input before reaching the synth sidecar.
+#[tokio::test]
+async fn tts_ja_rejects_bad_input() {
+    let (empty, _) = get("/tts/ja?kana=").await;
+    assert_eq!(empty, StatusCode::BAD_REQUEST);
+    // 40 chars > the 32-char guard
+    let (long, _) = get("/tts/ja?kana=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").await;
+    assert_eq!(long, StatusCode::BAD_REQUEST);
+}
+
 // E5. entry endpoint returns full structure; unknown id is 404.
 #[tokio::test]
 async fn entry_and_404() {

@@ -8,6 +8,7 @@ pub mod ocr;
 pub mod recognize;
 pub mod search;
 pub mod state;
+pub mod tts;
 
 use axum::{
     routing::{get, post},
@@ -34,6 +35,7 @@ pub fn build_router(st: AppState) -> Router {
         .route("/translate", get(handlers::translate_handler))
         .route("/segment", get(handlers::segment_handler))
         .route("/mt", get(mt::translate_handler))
+        .route("/tts/ja", get(tts::ja_handler))
         .route("/why/:id", get(handlers::why_handler))
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())

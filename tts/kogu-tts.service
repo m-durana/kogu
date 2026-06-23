@@ -1,0 +1,19 @@
+[Unit]
+Description=Kogu Japanese TTS sidecar (OpenJTalk/pyopenjtalk, forced pitch accent)
+After=network.target
+
+[Service]
+ExecStart=/mnt/HC_Volume_102319212/kogu-tts/venv/bin/python /srv/miro/kogu/tts/synth_service.py
+WorkingDirectory=/srv/miro/kogu/tts
+Environment=KOGU_TTS_PORT=4120
+Environment=KOGU_TTS_CACHE=/mnt/HC_Volume_102319212/kogu-tts/cache
+Restart=on-failure
+RestartSec=2
+# loopback-only sidecar; needs to write its mp3 cache on the data volume
+ReadWritePaths=/mnt/HC_Volume_102319212/kogu-tts
+ProtectSystem=strict
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
