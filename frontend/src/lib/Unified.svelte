@@ -25,7 +25,7 @@
   import IdcBox from './IdcBox.svelte'
   import Glyph from './Glyph.svelte'
   import EntryRow from './EntryRow.svelte'
-  import { AlertTriangle, Volume2, ArrowLeftRight } from '@lucide/svelte'
+  import { AlertTriangle, Volume2, ArrowLeftRight, Plus, Minus } from '@lucide/svelte'
 
   // a reading shown in the user's chosen romanisation (shared with the result/saved lists via display.ts)
   function dispReading(variety: string, reading: string): string {
@@ -36,6 +36,7 @@
   // plain reading renders unchanged. Monochrome overline + tick is drawn from these cells in the markup.
   type PitchCell = { mora: string; high: boolean; drop: boolean }
   function pitchCells(reading: string, accent: string | null | undefined): PitchCell[] | null {
+    if (!settings.pitchAccent) return null // user turned the contour off (Settings)
     const p = pitchPattern(reading, accent)
     if (!p) return null
     const morae = moraSplit(reading)
@@ -47,6 +48,9 @@
       drop: p.downstep !== null && i + 1 === p.downstep,
     }))
   }
+  // show the speaker affordance only when the browser can play audio AND the user hasn't turned
+  // pronunciation audio off in Settings.
+  const speakOn = $derived(canSpeak() && settings.audio)
   import { readingRomaji } from './romaji'
 
   // The unified cross-language view - one Han word, seen across 中 / 粵 / 日 at once.
@@ -357,7 +361,12 @@
   // whose characters were picked for their sound, not meaning. Driven by the entry's origin badges
   // (phono-semantic-matching). Single characters are excluded — they use the component role display.
   const soundLoan = $derived(!single && !!entry && isSoundLoan(entry.origin_badges))
-  const soundLoanTip = $derived(soundLoan ? soundLoanTitle(entry!.origin_badges) : '')
+  // shown when the user taps the "written for sound" chip (reuses the term-explainer popup). Prefer the
+  // badge's specific note ("Loanword from English: …"); fall back to a generic explanation.
+  const soundLoanExplain = $derived(
+    (soundLoan && soundLoanTitle(entry!.origin_badges)) ||
+      'Written for sound: a loanword whose characters were chosen for how they sound, not for their meaning.',
+  )
 
   // Cantonese shares the Han script: a single character written 中 is almost always written and
   // understood the same in 粵, differing only in pronunciation. So when there's no SEPARATE Cantonese
@@ -657,10 +666,16 @@
   const headHasOkurigana = $derived(
     (headChar?.readings ?? []).some((r) => r.kind === 'kunyomi' && r.value.includes('.')),
   )
+  // a kanji that is itself a standalone Japanese WORD (本=ほん, 水=みず, 木=き) is NOT a bound morpheme,
+  // even with no okurigana — detected by a real same-glyph ja word-lexeme among the rows. Without this,
+  // the synthetic Kanjidic row for such a noun-kanji was mislabelled "only in compounds".
+  const hasStandaloneJaWord = $derived(
+    rows.some((r) => r.variety === 'ja' && r.kind === 'form' && !r.synthetic && r.form === head),
+  )
   // bound classification for a row: 'always' (only ever in compounds), 'often' (bound in some senses
   // but free in others, e.g. 日), or null (not bound / a word stem).
   function boundKind(r: Row): 'always' | 'often' | null {
-    if (r.synthetic) return headHasOkurigana ? null : 'always'
+    if (r.synthetic) return headHasOkurigana || hasStandaloneJaWord ? null : 'always'
     if (isAlwaysBound(r.glosses)) return 'always'
     if (isBoundForm(r.glosses)) return 'often'
     return null
@@ -754,12 +769,19 @@
     activeTab = key
     save()
   }
-  // a single toggle that re-sorts the Related and Used-in lists: default order (frequency / relevance)
-  // ⇄ grouped by language (中 → 粵 → 日). Stable, so order within a language is preserved.
-  let sortByLang = $state(false)
+  // re-sort the Related and Used-in lists: 'relevance' = the default order (frequency / relevance),
+  // 'language' = grouped 中 → 粵 → 日, 'alphabet' = by reading (A–Z / gojūon). Stable within each key.
+  let sortMode = $state<'relevance' | 'language' | 'alphabet'>('relevance')
   function sortRows<T extends { variety: Variety }>(rows: T[]): T[] {
-    if (!sortByLang) return rows
-    return [...rows].sort((a, b) => VORDER.indexOf(a.variety) - VORDER.indexOf(b.variety))
+    if (sortMode === 'language') {
+      return [...rows].sort((a, b) => VORDER.indexOf(a.variety) - VORDER.indexOf(b.variety))
+    }
+    if (sortMode === 'alphabet') {
+      const key = (r: T) =>
+        (((r as { reading?: string | null }).reading || (r as { form?: string }).form || '') as string).toLowerCase()
+      return [...rows].sort((a, b) => key(a).localeCompare(key(b)))
+    }
+    return rows
   }
 
   // Bound form: a morpheme that doesn't stand alone as a word — it only carries meaning inside
@@ -893,10 +915,6 @@
           <span class="regiontags">{#each regionBadges as t}<span class="rtag" title="used mainly in {t}">{t}</span>{/each}</span>
         {/if}
       </div>
-      {#if soundLoan}
-        <!-- transliteration / phonetic loan: the characters were chosen for their sound, not meaning -->
-        <p class="soundloan"><span class="role role-phonetic">written for sound</span> <span class="slnote" title={soundLoanTip}>loanword: characters chosen for sound, not meaning</span></p>
-      {/if}
       <div class="defs">
         {#each defRows as r (r.id)}
           {@const ss = shownSenses(r)}
@@ -923,26 +941,26 @@
                        (kana + romaji), clamped to one line with a "+" (and horizontally scrollable). A
                        REAL ja word-row shows its OWN reading instead. The readings are plain text; the
                        single speaker icon plays them — one consistent speech affordance across 中/粵/日. -->
-                  <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe={(v) => (jaReadOver = v)}>{#each jaReadItems as it, i}{@const cells = pitchCells(it.main, it.accent)}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{#if cells}<span class="pitch" title="pitch accent (Kanjium)">{#each cells as c}<span class="pmora" class:phigh={c.high} class:pdrop={c.drop}>{c.mora}</span>{/each}</span>{:else}{it.main}{/if}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{#if canSpeak()}<button class="spk spk-sm" onclick={() => speakReading(it.main, 'ja', undefined, it.accent)} aria-label="listen to {it.main}" title="listen"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{jaReadOpen ? '−' : '+'}</button>{/if}
+                  <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe={(v) => (jaReadOver = v)}>{#each jaReadItems as it, i}{@const cells = pitchCells(it.main, it.accent)}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{#if cells}<span class="pitch" title="pitch accent (Kanjium)">{#each cells as c}<span class="pmora" class:phigh={c.high} class:pdrop={c.drop}>{c.mora}</span>{/each}</span>{:else}{it.main}{/if}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{#if speakOn}<button class="spk spk-sm" onclick={() => speakReading(it.main, 'ja', undefined, it.accent)} aria-label="listen to {it.main}" title="listen"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{#if jaReadOpen}<Minus size={15} />{:else}<Plus size={15} />{/if}</button>{/if}
                 {:else if r.reading}
                   {@const cells = r.variety === 'ja' ? pitchCells(r.reading, r.accent) : null}
                   <!-- plain reading text + speaker, wrapped in .rdg so the speaker sits tight to the
                        reading EXACTLY like the 日/粵 per-reading icons (not pushed away by .drow2's gap).
                        For a Japanese kana reading with Kanjium accent data, the reading renders as a
                        monochrome pitch contour (overline over high morae + a downstep tick) instead. -->
-                  <span class="dread"><span class="rdg">{#if cells}<span class="pitch" title="pitch accent (Kanjium)">{#each cells as c}<span class="pmora" class:phigh={c.high} class:pdrop={c.drop}>{c.mora}</span>{/each}</span>{:else}{dispReading(r.variety, r.reading)}{/if}{#if canSpeak()}<button class="spk spk-sm" onclick={() => speakReading(r.reading, r.variety, r.form, r.accent)} aria-label="listen" title="listen"><Volume2 size={13} /></button>{/if}</span></span>
+                  <span class="dread"><span class="rdg">{#if cells}<span class="pitch" title="pitch accent (Kanjium)">{#each cells as c}<span class="pmora" class:phigh={c.high} class:pdrop={c.drop}>{c.mora}</span>{/each}</span>{:else}{dispReading(r.variety, r.reading)}{/if}{#if speakOn}<button class="spk spk-sm" onclick={() => speakReading(r.reading, r.variety, r.form, r.accent)} aria-label="listen" title="listen"><Volume2 size={13} /></button>{/if}</span></span>
                 {/if}
-                {#if r.variety === 'zh' && headJyutList.length && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread dreads" class:clamp={!yueReadOpen} class:faded={yueReadOver && !yueReadOpen} use:readProbe={(v) => (yueReadOver = v)}>{#each headJyutList as j, i}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{settings.romanization === 'yale' ? jyutpingToYale(j) : j}{#if canSpeak()}<button class="spk spk-sm" onclick={() => speakReading(j, 'yue', r.form)} aria-label="listen to {j}, Cantonese" title="listen (Cantonese)"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if yueReadOver}<button class="rmore" onclick={toggleYueRead} aria-label={yueReadOpen ? 'show fewer readings' : 'show more readings'}>{yueReadOpen ? '−' : '+'}</button>{/if}{/if}
+                {#if r.variety === 'zh' && headJyutList.length && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread dreads" class:clamp={!yueReadOpen} class:faded={yueReadOver && !yueReadOpen} use:readProbe={(v) => (yueReadOver = v)}>{#each headJyutList as j, i}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{settings.romanization === 'yale' ? jyutpingToYale(j) : j}{#if speakOn}<button class="spk spk-sm" onclick={() => speakReading(j, 'yue', r.form)} aria-label="listen to {j}, Cantonese" title="listen (Cantonese)"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if yueReadOver}<button class="rmore" onclick={toggleYueRead} aria-label={yueReadOpen ? 'show fewer readings' : 'show more readings'}>{#if yueReadOpen}<Minus size={15} />{:else}<Plus size={15} />{/if}</button>{/if}{/if}
               </span>
             </div>
-            {#if boundKind(r) || (single && headChar && (isRadicalChar || rowUsage(r.variety)))}
-              <!-- tags (bound, rarely-used, radical) on their own line, indented under the readings.
-                   "rarely used" is for THIS row's language; "radical" is character-wide. The character
-                   badges are gated on headChar so they don't FLASH: before the entry enriches, headChar
-                   is undefined and rowUsage would otherwise return a false "rarely used" that vanishes a
-                   beat later. Gated, they appear once with the rest of the enriched content and stay. -->
+            {#if boundKind(r) || (soundLoan && r.variety === 'zh') || (single && headChar && (isRadicalChar || rowUsage(r.variety)))}
+              <!-- tags (bound, written-for-sound, rarely-used, radical) on their own line, indented under
+                   the readings — UNDER the language row, not the header. "rarely used" is for THIS row's
+                   language; "radical" is character-wide. The character badges are gated on headChar so
+                   they don't FLASH before the entry enriches. -->
               <div class="rtagline">
                 {#if boundKind(r) === 'always'}<button class="ltag tappable" onclick={() => openBound(r)} title="only used in compounds, never as a word on its own">only in compounds</button>{:else if boundKind(r) === 'often'}<button class="ltag tappable" onclick={() => openBound(r)} title="bound in some senses; often used in compounds">often in compounds</button>{/if}
+                {#if soundLoan && r.variety === 'zh'}<button class="ltag tappable" onclick={() => (openTerm = soundLoanExplain)} title="tap to explain">written for sound</button>{/if}
                 {#if single && headChar && isRadicalChar}<span class="ltag rad">radical</span>{/if}
                 {#if single && headChar && rowUsage(r.variety)}<span class="ltag">{rowUsage(r.variety)}</span>{/if}
               </div>
@@ -974,8 +992,19 @@
       </div>
     {/if}
 
+    {#snippet sortControl(defLabel: string)}
+      <div class="sortrow">
+        <span class="sortlbl">sort</span>
+        <span class="sortseg">
+          <button class:on={sortMode === 'relevance'} onclick={() => (sortMode = 'relevance')}>{defLabel}</button>
+          <button class:on={sortMode === 'language'} onclick={() => (sortMode = 'language')}>language</button>
+          <button class:on={sortMode === 'alphabet'} onclick={() => (sortMode = 'alphabet')}>A–Z</button>
+        </span>
+      </div>
+    {/snippet}
+
     {#if activeTab === 'related'}
-      <div class="sortrow"><button class="sortbtn" onclick={() => (sortByLang = !sortByLang)}>sort: {sortByLang ? 'by language' : 'by relevance'}</button></div>
+      {@render sortControl('relevance')}
       {#if everydayRows.length}
         <!-- the natural everyday word another language writes for this character's meaning (耳 → 耳朵) -->
         <section class="bridge"><ul class="langs">{#each sortRows(everydayRows) as r (r.id)}{@render rowItem(r)}{/each}</ul></section>
@@ -1110,26 +1139,18 @@
           {@render etyBody(acc.text)}
         </div>
       {/each}
-      {#if openTerm}
-        <div class="termpop" role="presentation" onclick={() => (openTerm = null)}>
-          <div class="termcard" role="dialog" aria-modal="true" onclick={(e) => e.stopPropagation()}>
-            <p>{openTerm}</p>
-            <button class="mclose" onclick={() => (openTerm = null)}>close</button>
-          </div>
-        </div>
-      {/if}
     </section>
   {/if}
 
   {#if isGlyphSearch && activeTab === 'words' && entry && compoundList.length}
     {@const wlist = sortRows(compoundRows)}
     <section class="words">
-      <div class="sortrow"><button class="sortbtn" onclick={() => (sortByLang = !sortByLang)}>sort: {sortByLang ? 'by language' : 'by frequency'}</button></div>
+      {@render sortControl('frequency')}
       <!-- the SAME rowItem style as every other entry list. In frequency order, cross-script-variant
            words (氷 for 冰) follow under a "written with a variant character" divider. -->
       <ul class="langs">
         {#each wlist as r, i (r.id)}
-          {#if !sortByLang && r.relation === 'compound-alt' && (i === 0 || wlist[i - 1].relation !== 'compound-alt')}
+          {#if sortMode === 'relevance' && r.relation === 'compound-alt' && (i === 0 || wlist[i - 1].relation !== 'compound-alt')}
             <li class="wdiv">written with a variant character</li>
           {/if}
           {@render rowItem(r)}
@@ -1147,6 +1168,17 @@
         {/each}
       </div>
     </section>
+  {/if}
+
+  {#if openTerm}
+    <!-- term/explainer popup (origin jargon + the "written for sound" chip) — at the component root so
+         it opens from any tab, not only the Origin section. -->
+    <div class="termpop" role="presentation" onclick={() => (openTerm = null)}>
+      <div class="termcard" role="dialog" aria-modal="true" onclick={(e) => e.stopPropagation()}>
+        <p>{openTerm}</p>
+        <button class="mclose" onclick={() => (openTerm = null)}>close</button>
+      </div>
+    </div>
   {/if}
 
   {#if boundOpen}
@@ -1270,17 +1302,23 @@
 
   /* CJKV-style segmented control for the below-definition sections */
   /* Hybrid: underline tabs (not a segmented pill) — a hairline rule with a white indicator. */
-  .seg { display: flex; align-items: stretch; gap: 1.5rem; border-bottom: 0.5px solid var(--border); margin: 1.5rem 0 0.2rem; overflow-x: auto; scrollbar-width: none; }
+  /* overflow-x:auto alone coerces overflow-y to auto too (CSS spec), which let the tab strip scroll
+     vertically; pin overflow-y:hidden so it only ever scrolls horizontally when tabs don't fit. */
+  .seg { display: flex; align-items: stretch; gap: 1.5rem; border-bottom: 0.5px solid var(--border); margin: 1.5rem 0 0.2rem; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
   .seg::-webkit-scrollbar { display: none; }
   .segb { flex: 0 0 auto; font-family: var(--sans); font-size: 0.95rem; color: var(--muted); background: none; border: none; padding: 0.7rem 0; white-space: nowrap; cursor: pointer; position: relative; }
   .segb:hover:not(.on) { color: var(--text); }
   .segb.on { color: var(--text); font-weight: 600; }
-  .segb.on::after { content: ""; position: absolute; left: 0; right: 0; bottom: -0.5px; height: 2px; background: var(--text); border-radius: 2px; }
+  .segb.on::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--text); border-radius: 2px; }
   .segsep { display: none; }
   /* a single toggle that re-sorts the Related / Used-in lists (default ⇄ by language) */
-  .sortrow { display: flex; justify-content: flex-end; margin: 0.7rem 0 0.2rem; }
-  .sortbtn { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); background: none; border: 1px solid var(--border); border-radius: 999px; padding: 0.22rem 0.6rem; cursor: pointer; }
-  .sortbtn:hover { color: var(--text); border-color: var(--border-strong); }
+  .sortrow { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; margin: 0.7rem 0 0.2rem; }
+  .sortlbl { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); }
+  .sortseg { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+  .sortseg button { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); background: none; border: none; padding: 0.22rem 0.62rem; cursor: pointer; }
+  .sortseg button + button { border-left: 1px solid var(--border); }
+  .sortseg button:hover { color: var(--text); }
+  .sortseg button.on { background: var(--text); color: var(--bg); }
   .dim { color: var(--faint); }
 
   /* jukugo component characters now reuse the shared .langs/.lang row system (see "written
@@ -1365,14 +1403,6 @@
   .mch b { font-family: var(--mono); font-weight: 600; color: var(--text); letter-spacing: 0.01em; }
   .pwnote { color: var(--muted); }
   .phonowhy.diverged .pwnote { color: var(--faint); }
-  /* phono-semantic role badge: meaning (filled) vs sound (outlined) — monochrome */
-  .role { font-family: var(--mono); font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.06em; padding: 0.05rem 0.38rem; border-radius: 999px; line-height: 1.5; align-self: center; }
-  .role-phonetic { color: var(--muted); background: none; border: 1px solid var(--border-strong); }
-
-  /* "written for sound" marker for transliteration / phonetic-loan words (沙發, 幽默) — reuses the
-     outlined phonetic role chip, with a faint explanatory note. Monochrome, sits under the headword. */
-  .soundloan { display: flex; align-items: center; gap: 0.5rem; margin: 0.1rem 0 0.5rem; flex-wrap: wrap; }
-  .slnote { color: var(--muted); font-size: 0.82rem; cursor: help; }
 
   /* words: a tab panel; grouped by language with breathing room */
   .words { margin-top: 0.4rem; }

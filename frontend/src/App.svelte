@@ -7,8 +7,8 @@
   import LookupPanel from './lib/LookupPanel.svelte'
   import Pad from './lib/Pad.svelte'
   import Ocr from './lib/Ocr.svelte'
-  import { Search, X, Brush, Camera, Bookmark, Clock, Share2, Trash2, ArrowRight, Download, Settings, SquarePlus, ExternalLink } from '@lucide/svelte'
-  import { settings, setRomanization } from './lib/settings.svelte'
+  import { Search, X, Brush, Camera, Bookmark, Clock, Share2, Trash2, ArrowRight, Download, Settings, SquarePlus, ExternalLink, ChevronDown } from '@lucide/svelte'
+  import { settings, setRomanization, setPitchAccent, setAudio } from './lib/settings.svelte'
   import { onMount } from 'svelte'
   import { getSaved, getHistory, isSaved, toggleSaved, recordHistory, clearHistory, type SavedItem } from './lib/store'
 
@@ -565,9 +565,9 @@
         spellcheck="false"
       />
       {#if q}
-        <button type="button" class="clearbtn" aria-label="clear search" onmousedown={(e) => e.preventDefault()} onclick={clearSearch} data-testid="clear"><X size={17} /></button>
+        <button type="button" class="clearbtn" aria-label="clear search" onmousedown={(e) => e.preventDefault()} onclick={clearSearch} data-testid="clear"><X size={22} /></button>
       {/if}
-      <button type="submit" class="searchbtn" aria-label="search" title="search" data-testid="search-go"><ArrowRight size={18} /></button>
+      <button type="submit" class="searchbtn" aria-label="search" title="search" data-testid="search-go"><ArrowRight size={22} /></button>
       {#if loading}<span class="loadbar" aria-hidden="true"></span>{/if}
     </form>
     <button class="rowbtn" class:on={panel === 'draw'} aria-label="draw a character" aria-pressed={panel === 'draw'} title="draw" onclick={toggleDraw} data-testid="draw-toggle"><Brush size={18} /></button>
@@ -730,9 +730,6 @@
         </p>
         <p class="intropos"><span class="intropron">/ko.gu/</span> <span class="introtag">noun</span></p>
 
-        <!-- design mockups live on their own page (doesn't re-skin the app) -->
-        <p class="designlink"><a href="/design/" target="_blank" rel="noopener">▦ compare design mockups →</a></p>
-
         <p class="introgloss">A dictionary for the living Han script. One character or word is shown across <b>中文</b> (Mandarin), <b>粵語</b> (Cantonese), and <b>日本語</b> (Japanese) at once, so you can see how the same writing is read and used in each, and how the reforms pulled the forms apart.</p>
 
         <h2 class="abh">On each page</h2>
@@ -768,7 +765,7 @@
         </ol>
         <button class="setclose" onclick={() => (showInstallHelp = false)}>got it</button>
       </div>
-      {#if isIOS}<div class="instpoint" aria-hidden="true">▾</div>{/if}
+      {#if isIOS}<div class="instpoint" aria-hidden="true"><ChevronDown size={18} /></div>{/if}
     </div>
   {/if}
 
@@ -779,7 +776,10 @@
   {#if showSettings}
     <div class="setbg" role="presentation" onclick={() => (showSettings = false)}>
       <div class="setcard" role="dialog" aria-modal="true" aria-label="settings" onclick={(e) => e.stopPropagation()}>
-        <h2 class="seth">Settings</h2>
+        <div class="sethrow">
+          <h2 class="seth">Settings</h2>
+          <button class="setx" onclick={() => (showSettings = false)} aria-label="close"><X size={20} /></button>
+        </div>
         <div class="setrow">
           <span class="setlabel">Cantonese romanization</span>
           <div class="seg">
@@ -787,7 +787,22 @@
             <button class:on={settings.romanization === 'yale'} onclick={() => setRomanization('yale')}>Yale</button>
           </div>
         </div>
-        <button class="setclose" onclick={() => (showSettings = false)}>close</button>
+        <div class="setrow">
+          <span class="setlabel">Japanese pitch accent</span>
+          <span class="setsub">Show the pitch-accent contour over kana readings.</span>
+          <div class="seg">
+            <button class:on={settings.pitchAccent} onclick={() => setPitchAccent(true)}>Show</button>
+            <button class:on={!settings.pitchAccent} onclick={() => setPitchAccent(false)}>Hide</button>
+          </div>
+        </div>
+        <div class="setrow">
+          <span class="setlabel">Pronunciation audio</span>
+          <span class="setsub">Tap the speaker on a reading to hear it.</span>
+          <div class="seg">
+            <button class:on={settings.audio} onclick={() => setAudio(true)}>On</button>
+            <button class:on={!settings.audio} onclick={() => setAudio(false)}>Off</button>
+          </div>
+        </div>
       </div>
     </div>
   {/if}
@@ -826,15 +841,18 @@
   /* settings panel */
   .setbg { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 70; }
   .setcard { width: min(22rem, 100%); background: var(--surface-2, #1c1c1f); border: 0.5px solid var(--border-strong); border-radius: 16px; box-shadow: 0 12px 40px -12px rgba(0,0,0,0.7); padding: 1.1rem 1.1rem 0.9rem; }
-  .seth { font-family: var(--sans); font-size: 1.1rem; font-weight: 500; color: var(--text); margin: 0 0 0.9rem; }
-  .setrow { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
-  .setlabel { font-size: 0.9rem; color: var(--muted); }
-  .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--r); overflow: hidden; align-self: start; }
-  .seg button { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); background: none; border: none; padding: 0.35rem 0.8rem; }
+  .sethrow { display: flex; align-items: center; justify-content: space-between; margin: 0 0 1.1rem; }
+  .seth { font-family: var(--sans); font-size: 1.15rem; font-weight: 500; color: var(--text); margin: 0; }
+  .setx { display: inline-flex; background: none; border: none; color: var(--muted); padding: 0.2rem; border-radius: var(--r); }
+  .setx:hover { color: var(--text); background: var(--surface); }
+  .setrow { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.9rem 0; border-top: 0.5px solid var(--border); }
+  .setrow:first-of-type { border-top: none; padding-top: 0; }
+  .setlabel { font-family: var(--sans); font-size: 0.95rem; color: var(--text); }
+  .setsub { font-size: 0.8rem; color: var(--faint); line-height: 1.4; margin-top: -0.15rem; }
+  .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 999px; overflow: hidden; align-self: start; margin-top: 0.15rem; }
+  .seg button { font-family: var(--mono); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); background: none; border: none; padding: 0.4rem 0.95rem; }
   .seg button + button { border-left: 1px solid var(--border-strong); }
   .seg button.on { background: var(--text); color: var(--bg); }
-  .setclose { font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); background: none; border: 1px solid var(--border); border-radius: var(--r); padding: 0.3rem 0.7rem; }
-  .setclose:hover { color: var(--text); border-color: var(--border-strong); }
   .brand { margin: 0; font-weight: 400; }
   .brandbtn { display: inline-flex; align-items: baseline; gap: 0.45rem; background: none; border: none; padding: 0; }
   .brandbtn:hover { background: none; }
@@ -847,7 +865,7 @@
   .searchicon { position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; display: flex; }
   /* matches the Hybrid mockup's .search: 0.6rem block padding + 18px radius (same height→same roundness) */
   .field input {
-    width: 100%; padding: 0.6rem 4.4rem 0.6rem 2.4rem; font-size: 1.02rem; line-height: 1.15;
+    width: 100%; padding: 0.6rem 5.2rem 0.6rem 2.4rem; font-size: 1.02rem; line-height: 1.15;
     font-family: var(--sans); color: var(--text); -webkit-appearance: none; appearance: none;
     background: var(--surface); border: 1px solid transparent; border-radius: 18px;
   }
@@ -862,7 +880,7 @@
   /* item 1: monochrome selection so highlighting typed text doesn't look odd */
   .field input::selection { background: var(--muted); color: var(--bg); }
   .clearbtn {
-    position: absolute; right: 2.5rem; top: 50%; transform: translateY(-50%);
+    position: absolute; right: 2.9rem; top: 50%; transform: translateY(-50%);
     border: none; background: transparent; color: var(--muted); padding: 0.4rem; border-radius: var(--r); display: inline-flex;
   }
   .clearbtn:hover { color: var(--hi); background: var(--surface-2); }
@@ -876,14 +894,14 @@
   .rowbtn {
     flex: none; display: inline-flex; align-items: center; justify-content: center; align-self: center;
     width: 2.9rem; height: 2.9rem; margin-left: 0.4rem;
-    color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 50%;
+    color: var(--muted); background: var(--surface); border: none; border-radius: 50%;
     overflow: hidden;
-    transition: width 0.22s ease, opacity 0.18s ease, margin 0.22s ease, border-width 0.22s ease;
+    transition: width 0.22s ease, opacity 0.18s ease, margin 0.22s ease;
   }
-  .rowbtn:hover { color: var(--hi); border-color: var(--border-strong); background: var(--surface-2); }
-  .rowbtn.on { color: var(--bg); background: var(--text); border-color: var(--text); }
+  .rowbtn:hover { color: var(--hi); background: var(--surface-2); }
+  .rowbtn.on { color: var(--bg); background: var(--text); }
   /* item 1: focusing the field expands it to full width; draw + camera slide away */
-  .searchrow.focused .rowbtn { width: 0; margin-left: 0; opacity: 0; border-width: 0; pointer-events: none; }
+  .searchrow.focused .rowbtn { width: 0; margin-left: 0; opacity: 0; pointer-events: none; }
   @media (prefers-reduced-motion: reduce) { .rowbtn { transition: none; } }
   /* draw pad: a FLOATING panel just under the search row. position:absolute with no offset keeps it at
      its natural place in flow but lifts it OUT of flow, so the results list / about text render full
@@ -948,10 +966,6 @@
   .intropos { margin: 0.35rem 0 1rem; display: flex; align-items: baseline; gap: 0.6rem; }
   .intropron { font-family: var(--mono); font-size: 0.95rem; color: var(--faint); }
   .introtag { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); }
-  /* link to the standalone design-mockup page */
-  .designlink { margin: 0.6rem 0 1.2rem; }
-  .designlink a { font-family: var(--mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); text-decoration: none; }
-  .designlink a:hover { color: var(--text); }
   /* install-as-web-app button (item 2) */
   /* install button sits to the right of the 古古 Kogu wordmark (item 139) */
   .installbtn { display: inline-flex; align-items: center; gap: 0.35rem; margin-left: auto; align-self: center; font-family: var(--mono); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text); background: none; border: 1px solid var(--border-strong); border-radius: var(--r); padding: 0.3rem 0.6rem; }

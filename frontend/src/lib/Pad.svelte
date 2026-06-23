@@ -249,8 +249,8 @@
     min-height: 0; height: 100%; padding-top: 0.15rem;
   }
   .pad.optionsopen .canvas-wrap { display: none; }
-  /* in the wrapped grid the inline separators don't make sense; give candidates room to be tapped */
-  .pad.optionsopen .csep { display: none; }
+  /* keep the vertical separators between candidates even in the expanded grid (item: "add the vertical
+     lines even if you expand the menu"); give candidates room to be tapped */
   .pad.optionsopen .cand { padding: 0.35rem 0.7rem; }
   /* the wrapper grows to fill remaining dock height; the canvas fills the wrapper */
   .canvas-wrap { position: relative; display: flex; flex: 1; min-height: 160px; }
