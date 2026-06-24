@@ -36,6 +36,7 @@ pub fn build_router(st: AppState) -> Router {
         .route("/segment", get(handlers::segment_handler))
         .route("/mt", get(mt::translate_handler))
         .route("/tts/ja", get(tts::ja_handler))
+        .route("/clip/:variety/:file", get(tts::clip_handler))
         .route("/why/:id", get(handlers::why_handler))
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())

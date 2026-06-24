@@ -7,8 +7,12 @@
 // Clips are cached by the service worker (cache-first), so repeat taps and offline both work. If a
 // clip is missing or the network is down we fall back to the OS voice on the Han text.
 
-const ZH_BASE = 'https://cdn.jsdelivr.net/gh/davinfifield/mp3-chinese-pinyin-sound@master/mp3/'
-const YUE_BASE = 'https://jyutping.org/audio/'
+// Pronunciation clips are proxied through our own backend (/api/clip/...) so they are SAME-ORIGIN —
+// the upstream CDNs (jsDelivr for Mandarin, jyutping.org for Cantonese) are unreachable for some users
+// (mainland China blocks jsDelivr; some iOS/PWA setups fail the cross-origin fetch), which silently
+// broke zh/yue audio while the same-origin Japanese synth kept working.
+const ZH_BASE = '/api/clip/zh/'
+const YUE_BASE = '/api/clip/yue/'
 const SYNTH_LANG: Record<string, string> = { zh: 'zh-CN', yue: 'zh-HK', ja: 'ja-JP' }
 
 let voices: SpeechSynthesisVoice[] = []
@@ -193,14 +197,13 @@ export function speakReading(
   variety: string,
   fallbackText?: string,
   accent?: string | null,
-): void {
-  if (!canSpeak()) return
+): Promise<void> {
+  if (!canSpeak()) return Promise.resolve()
   stopAll()
   const my = token
 
   if (variety === 'ja') {
-    void speakJa(reading, fallbackText, accent, my)
-    return
+    return speakJa(reading, fallbackText, accent, my)
   }
 
   const base = variety === 'yue' ? YUE_BASE : ZH_BASE
@@ -213,10 +216,12 @@ export function speakReading(
   if (!files.length) {
     // no romanisation to key clips on (e.g. a bare letter/number reading) — use the OS voice.
     speakSynth(fallbackText || '', variety)
-    return
+    return Promise.resolve()
   }
 
-  void playClips(files.map((f) => base + f + '.mp3'), my).then((played) => {
+  // resolves when playback finishes (or is superseded) — the UI uses this to light the speaker only
+  // while it's actually sounding.
+  return playClips(files.map((f) => base + f + '.mp3'), my).then((played) => {
     // every syllable was missing (and we weren't superseded) → fall back to the OS voice.
     if (played === 0 && my === token) speakSynth(fallbackText || '', variety)
   })

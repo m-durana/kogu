@@ -21,6 +21,10 @@ pub struct AppState {
     /// in-memory cache for the /mt translate proxy ("sl|q" → (translation, detected_source)); the DB
     /// pool is read-only so we can't persist there. Lost on restart, which is fine — cheap to refetch.
     pub mt_cache: Arc<Mutex<HashMap<String, (String, String)>>>,
+    /// in-memory cache of proxied pronunciation clips ("zh/ni3" → mp3 bytes). The zh/yue clips are
+    /// fetched from upstream CDNs server-side and served same-origin, so they work where those CDNs are
+    /// blocked (mainland China) or unreachable from the device; immutable, so caching is safe.
+    pub clip_cache: Arc<Mutex<HashMap<String, Vec<u8>>>>,
 }
 
 impl AppState {
@@ -48,6 +52,7 @@ impl AppState {
             .build()?;
         let ocr = crate::ocr::load_engine().map(Arc::new);
         let mt_cache = Arc::new(Mutex::new(HashMap::new()));
-        Ok(AppState { pool, graph: Arc::new(graph), http, ocr, mt_cache })
+        let clip_cache = Arc::new(Mutex::new(HashMap::new()));
+        Ok(AppState { pool, graph: Arc::new(graph), http, ocr, mt_cache, clip_cache })
     }
 }

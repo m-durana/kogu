@@ -51,6 +51,15 @@
   // show the speaker affordance only when the browser can play audio AND the user hasn't turned
   // pronunciation audio off in Settings.
   const speakOn = $derived(canSpeak() && settings.audio)
+  // which speaker is currently sounding — lights that one button up until playback finishes (or another
+  // tap supersedes it). Keyed by variety+reading so each row's speaker tracks independently.
+  let playingKey = $state<string | null>(null)
+  function speak(key: string, reading: string | null | undefined, variety: string, form?: string, accent?: string | null) {
+    playingKey = key
+    speakReading(reading, variety, form, accent).finally(() => {
+      if (playingKey === key) playingKey = null
+    })
+  }
   import { readingRomaji } from './romaji'
 
   // The unified cross-language view - one Han word, seen across 中 / 粵 / 日 at once.
@@ -941,16 +950,16 @@
                        (kana + romaji), clamped to one line with a "+" (and horizontally scrollable). A
                        REAL ja word-row shows its OWN reading instead. The readings are plain text; the
                        single speaker icon plays them — one consistent speech affordance across 中/粵/日. -->
-                  <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe={(v) => (jaReadOver = v)}>{#each jaReadItems as it, i}{@const cells = pitchCells(it.main, it.accent)}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{#if cells}<span class="pitch" title="pitch accent (Kanjium)">{#each cells as c}<span class="pmora" class:phigh={c.high} class:pdrop={c.drop}>{c.mora}</span>{/each}</span>{:else}{it.main}{/if}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{#if speakOn}<button class="spk spk-sm" onclick={() => speakReading(it.main, 'ja', undefined, it.accent)} aria-label="listen to {it.main}" title="listen"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{#if jaReadOpen}<Minus size={15} />{:else}<Plus size={15} />{/if}</button>{/if}
+                  <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe={(v) => (jaReadOver = v)}>{#each jaReadItems as it, i}{@const cells = pitchCells(it.main, it.accent)}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{#if cells}<span class="pitch" title="pitch accent (Kanjium)">{#each cells as c}<span class="pmora" class:phigh={c.high} class:pdrop={c.drop}>{c.mora}</span>{/each}</span>{:else}{it.main}{/if}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{#if speakOn}<button class="spk spk-sm" class:speaking={playingKey === 'ja:' + it.main} onclick={() => speak('ja:' + it.main, it.main, 'ja', undefined, it.accent)} aria-label="listen to {it.main}" title="listen"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{#if jaReadOpen}<Minus size={15} />{:else}<Plus size={15} />{/if}</button>{/if}
                 {:else if r.reading}
                   {@const cells = r.variety === 'ja' ? pitchCells(r.reading, r.accent) : null}
                   <!-- plain reading text + speaker, wrapped in .rdg so the speaker sits tight to the
                        reading EXACTLY like the 日/粵 per-reading icons (not pushed away by .drow2's gap).
                        For a Japanese kana reading with Kanjium accent data, the reading renders as a
                        monochrome pitch contour (overline over high morae + a downstep tick) instead. -->
-                  <span class="dread"><span class="rdg">{#if cells}<span class="pitch" title="pitch accent (Kanjium)">{#each cells as c}<span class="pmora" class:phigh={c.high} class:pdrop={c.drop}>{c.mora}</span>{/each}</span>{:else}{dispReading(r.variety, r.reading)}{/if}{#if speakOn}<button class="spk spk-sm" onclick={() => speakReading(r.reading, r.variety, r.form, r.accent)} aria-label="listen" title="listen"><Volume2 size={13} /></button>{/if}</span></span>
+                  <span class="dread"><span class="rdg">{#if cells}<span class="pitch" title="pitch accent (Kanjium)">{#each cells as c}<span class="pmora" class:phigh={c.high} class:pdrop={c.drop}>{c.mora}</span>{/each}</span>{:else}{dispReading(r.variety, r.reading)}{/if}{#if speakOn}<button class="spk spk-sm" class:speaking={playingKey === r.variety + ':' + r.reading} onclick={() => speak(r.variety + ':' + r.reading, r.reading, r.variety, r.form, r.accent)} aria-label="listen" title="listen"><Volume2 size={13} /></button>{/if}</span></span>
                 {/if}
-                {#if r.variety === 'zh' && headJyutList.length && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread dreads" class:clamp={!yueReadOpen} class:faded={yueReadOver && !yueReadOpen} use:readProbe={(v) => (yueReadOver = v)}>{#each headJyutList as j, i}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{settings.romanization === 'yale' ? jyutpingToYale(j) : j}{#if speakOn}<button class="spk spk-sm" onclick={() => speakReading(j, 'yue', r.form)} aria-label="listen to {j}, Cantonese" title="listen (Cantonese)"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if yueReadOver}<button class="rmore" onclick={toggleYueRead} aria-label={yueReadOpen ? 'show fewer readings' : 'show more readings'}>{#if yueReadOpen}<Minus size={15} />{:else}<Plus size={15} />{/if}</button>{/if}{/if}
+                {#if r.variety === 'zh' && headJyutList.length && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread dreads" class:clamp={!yueReadOpen} class:faded={yueReadOver && !yueReadOpen} use:readProbe={(v) => (yueReadOver = v)}>{#each headJyutList as j, i}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{settings.romanization === 'yale' ? jyutpingToYale(j) : j}{#if speakOn}<button class="spk spk-sm" class:speaking={playingKey === 'yue:' + j} onclick={() => speak('yue:' + j, j, 'yue', r.form)} aria-label="listen to {j}, Cantonese" title="listen (Cantonese)"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if yueReadOver}<button class="rmore" onclick={toggleYueRead} aria-label={yueReadOpen ? 'show fewer readings' : 'show more readings'}>{#if yueReadOpen}<Minus size={15} />{:else}<Plus size={15} />{/if}</button>{/if}{/if}
               </span>
             </div>
             {#if boundKind(r) || (soundLoan && r.variety === 'zh') || (single && headChar && (isRadicalChar || rowUsage(r.variety)))}
@@ -1349,6 +1358,10 @@
   /* speaker (Web Speech API) button on each definition row */
   .spk { display: inline-flex; align-items: center; justify-content: center; background: none; border: none; color: var(--faint); padding: 0.1rem 0.2rem; border-radius: var(--r); align-self: center; }
   .spk:hover { color: var(--text); background: var(--surface); }
+  /* lit up while this reading is actually sounding (cleared when playback ends) */
+  .spk.speaking { color: var(--text); }
+  @media (prefers-reduced-motion: no-preference) { .spk.speaking { animation: spkpulse 0.9s ease-in-out infinite; } }
+  @keyframes spkpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
   /* a per-reading speaker for the Japanese on/kun list, so each reading can be heard individually */
   .rdg { white-space: nowrap; }
   .spk-sm { padding: 0 0.1rem; vertical-align: -0.15em; margin-left: 0.1rem; }
