@@ -1164,3 +1164,36 @@ describe('headwordGlyphSize - shrink long headwords', () => {
     expect(new Set(sizes).size).toBe(4)
   })
 })
+
+// deeper-cognate classification (item: tuck dense comparative-linguistics paragraphs behind a toggle,
+// but never the core account, and keep the everyday origin visible)
+describe('etymologyTokens - deep comparative-cognate flagging', () => {
+  const FA = [
+    'Pictogram (象形) — a bow firing an arrow, later a phono-semantic compound.',
+    'STEDT compares 發 to Proto-Sino-Tibetan *m-p(r)ats ("to vomit").',
+    'According to Schuessler (2007), this is an area word; compare Proto-Vietic *ɓah.',
+    'A derivation is probably 廢.',
+  ].join('\n')
+
+  it('never marks the first (core) paragraph deep', () => {
+    expect(etymologyTokens(FA)[0].deep).toBe(false)
+  })
+  it('flags a "STEDT compares…" paragraph as deep', () => {
+    expect(etymologyTokens(FA)[1].deep).toBe(true)
+  })
+  it('flags an "According to Author (year)…" comparative paragraph as deep', () => {
+    expect(etymologyTokens(FA)[2].deep).toBe(true)
+  })
+  it('leaves a short non-comparative derivation note visible', () => {
+    expect(etymologyTokens(FA)[3].deep).toBe(false)
+  })
+  it('flags "Cognate with …" but not a plain "From …" second paragraph', () => {
+    const t = ['From earlier form A.', 'Cognate with Tibetan X.', 'From later form B.'].join('\n')
+    const segs = etymologyTokens(t)
+    expect(segs[1].deep).toBe(true)
+    expect(segs[2].deep).toBe(false)
+  })
+  it('a single-paragraph etymology is never deep', () => {
+    expect(etymologyTokens('Cognate with X.').every((s) => !s.deep)).toBe(true)
+  })
+})

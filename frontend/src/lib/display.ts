@@ -886,6 +886,11 @@ export interface EtySegment {
    * that opens a competing theory: "From …", "Alternatively…", "Author (YEAR)…"). The UI sets it off
    * so three unrelated theories don't read as one run-on origin (item 10, e.g. 古). */
   alt: boolean
+  /** true for a supplementary deep comparative-linguistics paragraph (cross-family cognates /
+   * reconstructions: "STEDT compares…", "Cognate with…", "According to Schuessler (2007)…"). The core
+   * account of the character's own formation is never marked deep; the UI tucks the deep ones behind a
+   * "show deeper cognates" toggle so the everyday reader sees the plain origin first. */
+  deep: boolean
   tokens: EtyInline[]
 }
 
@@ -952,11 +957,19 @@ function inlineEty(s: string): EtyInline[] {
 // cross-references, not rival theories — they were drawing a divider mid-account, so they're excluded.
 const ALT_LEADIN = /^(From |Possibly |Perhaps |Alternatively\b|[A-Z][a-zA-Z]+ \(\d{4}\))/
 
+// A supplementary DEEP comparative-linguistics paragraph: cross-family cognates and reconstructions,
+// not the character's own formation. These read as dense ("STEDT compares 發 to Proto-Sino-Tibetan
+// *m-p(r)ats…"), so the UI hides them behind a toggle. Never applied to the FIRST paragraph (the core
+// account). Kept deliberately narrow so a plain "From X" / "Pictogram" lead is never swept in.
+const DEEP_LEADIN =
+  /^(Cognate|Cognates|Compare\b|Cf\.|STEDT\b|Possibly cognate|Probably cognate|Related to\b|According to [A-Z][a-zA-Z]+ \(\d{4}\)|This is (?:an? )?area word|Sino-Tibetan\b)/i
+
 export function etymologyTokens(text: string): EtySegment[] {
   const segs: EtySegment[] = []
   let heading: string | null = null
   let ordCounter = 0 // running number for a run of consecutive "#" ordered-list items
   let topLevelSeen = 0 // how many depth-0 paragraphs we've emitted (to detect stacked theories)
+  let deepRun = false // a deep depth-0 paragraph's nested sub-points inherit its deep flag
   for (const raw of text.split('\n')) {
     let line = raw.trim()
     if (!line) continue
@@ -1003,7 +1016,15 @@ export function etymologyTokens(text: string): EtySegment[] {
     // a competing theory stacked as a fresh top-level paragraph after the first (古: graphic theory,
     // then 苦 theory, then the Sino-Tibetan word origin) is flagged so the UI separates them.
     const alt = depth === 0 && topLevelSeen > 0 && ALT_LEADIN.test(line)
-    segs.push({ heading, depth, ordinal, alt, tokens: inlineEty(line) })
+    // classify deep comparative paragraphs (never the first); nested points inherit the run.
+    let deep: boolean
+    if (depth === 0) {
+      deep = topLevelSeen > 0 && DEEP_LEADIN.test(line)
+      deepRun = deep
+    } else {
+      deep = deepRun
+    }
+    segs.push({ heading, depth, ordinal, alt, deep, tokens: inlineEty(line) })
     if (depth === 0) topLevelSeen += 1
     heading = null // a heading labels only its first following statement
   }

@@ -289,6 +289,11 @@
   // gates the structure readings so a 粵-only word shows jyutping, not a nominal Mandarin pinyin.
   const wordVarieties = $derived(new Set(rows.filter((r) => r.kind === 'form').map((r) => r.variety)))
 
+  // Kanjidic kun readings carry okurigana markers — a dot for the okurigana boundary (あ.う = 合 covers
+  // あ, う is the trailing kana) and affix hyphens (-あ.う prefix use, あい- suffix use). For a compact
+  // reading list we strip both to a plain kana so it reads cleanly instead of "あ.う -あ.う あい-".
+  const cleanKanaReading = (v: string): string => v.replace(/[.\-]/g, '')
+
   // A single Han character can be a genuine word in a language WITHOUT a standalone word-lexeme - e.g.
   // 津 (harbor) is a real kanji (シン/つ) but Japanese only uses it inside compounds, so there is no
   // ja lexeme and it would wrongly show as Chinese-only. Kanjidic kana on/kun is a reliable "used in
@@ -311,11 +316,13 @@
     if (!usedInJa && !hasOkurigana) return null
     const gloss = headChar.gloss_ja || headChar.gloss_en || ''
     if (!gloss) return null
-    // the Japanese form is the shinjitai if one exists, else the orthodox (traditional) glyph - NOT
-    // necessarily what was typed: Japan writes 電 / 陝, never the PRC 电 / 陕. It's still the SAME
-    // character, so this row is a co-equal block-A definition (it just displays Japan's glyph).
+    // the Japanese form is the shinjitai if one exists, else the typed glyph itself. We do NOT fall back
+    // to the backbone "orthodox" form: this row only fires when the typed glyph HAS Kanjidic on/kun, i.e.
+    // it IS a Japanese kanji that Japan writes as-is (合, 電) — so `head` is correct. Using `orthodox`
+    // mis-rendered 合 as its spurious Unihan "traditional" 閤 (a kSimplifiedVariant artifact, not a real
+    // reform). The PRC-only-simplified case (电→電) never reaches here: 电 has no Kanjidic readings.
     const sf = headChar.script_forms
-    const jaForm = sf?.branches.find((b) => b.script.includes('shinjitai'))?.form ?? sf?.orthodox ?? head
+    const jaForm = sf?.branches.find((b) => b.script.includes('shinjitai'))?.form ?? head
     return {
       id: -(head.codePointAt(0) ?? 1) - 1,
       variety: 'ja',
@@ -323,7 +330,7 @@
       alt: null,
       formScript: '',
       altScript: '',
-      reading: [on.join(' '), kun.join(' ')].filter(Boolean).join('    '),
+      reading: [on.map(cleanKanaReading).join(' '), kun.map(cleanKanaReading).join(' ')].filter(Boolean).join('    '),
       // Kanjidic packs all senses into one ';'-joined string; split so it enumerates (1. ocean 2. sea
       // …) like every other definition instead of rendering as one semicolon blob.
       glosses: gloss.split(';').map((s) => s.trim()).filter(Boolean),
@@ -602,10 +609,13 @@
   const singleJaRow = $derived(single && defRows.filter((r) => r.variety === 'ja').length === 1)
   const jaReadItems = $derived.by<{ main: string; sub: string; accent: string | null }[]>(() => {
     if (!single || !headChar) return []
+    // clean the Kanjidic okurigana markers off the kana, and dedup (あ.う / -あ.う collapse to あう).
+    const seen = new Set<string>()
     const mk = (kind: string) =>
       headChar!.readings
         .filter((r) => r.kind === kind && isKana(r.value))
-        .map((r) => ({ main: r.value, sub: readingRomaji(kind as 'onyomi' | 'kunyomi', r.value), accent: r.accent ?? null }))
+        .map((r) => ({ main: cleanKanaReading(r.value), sub: readingRomaji(kind as 'onyomi' | 'kunyomi', r.value), accent: r.accent ?? null }))
+        .filter((it) => it.main !== '' && !seen.has(it.main) && !!seen.add(it.main))
     return [...mk('onyomi'), ...mk('kunyomi')]
   })
 
@@ -801,6 +811,14 @@
       return [...rows].sort((a, b) => key(a).localeCompare(key(b)))
     }
     return rows
+  }
+
+  // which Origin accounts have their deep comparative-cognate paragraphs expanded (keyed by variety)
+  let deepOpen = $state<Set<string>>(new Set())
+  function toggleDeep(key: string) {
+    const n = new Set(deepOpen)
+    n.has(key) ? n.delete(key) : n.add(key)
+    deepOpen = n
   }
 
   // Bound form: a morpheme that doesn't stand alone as a word — it only carries meaning inside
@@ -1146,16 +1164,27 @@
     </section>
   {/if}
 
-  {#snippet etyBody(text: string)}
-    <!-- one account's prose: flowing paragraphs (no fake numbering, no dividing rule); Wiktionary
-         "*"/"**" lines become indented sub-points; a real "Etymology N" heading (rare) is kept. -->
+  <!-- one etymology paragraph (shared by the core prose and the collapsed deep-cognate block) -->
+  {#snippet etySeg(seg: ReturnType<typeof etymologyTokens>[number])}
+    <div class="etyseg" class:sub={seg.depth > 0} class:alt={seg.alt} class:ord={seg.ordinal != null} style="--depth:{seg.depth}">
+      {#if seg.heading}<div class="etyhead">{seg.heading}</div>{/if}
+      <p class="ety">{#if seg.ordinal != null}<span class="etynum">{seg.ordinal}.</span> {/if}{#each seg.tokens as s}{#if s.t === 'ruby'}<ruby><button class="kanji etylink" onclick={() => onsearch(s.base)}>{s.base}</button><rt>{s.rt}</rt></ruby>{:else if s.t === 'recon'}<span class="recon" title={s.title}>{s.v}</span>{:else if s.t === 'abbr'}<button class="term" title={s.title} onclick={() => (openTerm = s.title)}>{s.v}</button>{:else if s.t === 'han'}<button class="kanji etylink" onclick={() => onsearch(s.v)}>{s.v}</button>{:else}{s.v}{/if}{/each}</p>
+    </div>
+  {/snippet}
+
+  {#snippet etyBody(text: string, key: string)}
+    <!-- one account's prose: the core formation first; dense cross-family comparative cognates
+         ("STEDT compares…") tuck behind a "show deeper cognates" toggle so the plain origin reads
+         first. The deep paragraphs keep their normal brightness (foreign scripts are not dimmed). -->
+    {@const segs = etymologyTokens(text)}
+    {@const core = segs.filter((s) => !s.deep)}
+    {@const deep = segs.filter((s) => s.deep)}
     <div class="etylist">
-      {#each etymologyTokens(text) as seg}
-        <div class="etyseg" class:sub={seg.depth > 0} class:alt={seg.alt} class:ord={seg.ordinal != null} style="--depth:{seg.depth}">
-          {#if seg.heading}<div class="etyhead">{seg.heading}</div>{/if}
-          <p class="ety">{#if seg.ordinal != null}<span class="etynum">{seg.ordinal}.</span> {/if}{#each seg.tokens as s}{#if s.t === 'ruby'}<ruby><button class="kanji etylink" onclick={() => onsearch(s.base)}>{s.base}</button><rt>{s.rt}</rt></ruby>{:else if s.t === 'recon'}<span class="recon" title={s.title}>{s.v}</span>{:else if s.t === 'abbr'}<button class="term" title={s.title} onclick={() => (openTerm = s.title)}>{s.v}</button>{:else if s.t === 'han'}<button class="kanji etylink" onclick={() => onsearch(s.v)}>{s.v}</button>{:else}{s.v}{/if}{/each}</p>
-        </div>
-      {/each}
+      {#each core as seg}{@render etySeg(seg)}{/each}
+      {#if deep.length}
+        <button class="deeptoggle" onclick={() => toggleDeep(key)} aria-expanded={deepOpen.has(key)}>{deepOpen.has(key) ? 'hide deeper cognates' : 'show deeper cognates'}</button>
+        {#if deepOpen.has(key)}<div class="etydeep">{#each deep as seg}{@render etySeg(seg)}{/each}</div>{/if}
+      {/if}
     </div>
   {/snippet}
 
@@ -1169,7 +1198,7 @@
             <div class="olang"><span class="ovar" lang={langTag(acc.variety)} style="font-family:{hanFont(acc.variety)}">{varietyLabel(acc.variety)}</span> <span class="ohw" lang={langTag(acc.variety)} style="font-family:{hanFont(acc.variety)}">{#if acc.script}<span class="ftag">{scriptShort(acc.script)}</span>{/if}{acc.headword}</span></div>
           {/if}
           {#if acc.note}<p class="onote">{acc.note}</p>{/if}
-          {@render etyBody(acc.text)}
+          {@render etyBody(acc.text, acc.variety)}
         </div>
       {/each}
     </section>
@@ -1400,13 +1429,14 @@
   .oacc { margin-top: 1rem; }
   .oacc:first-of-type { margin-top: 0; }
   .olang { display: flex; align-items: baseline; gap: 0.4rem; margin-bottom: 0.25rem; }
-  /* brighter origin header: the language label and the hanzi headword (+ TC/SC tag) read at full ink
-     so the character being explained stands out from the dim prose (item: brighten origin glyphs). */
-  .olang .ovar { font-size: 0.95rem; color: var(--text); }
+  /* brighter origin header, but keep a hierarchy (not all one colour): the hanzi being explained is
+     full-ink white, the language label + TC/SC tag sit a tier down at muted — both brighter than the
+     old dim faint, and visibly separated from the headword glyph. */
+  .olang .ovar { font-size: 0.95rem; color: var(--muted); }
   .olang .ohw { font-size: 0.95rem; color: var(--text); }
   /* item 15: traditional/simplified tag + merge-clarifying note on an origin account */
   /* same TC/SC tag the definition rows use, reused before the origin headword (item 152) */
-  .olang .ohw .ftag { font-family: var(--mono); font-size: 0.7rem; color: var(--text); margin-right: 0.18rem; vertical-align: 0.2em; }
+  .olang .ohw .ftag { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); margin-right: 0.18rem; vertical-align: 0.2em; }
   .onote { font-size: 0.85rem; color: var(--faint); font-style: italic; margin: 0 0 0.4rem; line-height: 1.5; }
   /* structure block - composition (what parts make it up, e.g. 森 = three 木) + a quiet stroke count */
   .cln { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 0.5rem; font-size: 0.8rem; }
@@ -1455,6 +1485,10 @@
 
   .origin { margin-top: 0.4rem; }
   .etylist { margin-top: 0.5rem; }
+  /* "show deeper cognates" toggle + the collapsed deep block (kept at normal brightness) */
+  .deeptoggle { display: inline-flex; background: none; border: none; padding: 0.3rem 0; margin-top: 0.6rem; font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+  .deeptoggle:hover { color: var(--text); background: none; }
+  .etydeep { margin-top: 0.2rem; padding-top: 0.3rem; border-top: 1px solid var(--border); }
   /* one flowing account: plain stacked paragraphs, no dividing rule, no fake numbering */
   .etyseg { margin-top: 0.7rem; }
   .etyseg:first-child { margin-top: 0; }

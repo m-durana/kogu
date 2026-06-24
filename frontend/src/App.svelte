@@ -810,26 +810,27 @@
         </p>
         <p class="intropos"><span class="intropron">/ko.gu/</span> <span class="introtag">noun</span></p>
 
-        <p class="introgloss">A dictionary for the living Han script. One character or word is shown across <b>中文</b> (Mandarin), <b>粵語</b> (Cantonese), and <b>日本語</b> (Japanese) at once, so you can see how the same writing is read and used in each, and how the reforms pulled the forms apart.</p>
+        <p class="introgloss">A dictionary for the living Han script. Type one character or word and see it across <b>中文</b> (Mandarin), <b>粵語</b> (Cantonese), and <b>日本語</b> (Japanese) at once: how each language reads it, what it means, and how the 20th-century reforms pulled the written forms apart (<b>廣</b> → <b>广</b> in China, <b>広</b> in Japan). Search by hanzi or kanji, pinyin or jyutping, kana, or plain English.</p>
 
         <h2 class="abh">On each page</h2>
         <dl class="ablist">
-          <dt>Readings</dt><dd>How the word sounds in each language: <b>中</b> pinyin, <b>粵</b> jyutping, <b>日</b> kana (on and kun), with the meaning beside it.</dd>
-          <dt>Structure</dt><dd>What a character is built from (its parts, and which carries the meaning vs the sound), plus its forms across scripts: traditional, simplified, and Japanese shinjitai, with the reform that split them.</dd>
-          <dt>Origin</dt><dd>The character or word's etymology, kept per language since the Chinese and Japanese accounts of the same glyph can both be true.</dd>
+          <dt>Readings</dt><dd>How the word sounds in each language: <b>中</b> pinyin, <b>粵</b> jyutping, <b>日</b> kana (on and kun) with the pitch accent, the meaning beside each.</dd>
+          <dt>Related</dt><dd>Words that carry the same meaning, including cross-language equivalents, cognates, and false friends (same writing, different meaning).</dd>
           <dt>Used in</dt><dd>Common words that contain the character, grouped by language.</dd>
-          <dt>Related</dt><dd>Other words that carry the same meaning, including cross-language equivalents, cognates, and false friends (same writing, different meaning).</dd>
+          <dt>Origin</dt><dd>The etymology, kept per language since the Chinese and Japanese accounts of the same glyph can both be true.</dd>
+          <dt>Structure</dt><dd>What a character is built from (its parts, and which carries the meaning vs the sound), and its forms across scripts: traditional, simplified, and Japanese shinjitai, with the reform that split them.</dd>
         </dl>
 
         <h2 class="abh">Where the data comes from</h2>
         <ul class="absrc">
-          <li><b>CC-CEDICT</b> and <b>CC-Canto</b>: Mandarin and Cantonese words and readings</li>
-          <li><b>JMdict</b> and <b>Kanjidic</b>: Japanese words and kanji readings</li>
-          <li><b><a href="https://github.com/mifunetoshiro/kanjium" target="_blank" rel="noopener">Kanjium</a></b> (CC BY-SA 4.0): Japanese pitch accent</li>
-          <li><b>Unihan</b> and <b>cjkvi-ids</b>: characters, stroke data, and how they decompose</li>
-          <li><b>Wiktionary</b>: etymologies and phono-semantic component roles</li>
+          <li><b><a href="https://cc-cedict.org/" target="_blank" rel="noopener noreferrer external">CC-CEDICT</a></b> and <b><a href="https://cantonese.org/" target="_blank" rel="noopener noreferrer external">CC-Canto</a></b>: Mandarin and Cantonese words and readings</li>
+          <li><b><a href="https://www.edrdg.org/jmdict/j_jmdict.html" target="_blank" rel="noopener noreferrer external">JMdict</a></b> and <b><a href="https://www.edrdg.org/wiki/index.php/KANJIDIC_Project" target="_blank" rel="noopener noreferrer external">KANJIDIC</a></b>: Japanese words and kanji readings</li>
+          <li><b><a href="https://github.com/mifunetoshiro/kanjium" target="_blank" rel="noopener noreferrer external">Kanjium</a></b> (CC BY-SA 4.0): Japanese pitch accent</li>
+          <li><b><a href="https://www.unicode.org/charts/unihan.html" target="_blank" rel="noopener noreferrer external">Unihan</a></b> and <b><a href="https://github.com/cjkvi/cjkvi-ids" target="_blank" rel="noopener noreferrer external">cjkvi-ids</a></b>: characters, stroke data, and how they decompose</li>
+          <li><b><a href="https://github.com/nk2028/tshet-uinh-data" target="_blank" rel="noopener noreferrer external">Tshet-uinh</a></b> (廣韻, Baxter): Middle Chinese readings behind the phonological notes</li>
+          <li><b><a href="https://www.wiktionary.org/" target="_blank" rel="noopener noreferrer external">Wiktionary</a></b>: etymologies and phono-semantic component roles</li>
         </ul>
-        <p class="abnote">Everything is passed through from these open datasets directly. Nothing here is written by an AI. Kogu is open source.</p>
+        <p class="abnote">Everything is passed through from these open datasets directly. Nothing here is written by an AI. Kogu is open source, and was inspired by <b><a href="https://cjkvdict.com/" target="_blank" rel="noopener noreferrer external">CJKV Dict</a></b>.</p>
       </div>
     {/if}
   {/if}
