@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { search, entry as fetchEntry, segment as fetchSegment, type SegmentPart } from './lib/api'
+  import { search, entry as fetchEntry, segment as fetchSegment, suggest as fetchSuggest, type SegmentPart, type Suggestion } from './lib/api'
   import type { Entry, Hit, CharInfo } from './lib/types'
   import { primaryForm, varietyLabel, regionsOf, shortGloss, cleanGloss, langTag, hanFont, placeholderAt, formatReading } from './lib/display'
   import Unified from './lib/Unified.svelte'
@@ -39,6 +39,8 @@
   // greedy longest-word segmentation of an unknown query for the "literally" line (紅出口 → red · exit);
   // when present it supersedes the strict character-by-character composite.
   let segments = $state<SegmentPart[]>([])
+  // "did you mean …": closest real entries when a search finds nothing (a typo/partial query).
+  let didYouMean = $state<Suggestion[]>([])
 
   const HAN = /\p{Script=Han}/u
   // easter egg: 古古 ("old old") is the app's name, not a real word — shown when looked up (item 8)
@@ -216,6 +218,7 @@
     breakdown = []
     breaking = false
     segments = []
+    didYouMean = []
     // clear prior results so a NEW search shows the skeleton, not stale content that then swaps out
     results = []
     if (!term) {
@@ -294,6 +297,9 @@
           }
         })
       }
+      // nothing matched and there's no character breakdown to show (a non-Han typo/partial like
+      // "moutain" or "fei1ji"): offer the closest real entries as "did you mean …".
+      if (results.length === 0 && !breaking) loadDidYouMean(term)
       // record the SEARCH itself in history when it did NOT resolve to a single word card/entry (a
       // list, a partial match, or a no-word query like 中宇大廈) — those have no entry to record via
       // the visited-page effect, so they'd otherwise never appear in history. (Skip back/forward nav.)
@@ -312,6 +318,26 @@
       if ((e as Error).name !== 'AbortError') err = 'search failed'
     } finally {
       loading = false
+    }
+  }
+
+  // closest real entries for a query that matched nothing. /suggest is prefix-based, so we also retry
+  // with progressively shorter prefixes — that recovers a trailing typo or extra character
+  // ("mountainz" → "mountain", "発展xx" → "発展") on top of plain truncation ("moun" → "mountain").
+  async function loadDidYouMean(term: string) {
+    let t = term.trim()
+    for (let i = 0; i < 3 && [...t].length >= 2; i++) {
+      try {
+        const s = await fetchSuggest(t)
+        const hits = s.filter((x) => x.headword !== term)
+        if (hits.length) {
+          if (q.trim() === term) didYouMean = hits.slice(0, 6)
+          return
+        }
+      } catch {
+        /* a stale/aborted suggest is fine — leave didYouMean empty */
+      }
+      t = [...t].slice(0, -1).join('') // drop a trailing char and try again
     }
   }
 
@@ -539,6 +565,7 @@
     breakdown = []
     breaking = false
     segments = []
+    didYouMean = []
     q = ''
     lastSearched = ''
     err = ''
@@ -756,6 +783,20 @@
         {@render pageSkel()}
       {:else if results.length === 0}
         <div class="empty">nothing for “{q}”.</div>
+        {#if didYouMean.length}
+          <section class="dym" data-testid="did-you-mean">
+            <span class="dym-k">did you mean</span>
+            <ul class="dym-list">
+              {#each didYouMean as s (s.headword + '|' + s.variety)}
+                <li><button class="dym-item" onclick={() => doSearch(s.headword)}>
+                  <span class="dym-hw" lang={langTag(s.variety as Hit['variety'])} style="font-family:{hanFont(s.variety as Hit['variety'])}">{s.headword}</span>
+                  {#if s.reading}<span class="dym-rd">{formatReading(s.variety as Hit['variety'], s.reading, settings.romanization === 'yale')}</span>{/if}
+                  <span class="dym-var">{varietyLabel(s.variety as Hit['variety'])}</span>
+                </button></li>
+              {/each}
+            </ul>
+          </section>
+        {/if}
         <button class="lookup" onclick={() => (lookupOpen = true)}><ExternalLink size={14} /> look “{q}” up</button>
       {/if}
     {/if}
@@ -1000,6 +1041,16 @@
   /* a literal character-by-character gloss chain for an unmatched query (honest hint, not a definition) */
   .nw-lit { margin: 0 0 0.9rem; font-size: 0.95rem; line-height: 1.5; color: var(--muted); }
   .nw-lit-k { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); margin-right: 0.5rem; }
+  /* "did you mean …": closest real entries for a query that matched nothing */
+  .dym { margin: 0.9rem 0 0.2rem; }
+  .dym-k { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); }
+  .dym-list { list-style: none; margin: 0.4rem 0 0; padding: 0; }
+  .dym-list li + li { border-top: 1px solid var(--border); }
+  .dym-item { display: flex; align-items: baseline; gap: 0.6rem; width: 100%; text-align: left; background: none; border: none; border-radius: var(--r); padding: 0.55rem 0.5rem; }
+  .dym-item:hover { background: var(--surface); color: var(--text); }
+  .dym-hw { font-family: var(--han); font-size: 1.3rem; line-height: 1.1; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; max-width: 9em; }
+  .dym-rd { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dym-var { font-family: var(--han); font-size: 0.78rem; color: var(--faint); margin-left: auto; flex: none; }
   /* "look it up on the web" — an external lookup that works regardless of whether Kogu has the word */
   .lookup { display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 1rem; font-family: var(--mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: var(--r); padding: 0.4rem 0.7rem; }
   .lookup:hover { color: var(--text); border-color: var(--border-strong); background: var(--surface); }

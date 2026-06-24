@@ -4,6 +4,7 @@
   // a Definition tab (Wiktionary's CORS REST API). When Wiktionary has no page for a multi-character
   // phrase, it falls back to the per-character entries so something useful always shows.
   import { X, ExternalLink } from '@lucide/svelte'
+  import { untrack } from 'svelte'
 
   let { term, sl = 'auto', onclose }: { term: string; sl?: string; onclose: () => void } = $props()
 
@@ -14,7 +15,6 @@
   let trError = $state(false)
   let wkLoading = $state(false)
   let wkSenses = $state<WiktSense[]>([])
-  let wkPerChar = $state(false)
   let wkError = $state(false)
   let trDone = false
   let wkDone = false
@@ -59,17 +59,10 @@
     if (wkDone || wkLoading) return // mark done only on SUCCESS, so a failed lookup can be retried
     wkLoading = true
     wkError = false
-    wkPerChar = false
     try {
-      let senses = await wiktFor(term)
-      if (!senses.length && [...term].length > 1) {
-        // no page for the whole phrase — show each character's entry instead
-        wkPerChar = true
-        for (const ch of [...term]) {
-          const s = await wiktFor(ch)
-          if (s.length) senses.push({ pos: ch, lang: '', defs: s.flatMap((x) => x.defs).slice(0, 2) })
-        }
-      }
+      // a single Wiktionary lookup for the whole term. No per-character fallback: if the user wants a
+      // component character's meaning, they can just search it in Kogu.
+      const senses = await wiktFor(term)
       if (senses.length) {
         wkSenses = senses
         wkDone = true
@@ -81,9 +74,12 @@
     }
   }
 
+  // Run the active tab's loader when the tab changes. untrack the call so the loaders' internal reads
+  // (wkLoading/wkDone/trDone guards) don't become effect dependencies — otherwise toggling wkLoading
+  // re-fires this effect, and a no-result Dictionary lookup (which never sets wkDone) loops forever.
   $effect(() => {
-    if (tab === 'translate') runTranslate()
-    else runDefine()
+    const t = tab
+    untrack(() => (t === 'translate' ? runTranslate() : runDefine()))
   })
 </script>
 
@@ -105,10 +101,9 @@
         {:else if trError}<p class="lpdim">couldn't translate this.</p>{/if}
       {:else if wkLoading}<p class="lpdim">looking up…</p>
       {:else if wkSenses.length}
-        {#if wkPerChar}<p class="lpnote">No Wiktionary entry for the whole word — showing each character.</p>{/if}
         {#each wkSenses as s}
           <div class="lpsense">
-            <span class="lppos">{wkPerChar ? s.pos : (LANG(s.lang) + (s.pos ? ' · ' + s.pos : ''))}</span>
+            <span class="lppos">{LANG(s.lang) + (s.pos ? ' · ' + s.pos : '')}</span>
             <ol>{#each s.defs as d}<li>{d}</li>{/each}</ol>
           </div>
         {/each}
@@ -142,7 +137,6 @@
   .lpdim { color: var(--faint); font-size: 0.92rem; }
   .lptr { font-size: 1.3rem; line-height: 1.4; color: var(--text); margin: 0; font-family: var(--sans); }
   .lpsrc { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); margin: 0.4rem 0 0; }
-  .lpnote { color: var(--faint); font-size: 0.82rem; font-style: italic; margin: 0 0 0.7rem; }
   .lpsense { margin-bottom: 0.8rem; }
   .lppos { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
   .lpsense ol { margin: 0.3rem 0 0; padding-left: 1.2rem; }
