@@ -781,6 +781,10 @@
   // re-sort the Related and Used-in lists: 'relevance' = the default order (frequency / relevance),
   // 'language' = grouped 中 → 粵 → 日, 'alphabet' = by reading (A–Z / gojūon). Stable within each key.
   let sortMode = $state<'relevance' | 'language' | 'alphabet'>('relevance')
+  // one button cycles the three modes (relevance → language → A–Z → …)
+  function cycleSort() {
+    sortMode = sortMode === 'relevance' ? 'language' : sortMode === 'language' ? 'alphabet' : 'relevance'
+  }
   function sortRows<T extends { variety: Variety }>(rows: T[]): T[] {
     if (sortMode === 'language') {
       return [...rows].sort((a, b) => VORDER.indexOf(a.variety) - VORDER.indexOf(b.variety))
@@ -911,6 +915,14 @@
     />
   {/snippet}
 
+  <!-- the cycling sort control, at the article scope so BOTH the Related and Used-in tabs can render it
+       (it was previously nested in the Related block, so Used-in's {@render} threw and showed nothing). -->
+  {#snippet sortControl(defLabel: string)}
+    <div class="sortrow">
+      <button class="sortbtn" onclick={cycleSort}>sort: {sortMode === 'relevance' ? defLabel : sortMode === 'language' ? 'language' : 'A–Z'}</button>
+    </div>
+  {/snippet}
+
   {#if isGlyphSearch}
     <!-- Block A - the definition: the typed glyph across every language that writes it, co-equally -->
     <section class="def">
@@ -1001,30 +1013,21 @@
       </div>
     {/if}
 
-    {#snippet sortControl(defLabel: string)}
-      <div class="sortrow">
-        <span class="sortlbl">sort</span>
-        <span class="sortseg">
-          <button class:on={sortMode === 'relevance'} onclick={() => (sortMode = 'relevance')}>{defLabel}</button>
-          <button class:on={sortMode === 'language'} onclick={() => (sortMode = 'language')}>language</button>
-          <button class:on={sortMode === 'alphabet'} onclick={() => (sortMode = 'alphabet')}>A–Z</button>
-        </span>
-      </div>
-    {/snippet}
-
     {#if activeTab === 'related'}
       {@render sortControl('relevance')}
+      <!-- band labels explain WHY each group is related; shown only in relevance order (in language /
+           A–Z order the rows are globally re-sorted, so the bands no longer hold). -->
       {#if everydayRows.length}
         <!-- the natural everyday word another language writes for this character's meaning (耳 → 耳朵) -->
-        <section class="bridge"><ul class="langs">{#each sortRows(everydayRows) as r (r.id)}{@render rowItem(r)}{/each}</ul></section>
+        <section class="bridge">{#if sortMode === 'relevance'}<div class="blabel">everyday word</div>{/if}<ul class="langs">{#each sortRows(everydayRows) as r (r.id)}{@render rowItem(r)}{/each}</ul></section>
       {/if}
       {#if bridgeRows.length}
         <!-- the same meaning, written differently elsewhere. Tappable pivots. -->
-        <section class="bridge"><ul class="langs">{#each sortRows(bridgeRows) as r (r.id)}{@render rowItem(r)}{/each}</ul></section>
+        <section class="bridge">{#if sortMode === 'relevance'}<div class="blabel">written differently</div>{/if}<ul class="langs">{#each sortRows(bridgeRows) as r (r.id)}{@render rowItem(r)}{/each}</ul></section>
       {/if}
       {#if relatedRows.length}
         <!-- looser same-concept words in another language (lowest-confidence gloss/synset pivot) -->
-        <section class="bridge related"><ul class="langs">{#each sortRows(relatedRows) as r (r.id)}{@render rowItem(r)}{/each}</ul></section>
+        <section class="bridge related">{#if sortMode === 'relevance'}<div class="blabel">related in meaning</div>{/if}<ul class="langs">{#each sortRows(relatedRows) as r (r.id)}{@render rowItem(r)}{/each}</ul></section>
       {/if}
     {/if}
 
@@ -1322,12 +1325,11 @@
   .segsep { display: none; }
   /* a single toggle that re-sorts the Related / Used-in lists (default ⇄ by language) */
   .sortrow { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; margin: 0.7rem 0 0.2rem; }
-  .sortlbl { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); }
-  .sortseg { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
-  .sortseg button { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); background: none; border: none; padding: 0.22rem 0.62rem; cursor: pointer; }
-  .sortseg button + button { border-left: 1px solid var(--border); }
-  .sortseg button:hover { color: var(--text); }
-  .sortseg button.on { background: var(--text); color: var(--bg); }
+  /* one cycling pill, same outlined-pill style as the app's other small buttons */
+  .sortbtn { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); background: none; border: 1px solid var(--border); border-radius: 999px; padding: 0.22rem 0.62rem; cursor: pointer; }
+  .sortbtn:hover { color: var(--text); border-color: var(--border-strong); }
+  /* band label above each Related group ("everyday word" / "written differently" / "related") */
+  .blabel { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); margin: 0 0 0.4rem; }
   .dim { color: var(--faint); }
 
   /* jukugo component characters now reuse the shared .langs/.lang row system (see "written
