@@ -8,8 +8,12 @@
   --border: rgba(84, 84, 88, 0.4);
   --border-strong: rgba(84, 84, 88, 0.65);
   --text: #ffffff;
-  --muted: rgba(235, 235, 245, 0.6);
-  --faint: rgba(235, 235, 245, 0.32);
+  /* OPAQUE secondary inks (not rgba). A translucent stroke paints each Lucide sub-path separately, so
+     overlapping strokes (X, brush, camera, plus) stack alpha where they CROSS — a brighter spot that
+     read as hand-drawn. An opaque paint can't build up at intersections. These values equal the old
+     rgba(235,235,245,·) composited over the #000 canvas, so text is visually unchanged. */
+  --muted: #8d8d93;
+  --faint: #4b4b4e;
   /* monochrome only - no colour. "accent" = brightest grey/white for emphasis. */
   --accent: #f4f4f2;
   --accent-dim: #3a3a3c;
@@ -63,8 +67,10 @@ html, body {
   font-family: var(--sans);
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
-  /* PWA: kill the rubber-band overscroll that reveals it's a web view */
-  overscroll-behavior: none;
+  /* keep the native rubber-band overscroll (the bounce at the top/bottom) — it makes scrolling feel
+     alive rather than rigid. `auto` = the platform default elastic bounce. */
+  overscroll-behavior: auto;
+  -webkit-overflow-scrolling: touch;
 }
 body { min-height: 100svh; }
 

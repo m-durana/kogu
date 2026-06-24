@@ -53,7 +53,9 @@
     background: none; border: none; border-radius: var(--r); padding: 0.7rem 0.5rem;
   }
   .hit:hover { background: var(--surface); color: var(--text); }
-  .hw { font-family: var(--han); font-size: 1.7rem; line-height: 1.05; flex: none; min-width: 2.2em; }
+  /* headword: reserve a 2.2em column for short glyphs, but cap long headwords (idioms like
+     親の意見と茄子の花は千に一つも無駄はない) and ellipsise them so a row never widens the layout. */
+  .hw { font-family: var(--han); font-size: 1.7rem; line-height: 1.05; flex: none; min-width: 2.2em; max-width: 8.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hw .alt { color: var(--faint); font-size: 0.95rem; margin-left: 0.35rem; }
   .meta-col { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }
   .line1 { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }

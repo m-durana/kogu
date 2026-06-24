@@ -290,6 +290,30 @@ async fn cognate_label() {
     assert_eq!(sf["relation"], "cognate");
 }
 
+// The "characters" breakdown of a word lists only Han ideographs — kana/okurigana are NOT components.
+// あずかり知る must break down to 知 alone, never to a hiragana like り.
+#[tokio::test]
+async fn characters_breakdown_excludes_kana() {
+    let hit = entry_of(&search("あずかり知る").await, "ja", "あずかり知る");
+    let id = hit["lexeme_id"].as_i64().unwrap();
+    let e = get(&format!("/entry/{id}")).await.1;
+    let chars: Vec<String> = e["characters"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["ch"].as_str().unwrap().to_string())
+        .collect();
+    assert!(chars.contains(&"知".to_string()), "expected 知 among components, got {chars:?}");
+    // no kana component (り / し / あ / ず / か)
+    assert!(
+        chars.iter().all(|c| c.chars().all(|ch| {
+            let cp = ch as u32;
+            (0x3400..=0x9FFF).contains(&cp) || (0x20000..=0x3FFFF).contains(&cp) || (0xF900..=0xFAFF).contains(&cp)
+        })),
+        "characters breakdown leaked a non-Han glyph: {chars:?}"
+    );
+}
+
 // P3. false friend: 手紙 is zh "toilet paper" / ja "letter" -> same form, no shared concept.
 #[tokio::test]
 async fn false_friend_label() {

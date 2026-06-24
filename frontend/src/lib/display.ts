@@ -75,6 +75,23 @@ export function varietyLabel(v: Variety): string {
   return v === 'zh' ? '中' : v === 'yue' ? '粵' : '日'
 }
 
+/** Full language name for a variety — used for section/divider headings (e.g. the language-sorted
+ * Related / Used-in lists, where each 中/粵/日 group gets a labelled divider). */
+export function varietyName(v: Variety): string {
+  return v === 'zh' ? 'Mandarin' : v === 'yue' ? 'Cantonese' : 'Japanese'
+}
+
+/** Headword glyph font-size for an entry: a 1–2 char word stays huge, but a long word (an idiom, or a
+ * kana+kanji verb like あずかり知る) shrinks so the header stays compact and never grows tall enough to
+ * collide with the save/share buttons overlapping the top-right of the card. `len` is the headword's
+ * Unicode code-point count ([...head].length). */
+export function headwordGlyphSize(len: number): string {
+  if (len <= 2) return 'clamp(2.8rem, 14vw, 3.8rem)'
+  if (len <= 4) return 'clamp(2.2rem, 10vw, 2.9rem)'
+  if (len <= 7) return 'clamp(1.7rem, 7vw, 2.1rem)'
+  return 'clamp(1.35rem, 5.5vw, 1.7rem)'
+}
+
 /** BCP-47 lang tag for a variety, stamped on glyph elements so screen readers / text selection know
  * the language, and so the matching regional Han font is chosen. */
 export function langTag(v: Variety): string {

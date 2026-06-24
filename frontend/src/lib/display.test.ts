@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle, reformLabel, scriptChangeNote, scriptChangeFromForms, scSwitchTarget, glyphWikiUrl, SEARCH_PLACEHOLDERS, placeholderAt, isAlwaysBound, jyutpingToYale, mcSoundLink, regionTags, expandSenses, pitchPattern, moraSplit } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, varietyName, headwordGlyphSize, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle, reformLabel, scriptChangeNote, scriptChangeFromForms, scSwitchTarget, glyphWikiUrl, SEARCH_PLACEHOLDERS, placeholderAt, isAlwaysBound, jyutpingToYale, mcSoundLink, regionTags, expandSenses, pitchPattern, moraSplit } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -1122,5 +1122,45 @@ describe('pitchPattern - Japanese pitch accent contour', () => {
     expect(pitchPattern('', '1')).toBeNull()
     expect(pitchPattern('はし', 'x')).toBeNull()
     expect(pitchPattern('はし', '5')).toBeNull() // downstep past 2-mora word
+  })
+})
+
+// language dividers (item: language-sorted Related / Used-in get a 中/粵/日 group heading)
+describe('varietyName - full language name for dividers', () => {
+  it('maps zh to Mandarin', () => expect(varietyName('zh')).toBe('Mandarin'))
+  it('maps yue to Cantonese', () => expect(varietyName('yue')).toBe('Cantonese'))
+  it('maps ja to Japanese', () => expect(varietyName('ja')).toBe('Japanese'))
+  it('differs from the short single-glyph label', () => {
+    expect(varietyName('zh')).not.toBe(varietyLabel('zh'))
+    expect(varietyName('yue')).not.toBe(varietyLabel('yue'))
+  })
+  it('returns a distinct non-empty name per variety', () => {
+    const names = new Set([varietyName('zh'), varietyName('yue'), varietyName('ja')])
+    expect(names.size).toBe(3)
+    expect([...names].every((n) => n.length > 0)).toBe(true)
+  })
+})
+
+// headword glyph sizing (item: long idiom / kana+kanji headword shrinks so it never collides with the
+// save/share buttons; short words stay big)
+describe('headwordGlyphSize - shrink long headwords', () => {
+  it('keeps a 1-char headword at the largest size', () =>
+    expect(headwordGlyphSize(1)).toBe('clamp(2.8rem, 14vw, 3.8rem)'))
+  it('keeps a 2-char word (機場) at the largest size', () =>
+    expect(headwordGlyphSize(2)).toBe('clamp(2.8rem, 14vw, 3.8rem)'))
+  it('steps down for a 4-char word', () =>
+    expect(headwordGlyphSize(4)).toBe('clamp(2.2rem, 10vw, 2.9rem)'))
+  it('steps down again for a 6-char word (あずかり知る)', () =>
+    expect(headwordGlyphSize(6)).toBe('clamp(1.7rem, 7vw, 2.1rem)'))
+  it('uses the smallest size for a long idiom (15+ chars)', () =>
+    expect(headwordGlyphSize(15)).toBe('clamp(1.35rem, 5.5vw, 1.7rem)'))
+  it('is monotonically non-increasing as length grows', () => {
+    const sizes = [1, 2, 3, 4, 5, 7, 8, 20].map(headwordGlyphSize)
+    // each distinct bucket value should appear in descending introduction order
+    expect(sizes[0]).toBe(sizes[1]) // 1,2 share
+    expect(sizes[2]).toBe(sizes[3]) // 3,4 share
+    expect(sizes[4]).toBe(sizes[5]) // 5,7 share
+    expect(sizes[6]).toBe(sizes[7]) // 8,20 share
+    expect(new Set(sizes).size).toBe(4)
   })
 })

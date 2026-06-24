@@ -18,7 +18,7 @@
 
 <script lang="ts">
   import type { CharInfo, Entry, Hit, ReadingKV, Variety } from './types'
-  import { primaryForm, varietyLabel, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, isAlwaysBound, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle, scriptShort, scSwitchTarget, scriptChangeNote, scriptChangeFromForms, jyutpingToYale, mcSoundLink, regionTags, expandSenses, formatReading, pitchPattern, moraSplit } from './display'
+  import { primaryForm, varietyLabel, varietyName, headwordGlyphSize, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, isAlwaysBound, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle, scriptShort, scSwitchTarget, scriptChangeNote, scriptChangeFromForms, jyutpingToYale, mcSoundLink, regionTags, expandSenses, formatReading, pitchPattern, moraSplit } from './display'
   import { speakReading, canSpeak } from './speech'
   import { settings } from './settings.svelte'
   import ScriptForms from './ScriptForms.svelte'
@@ -281,6 +281,9 @@
 
   const single = $derived([...head].length === 1)
   const headChar = $derived(entry?.characters?.[0])
+  // the headword glyph shrinks for long multi-character words (idioms, kana+kanji verbs like
+  // あずかり知る) so the header stays compact and never collides with the save/share buttons (item 3).
+  const glyphSize = $derived(headwordGlyphSize(headChars.length))
   const isKana = (s: string) => /[぀-ヿ]/.test(s)
   // languages this word is actually represented in by a REAL word-lexeme (its same-glyph form rows) -
   // gates the structure readings so a 粵-only word shows jyutping, not a nominal Mandarin pinyin.
@@ -761,13 +764,16 @@
   const tabs = $derived.by<{ key: string; label: string }[]>(() => {
     if (!isGlyphSearch) return []
     const t: { key: string; label: string }[] = []
-    if ((single && headChar) || (entry && entry.characters.length))
-      t.push({ key: 'forms', label: single ? 'Structure' : 'Characters' })
+    // Order: Related → Used in → Origin → Structure (most-used sections first).
     if (everydayRows.length || bridgeRows.length || relatedRows.length)
       t.push({ key: 'related', label: 'Related' })
-    if (originAccounts.length) t.push({ key: 'origin', label: 'Origin' })
     if (compoundList.length) t.push({ key: 'words', label: 'Used in' })
     else if (entry?.appears_in.length) t.push({ key: 'words', label: 'Appears in' })
+    if (originAccounts.length) t.push({ key: 'origin', label: 'Origin' })
+    // a single-character entry always gets Structure; a word gets a "Characters" breakdown only when it
+    // has 2+ Han components (one kanji, e.g. あずかり知る → 知, is not a meaningful breakdown).
+    if ((single && headChar) || (entry && entry.characters.length >= 2))
+      t.push({ key: 'forms', label: single ? 'Structure' : 'Characters' })
     return t
   })
   // keep activeTab valid as content loads (default to the first tab; never stay on a vanished one)
@@ -923,11 +929,20 @@
     </div>
   {/snippet}
 
+  <!-- render a row list with a 中/粵/日 divider before each language group (only in language-sort mode,
+       where same-variety rows are contiguous). Caller wraps these <li> in <ul class="langs">. -->
+  {#snippet langRows(rows: Row[])}
+    {#each rows as r, i (r.id)}
+      {#if sortMode === 'language' && (i === 0 || rows[i - 1].variety !== r.variety)}<li class="langdiv">{varietyName(r.variety)}</li>{/if}
+      {@render rowItem(r)}
+    {/each}
+  {/snippet}
+
   {#if isGlyphSearch}
     <!-- Block A - the definition: the typed glyph across every language that writes it, co-equally -->
     <section class="def">
       <div class="glyphrow">
-        <h2 class="glyph"><Glyph ch={head} font={headFont} lang={langTag(headVariety)} /></h2>
+        <h2 class="glyph" style="font-size:{glyphSize}"><Glyph ch={head} font={headFont} lang={langTag(headVariety)} /></h2>
         {#if switchTarget}
           <button class="scswitch" onclick={() => onsearch(switchTarget.to)} title="switch to the {switchTarget.label} form ({switchTarget.to})" aria-label="switch to the {switchTarget.label} form"><ArrowLeftRight size={17} /></button>
         {/if}
@@ -1015,19 +1030,24 @@
 
     {#if activeTab === 'related'}
       {@render sortControl('relevance')}
-      <!-- band labels explain WHY each group is related; shown only in relevance order (in language /
-           A–Z order the rows are globally re-sorted, so the bands no longer hold). -->
-      {#if everydayRows.length}
-        <!-- the natural everyday word another language writes for this character's meaning (耳 → 耳朵) -->
-        <section class="bridge">{#if sortMode === 'relevance'}<div class="blabel">everyday word</div>{/if}<ul class="langs">{#each sortRows(everydayRows) as r (r.id)}{@render rowItem(r)}{/each}</ul></section>
-      {/if}
-      {#if bridgeRows.length}
-        <!-- the same meaning, written differently elsewhere. Tappable pivots. -->
-        <section class="bridge">{#if sortMode === 'relevance'}<div class="blabel">written differently</div>{/if}<ul class="langs">{#each sortRows(bridgeRows) as r (r.id)}{@render rowItem(r)}{/each}</ul></section>
-      {/if}
-      {#if relatedRows.length}
-        <!-- looser same-concept words in another language (lowest-confidence gloss/synset pivot) -->
-        <section class="bridge related">{#if sortMode === 'relevance'}<div class="blabel">related in meaning</div>{/if}<ul class="langs">{#each sortRows(relatedRows) as r (r.id)}{@render rowItem(r)}{/each}</ul></section>
+      {#if sortMode === 'relevance'}
+        <!-- band labels explain WHY each group is related; shown only in relevance order (in language /
+             A–Z order the rows are globally re-sorted into one list, so the bands no longer hold). -->
+        {#if everydayRows.length}
+          <!-- the natural everyday word another language writes for this character's meaning (耳 → 耳朵) -->
+          <section class="bridge"><div class="blabel">everyday word</div><ul class="langs">{#each everydayRows as r (r.id)}{@render rowItem(r)}{/each}</ul></section>
+        {/if}
+        {#if bridgeRows.length}
+          <!-- the same meaning, written differently elsewhere. Tappable pivots. -->
+          <section class="bridge"><div class="blabel">written differently</div><ul class="langs">{#each bridgeRows as r (r.id)}{@render rowItem(r)}{/each}</ul></section>
+        {/if}
+        {#if relatedRows.length}
+          <!-- looser same-concept words in another language (lowest-confidence gloss/synset pivot) -->
+          <section class="bridge related"><div class="blabel">related in meaning</div><ul class="langs">{#each relatedRows as r (r.id)}{@render rowItem(r)}{/each}</ul></section>
+        {/if}
+      {:else}
+        <!-- language / A–Z: one globally-sorted list; language order gets 中/粵/日 dividers -->
+        <section class="bridge"><ul class="langs">{@render langRows(sortRows([...everydayRows, ...bridgeRows, ...relatedRows]))}</ul></section>
       {/if}
     {/if}
 
@@ -1045,7 +1065,6 @@
          (Readings used to live in their own section here; they're now folded onto the definition rows
          above — 中 pinyin / 粵 jyutping / 日 on·kun — so there's no duplicate "readings" block.) -->
     <section class="struct">
-      <h3>structure</h3>
       {#if headChar.is_radical && (headChar.radical_number || headChar.standalone)}
         <!-- a radical's detail (Kangxi number, standalone form). The "radical" badge itself now sits
              left of the language rows above (item 18); here we keep only the explanatory detail. -->
@@ -1061,7 +1080,9 @@
           {#if scriptNote}<p class="scriptnote">{scriptNote}</p>{/if}
         </div>
       {/if}
-      {#if hasRoles || decomp || comp}<div class="sublabel substep">what it's made of</div>{/if}
+      <!-- only label the composition block when there's ALSO an "across scripts" strip (or radical
+           detail) above it; if it's the only thing under Structure, the label is redundant. -->
+      {#if (hasRoles || decomp || comp) && (headChar.script_forms || (headChar.is_radical && (headChar.radical_number || headChar.standalone)))}<div class="sublabel substep">what it's made of</div>{/if}
       {#if hasRoles}
         <!-- phono-semantic: which part carries the meaning vs the sound (媽 = 女 meaning + 馬 sound) -->
         <p class="comp">
@@ -1162,7 +1183,9 @@
            words (氷 for 冰) follow under a "written with a variant character" divider. -->
       <ul class="langs">
         {#each wlist as r, i (r.id)}
-          {#if sortMode === 'relevance' && r.relation === 'compound-alt' && (i === 0 || wlist[i - 1].relation !== 'compound-alt')}
+          {#if sortMode === 'language' && (i === 0 || wlist[i - 1].variety !== r.variety)}
+            <li class="langdiv">{varietyName(r.variety)}</li>
+          {:else if sortMode === 'relevance' && r.relation === 'compound-alt' && (i === 0 || wlist[i - 1].relation !== 'compound-alt')}
             <li class="wdiv">written with a variant character</li>
           {/if}
           {@render rowItem(r)}
@@ -1220,8 +1243,10 @@
   /* matches .bridge so def→next-heading spacing is identical whether a bridge band follows or not
      (margins don't collapse inside the flex column, so keep both sides small + let h3's top margin lead) */
   .def { margin-bottom: 1rem; }
-  .glyphrow { display: flex; align-items: flex-start; gap: 0.5rem; }
-  .glyph { font-family: var(--han); font-size: clamp(2.8rem, 14vw, 3.8rem); line-height: 1; margin: 0 0 1.1rem; font-weight: 500; }
+  /* leave a clear gutter on the right so even a wrapped long headword never runs under the
+     save/share buttons that overlap the top-right corner of the card (item 3). */
+  .glyphrow { display: flex; align-items: flex-start; gap: 0.5rem; padding-right: 5.6rem; }
+  .glyph { font-family: var(--han); font-size: clamp(2.8rem, 14vw, 3.8rem); line-height: 1.05; margin: 0 0 1.1rem; font-weight: 500; overflow-wrap: anywhere; min-width: 0; }
   /* tiny two-arrow switch to the TC/SC counterpart, top-right of the header glyph (item 161) */
   /* just the two-arrow icon, no box around it (item) */
   .scswitch { display: inline-flex; align-items: center; justify-content: center; margin-top: 0.45rem; padding: 0.15rem; color: var(--muted); background: none; border: none; }
@@ -1308,10 +1333,6 @@
   /* align the warning triangle with the cap of the first text line (was sitting a touch low) */
   .note :global(svg) { flex: none; margin-top: 0.02rem; color: var(--muted); }
 
-  h3 { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 1.9rem 0 0.8rem; }
-  /* first heading inside a tab panel sits close under the segmented control */
-  .seg + section h3, section:first-of-type > h3 { margin-top: 0.6rem; }
-
   /* CJKV-style segmented control for the below-definition sections */
   /* Hybrid: underline tabs (not a segmented pill) — a hairline rule with a white indicator. */
   /* overflow-x:auto alone coerces overflow-y to auto too (CSS spec), which let the tab strip scroll
@@ -1379,11 +1400,13 @@
   .oacc { margin-top: 1rem; }
   .oacc:first-of-type { margin-top: 0; }
   .olang { display: flex; align-items: baseline; gap: 0.4rem; margin-bottom: 0.25rem; }
-  .olang .ovar { font-size: 0.95rem; color: var(--muted); }
-  .olang .ohw { font-size: 0.95rem; color: var(--faint); }
+  /* brighter origin header: the language label and the hanzi headword (+ TC/SC tag) read at full ink
+     so the character being explained stands out from the dim prose (item: brighten origin glyphs). */
+  .olang .ovar { font-size: 0.95rem; color: var(--text); }
+  .olang .ohw { font-size: 0.95rem; color: var(--text); }
   /* item 15: traditional/simplified tag + merge-clarifying note on an origin account */
   /* same TC/SC tag the definition rows use, reused before the origin headword (item 152) */
-  .olang .ohw .ftag { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); margin-right: 0.18rem; vertical-align: 0.2em; }
+  .olang .ohw .ftag { font-family: var(--mono); font-size: 0.7rem; color: var(--text); margin-right: 0.18rem; vertical-align: 0.2em; }
   .onote { font-size: 0.85rem; color: var(--faint); font-style: italic; margin: 0 0 0.4rem; line-height: 1.5; }
   /* structure block - composition (what parts make it up, e.g. 森 = three 木) + a quiet stroke count */
   .cln { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 0.5rem; font-size: 0.8rem; }
@@ -1423,8 +1446,10 @@
   .words { margin-top: 0.4rem; }
   /* divider before the cross-script-variant words (氷 for 冰), inside the shared .langs list (item 155) */
   .wdiv { list-style: none; font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); margin: 0.7rem 0 0.3rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+  .langdiv { list-style: none; font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); margin: 0.7rem 0 0.3rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+  .langdiv:first-child { margin-top: 0; padding-top: 0; border-top: none; }
   .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-  .chip { display: inline-flex; align-items: center; gap: 0.35rem; font-family: var(--han); font-size: 1.05rem; padding: 0.25rem 0.55rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); }
+  .chip { display: inline-flex; align-items: center; gap: 0.35rem; font-family: var(--han); font-size: 1.05rem; padding: 0.25rem 0.55rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); max-width: 14em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .chip.rare { border-style: dashed; color: var(--muted); }
   .chip:hover { border-color: var(--border-strong); }
 

@@ -125,6 +125,11 @@ fn build_entry(
     let mut characters = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for ch in primary.chars() {
+        // only Han ideographs are real "component characters" — skip kana/okurigana so a word like
+        // あずかり知る breaks down to 知, not to り as if it were a character.
+        if !search::is_han(ch) {
+            continue;
+        }
         if !seen.insert(ch) {
             continue;
         }

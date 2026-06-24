@@ -112,10 +112,13 @@
             <ol>{#each s.defs as d}<li>{d}</li>{/each}</ol>
           </div>
         {/each}
+        <p class="lpsrc">Wiktionary</p>
       {:else if wkError}<p class="lpdim">No Wiktionary entry found.</p>{/if}
     </div>
 
-    <a class="lpweb" href={`https://www.google.com/search?q=${encodeURIComponent(term)}`} target="_blank" rel="noopener">
+    <!-- rel="external" hints the OS to hand the URL to the SYSTEM browser instead of opening an in-app
+         tab inside the installed PWA (best-effort: there's no guaranteed web API to break out). -->
+    <a class="lpweb" href={`https://www.google.com/search?q=${encodeURIComponent(term)}`} target="_blank" rel="noopener noreferrer external">
       <ExternalLink size={13} /> search the web
     </a>
   </div>
@@ -125,13 +128,16 @@
   .lpbg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 60; }
   .lp { width: min(30rem, 100%); max-height: 80vh; overflow-y: auto; background: var(--surface-2); border: 0.5px solid var(--border-strong); border-radius: 16px; box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.7); padding: 1rem 1.1rem 0.9rem; }
   .lph { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin-bottom: 0.7rem; }
-  .lpterm { font-family: var(--han); font-size: 1.6rem; line-height: 1.1; color: var(--text); }
+  .lpterm { font-family: var(--han); font-size: 1.6rem; line-height: 1.1; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .lpx { display: inline-flex; background: none; border: none; color: var(--muted); padding: 0.2rem; border-radius: var(--r); }
   .lpx:hover { color: var(--text); background: var(--surface); }
-  .lptabs { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--r); overflow: hidden; margin-bottom: 0.9rem; }
-  .lptabs button { font-family: var(--mono); font-size: 0.74rem; color: var(--muted); background: none; border: none; padding: 0.35rem 0.9rem; }
-  .lptabs button + button { border-left: 1px solid var(--border-strong); }
+  /* track-style segmented control (matches Settings): only the selected tab is filled, no per-cell
+     outline on the unselected one (item 7/8). */
+  .lptabs { display: inline-flex; gap: 2px; padding: 2px; background: var(--surface); border-radius: 999px; margin-bottom: 0.9rem; }
+  .lptabs button { font-family: var(--mono); font-size: 0.74rem; color: var(--muted); background: none; border: none; border-radius: 999px; padding: 0.35rem 0.9rem; }
+  .lptabs button:hover { color: var(--text); background: none; }
   .lptabs button.on { background: var(--text); color: var(--bg); }
+  .lptabs button.on:hover { color: var(--bg); }
   .lpbody { min-height: 3rem; }
   .lpdim { color: var(--faint); font-size: 0.92rem; }
   .lptr { font-size: 1.3rem; line-height: 1.4; color: var(--text); margin: 0; font-family: var(--sans); }

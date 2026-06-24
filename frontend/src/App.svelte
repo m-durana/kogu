@@ -223,8 +223,10 @@
       if (mode !== 'none') history.replaceState({ view: 'results', q: '' }, '', location.pathname)
       return
     }
-    if (mode === 'push') history.pushState({ view: 'results', q: term }, '', resultsUrl(term))
-    else if (mode === 'replace') history.replaceState({ view: 'results', q: term }, '', resultsUrl(term))
+    if (mode === 'push') {
+      history.pushState({ view: 'results', q: term }, '', resultsUrl(term))
+      window.scrollTo(0, 0) // a freshly navigated word/list starts at the top (back restores the rest)
+    } else if (mode === 'replace') history.replaceState({ view: 'results', q: term }, '', resultsUrl(term))
     ctrl?.abort()
     ctrl = new AbortController()
     loading = true
@@ -372,7 +374,10 @@
       view = 'entry'
       // store the headword in history state so Back/Forward to this entry can re-resolve if the id
       // went stale after a DB rebuild (see the openEntry stale-id guard above).
-      if (mode === 'push') history.pushState({ view: 'entry', id, hw: e.headword }, '', `#/entry/${id}`)
+      if (mode === 'push') {
+        history.pushState({ view: 'entry', id, hw: e.headword }, '', `#/entry/${id}`)
+        window.scrollTo(0, 0) // a freshly opened entry starts at the top
+      }
     } catch {
       // a saved/history id that no longer exists (reassigned/removed by a DB rebuild): if we know the
       // tapped form, recover by searching it instead of showing an error.
@@ -387,8 +392,35 @@
     }
   }
 
-  function onPop(e: PopStateEvent) {
+  // ── scroll restoration (arrow back/forward) ──────────────────────────────────────────────────
+  // Word/entry pages remember where you'd scrolled to, so going back/forward with the arrows lands you
+  // where you left off (not pinned to the top). The home page always resets to the top. Content loads
+  // async, so on restore we re-apply the saved offset over a few frames as the page settles.
+  const scrollPos = new Map<string, number>()
+  const locKey = () => location.pathname + location.search + location.hash
+  const isHome = () => !location.search && (!location.hash || location.hash === '#/')
+  let rafScroll = 0
+  function onScroll() {
+    if (rafScroll) return
+    rafScroll = requestAnimationFrame(() => {
+      rafScroll = 0
+      scrollPos.set(locKey(), window.scrollY)
+    })
+  }
+  function restoreScroll(key: string) {
+    const y = isHome() ? 0 : scrollPos.get(key) ?? 0
+    const apply = () => window.scrollTo(0, y)
+    requestAnimationFrame(() => {
+      apply()
+      requestAnimationFrame(apply)
+    })
+    setTimeout(apply, 90)
+    setTimeout(apply, 220)
+  }
+
+  async function onPop(e: PopStateEvent) {
     const st = e.state as { view?: string; id?: number; q?: string; hw?: string } | null
+    const key = locKey()
     if (st?.view === 'saved') {
       savedList = getSaved()
       view = 'saved'
@@ -396,17 +428,22 @@
       historyList = getHistory()
       view = 'history'
     } else if (st?.view === 'entry' && st.id != null) {
-      openEntry(st.id, 'none', st.hw ?? '')
+      await openEntry(st.id, 'none', st.hw ?? '')
     } else {
       view = 'results'
       entry = null
       const term = st?.q ?? ''
-      if (term && term !== q) doSearch(term, 'none')
+      if (term && term !== q) await doSearch(term, 'none')
       else q = term
     }
+    restoreScroll(key)
   }
 
   onMount(() => {
+    // take over scroll restoration: the browser's 'auto' restores against the OLD (pre-render) layout
+    // of this SPA and lands in the wrong place; we restore manually once async content has settled.
+    if ('scrollRestoration' in history) history.scrollRestoration = 'manual'
+    window.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('popstate', onPop)
     // deep link: a shared #/entry/<id> (id may be negative for a char-only page) reopens that entry
     const m = location.hash.match(/^#\/entry\/(-?\d+)$/)
@@ -431,6 +468,7 @@
     }
     window.addEventListener('beforeinstallprompt', onBip)
     return () => {
+      window.removeEventListener('scroll', onScroll)
       window.removeEventListener('popstate', onPop)
       window.removeEventListener('beforeinstallprompt', onBip)
       if (ph) clearInterval(ph)
@@ -506,6 +544,7 @@
     err = ''
     view = 'results'
     history.replaceState({ view: 'results', q: '' }, '', location.pathname)
+    window.scrollTo(0, 0) // home always resets to the top
   }
 
   // a character was chosen from the photo selection — search it and close the panel
@@ -849,10 +888,13 @@
   .setrow:first-of-type { border-top: none; padding-top: 0; }
   .setlabel { font-family: var(--sans); font-size: 0.95rem; color: var(--text); }
   .setsub { font-size: 0.8rem; color: var(--faint); line-height: 1.4; margin-top: -0.15rem; }
-  .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 999px; overflow: hidden; align-self: start; margin-top: 0.15rem; }
-  .seg button { font-family: var(--mono); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); background: none; border: none; padding: 0.4rem 0.95rem; }
-  .seg button + button { border-left: 1px solid var(--border-strong); }
+  /* track-style segmented control: a quiet rounded track, only the SELECTED segment is filled. No
+     per-segment border/divider, so the unselected side has no stray outline of the selector (item 7). */
+  .seg { display: inline-flex; gap: 2px; padding: 2px; background: var(--surface); border-radius: 999px; align-self: start; margin-top: 0.15rem; }
+  .seg button { font-family: var(--mono); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); background: none; border: none; border-radius: 999px; padding: 0.38rem 0.95rem; }
+  .seg button:hover { color: var(--text); background: none; }
   .seg button.on { background: var(--text); color: var(--bg); }
+  .seg button.on:hover { color: var(--bg); }
   .brand { margin: 0; font-weight: 400; }
   .brandbtn { display: inline-flex; align-items: baseline; gap: 0.45rem; background: none; border: none; padding: 0; }
   .brandbtn:hover { background: none; }
@@ -896,12 +938,15 @@
     width: 2.9rem; height: 2.9rem; margin-left: 0.4rem;
     color: var(--muted); background: var(--surface); border: none; border-radius: 50%;
     overflow: hidden;
-    transition: width 0.22s ease, opacity 0.18s ease, margin 0.22s ease;
+    transition: width 0.22s ease, opacity 0.18s ease, margin 0.22s ease, padding 0.22s ease;
   }
   .rowbtn:hover { color: var(--hi); background: var(--surface-2); }
   .rowbtn.on { color: var(--bg); background: var(--text); }
-  /* item 1: focusing the field expands it to full width; draw + camera slide away */
-  .searchrow.focused .rowbtn { width: 0; margin-left: 0; opacity: 0; pointer-events: none; }
+  /* item 1: focusing the field expands it to FULL width; draw + camera slide away. Must also zero the
+     padding/border: with box-sizing:border-box a width:0 button still can't shrink below its 24px
+     horizontal padding, which left the field ~48px short of full width (item: search bar only went
+     halfway). Collapsing padding+border too lets it reach 0 and the field fills the row. */
+  .searchrow.focused .rowbtn { width: 0; padding: 0; border: 0; margin-left: 0; opacity: 0; pointer-events: none; }
   @media (prefers-reduced-motion: reduce) { .rowbtn { transition: none; } }
   /* draw pad: a FLOATING panel just under the search row. position:absolute with no offset keeps it at
      its natural place in flow but lifts it OUT of flow, so the results list / about text render full
