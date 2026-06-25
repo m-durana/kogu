@@ -1143,25 +1143,24 @@ describe('varietyName - full language name for dividers', () => {
 
 // headword glyph sizing (item: long idiom / kana+kanji headword shrinks so it never collides with the
 // save/share buttons; short words stay big)
-describe('headwordGlyphSize - shrink long headwords', () => {
-  it('keeps a 1-char headword at the largest size', () =>
-    expect(headwordGlyphSize(1)).toBe('clamp(2.8rem, 14vw, 3.8rem)'))
-  it('keeps a 2-char word (機場) at the largest size', () =>
-    expect(headwordGlyphSize(2)).toBe('clamp(2.8rem, 14vw, 3.8rem)'))
-  it('steps down for a 4-char word', () =>
-    expect(headwordGlyphSize(4)).toBe('clamp(2.2rem, 10vw, 2.9rem)'))
-  it('steps down again for a 6-char word (あずかり知る)', () =>
-    expect(headwordGlyphSize(6)).toBe('clamp(1.7rem, 7vw, 2.1rem)'))
-  it('uses the smallest size for a long idiom (15+ chars)', () =>
-    expect(headwordGlyphSize(15)).toBe('clamp(1.35rem, 5.5vw, 1.7rem)'))
-  it('is monotonically non-increasing as length grows', () => {
-    const sizes = [1, 2, 3, 4, 5, 7, 8, 20].map(headwordGlyphSize)
-    // each distinct bucket value should appear in descending introduction order
-    expect(sizes[0]).toBe(sizes[1]) // 1,2 share
-    expect(sizes[2]).toBe(sizes[3]) // 3,4 share
-    expect(sizes[4]).toBe(sizes[5]) // 5,7 share
-    expect(sizes[6]).toBe(sizes[7]) // 8,20 share
-    expect(new Set(sizes).size).toBe(4)
+describe('headwordGlyphSize - full to length 4, one step down beyond (never shrunk away)', () => {
+  const FULL = 'clamp(2.8rem, 14vw, 3.8rem)'
+  const SMALL = 'clamp(2.0rem, 9vw, 2.6rem)'
+  it('keeps a 1-char headword at full size', () => expect(headwordGlyphSize(1)).toBe(FULL))
+  it('keeps a 4-char word at full size (boundary)', () => expect(headwordGlyphSize(4)).toBe(FULL))
+  it('steps down at 5 characters (boundary)', () => expect(headwordGlyphSize(5)).toBe(SMALL))
+  it('does NOT shrink a really long idiom any further than the one step', () => {
+    expect(headwordGlyphSize(12)).toBe(SMALL)
+    expect(headwordGlyphSize(30)).toBe(SMALL)
+  })
+  it('uses exactly two distinct sizes across all lengths', () => {
+    const sizes = new Set(Array.from({ length: 20 }, (_, i) => headwordGlyphSize(i + 1)))
+    expect(sizes).toEqual(new Set([FULL, SMALL]))
+  })
+  it('is non-increasing as length grows (full then small, never back up)', () => {
+    const order = [1, 2, 3, 4, 5, 8, 20].map(headwordGlyphSize)
+    expect(order.slice(0, 4).every((s) => s === FULL)).toBe(true)
+    expect(order.slice(4).every((s) => s === SMALL)).toBe(true)
   })
 })
 

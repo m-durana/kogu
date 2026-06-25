@@ -58,10 +58,12 @@
   .hw { font-family: var(--han); font-size: 1.7rem; line-height: 1.05; flex: none; min-width: 2.2em; max-width: 8.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hw .alt { color: var(--faint); font-size: 0.95rem; margin-left: 0.35rem; }
   .meta-col { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }
-  .line1 { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
-  .rd { font-family: var(--mono); color: var(--muted); font-size: 0.78rem; }
+  /* keep the reading line to ONE line: a long reading ellipsises rather than wrapping the row to a
+     second line (no entry longer than one line). */
+  .line1 { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: nowrap; min-width: 0; }
+  .rd { font-family: var(--mono); color: var(--muted); font-size: 0.78rem; min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* Hybrid: variety/region as plain labels after a hairline divider, not bordered chips */
-  .tags { display: inline-flex; align-items: baseline; gap: 0.35rem; }
+  .tags { display: inline-flex; align-items: baseline; gap: 0.35rem; flex: none; }
   .rd + .tags { border-left: 1px solid var(--border-strong); padding-left: 0.5rem; margin-left: 0.05rem; }
   .var { font-family: var(--han); font-size: 0.78rem; color: var(--faint); }
   .rg { font-size: 0.62rem; color: var(--faint); font-family: var(--mono); }

@@ -880,6 +880,9 @@
     const h = head
     if (h === restoredFor) return
     restoredFor = h
+    // collapse the headword + reading expanders on every word change (per-session UI, not cached)
+    headOpen = false
+    readOpen = new Set()
     const snap = h ? uiCache.get(h) : undefined
     if (snap && Date.now() - snap.ts < UI_TTL) {
       expanded = new Set(snap.expanded)
@@ -905,6 +908,27 @@
   // jyutping list, so readProbe takes a setter for whichever "over" flag this line drives. ──
   let jaReadOver = $state(false)
   let yueReadOver = $state(false)
+  // per-row clamp state for a plain word reading (中 pinyin / 粵 jyutping / 日 word kana): a long
+  // multi-syllable reading (中國國民黨革命委員會) would otherwise run off the viewport, so each row's
+  // reading clamps to one line with a "+" — keyed by row id since a card has several reading rows.
+  let readOver = $state<Set<number>>(new Set())
+  let readOpen = $state<Set<number>>(new Set())
+  function setReadOver(id: number, v: boolean) {
+    if (v === readOver.has(id)) return
+    const n = new Set(readOver)
+    if (v) n.add(id)
+    else n.delete(id)
+    readOver = n
+  }
+  function toggleRead(id: number) {
+    const n = new Set(readOpen)
+    n.has(id) ? n.delete(id) : n.add(id)
+    readOpen = n
+  }
+  // headword glyph: clamp to one line so a long word (idiom) never grows tall enough to clip into the
+  // save/share buttons; a "+" expands it downward instead of shrinking it away (item).
+  let headOpen = $state(false)
+  let headOver = $state(false)
   function readProbe(node: HTMLElement, setOver: (v: boolean) => void) {
     const measure = () => {
       // only meaningful while clamped (one line); when expanded keep the toggle visible so it can
@@ -960,7 +984,8 @@
     <!-- Block A - the definition: the typed glyph across every language that writes it, co-equally -->
     <section class="def">
       <div class="glyphrow">
-        <h2 class="glyph" style="font-size:{glyphSize}"><Glyph ch={head} font={headFont} lang={langTag(headVariety)} /></h2>
+        <h2 class="glyph" class:clamp={!headOpen} style="font-size:{glyphSize}" use:readProbe={(v) => (headOver = v)}><Glyph ch={head} font={headFont} lang={langTag(headVariety)} /></h2>
+        {#if headOver}<button class="headmore" onclick={() => (headOpen = !headOpen)} aria-label={headOpen ? 'collapse headword' : 'show full headword'} title={headOpen ? 'collapse' : 'show full word'}>{#if headOpen}<Minus size={18} />{:else}<Plus size={18} />{/if}</button>{/if}
         {#if switchTarget}
           <button class="scswitch" onclick={() => onsearch(switchTarget.to)} title="switch to the {switchTarget.label} form ({switchTarget.to})" aria-label="switch to the {switchTarget.label} form"><ArrowLeftRight size={17} /></button>
         {/if}
@@ -1002,7 +1027,7 @@
                        reading EXACTLY like the 日/粵 per-reading icons (not pushed away by .drow2's gap).
                        For a Japanese kana reading with Kanjium accent data, the reading renders as a
                        monochrome pitch contour (overline over high morae + a downstep tick) instead. -->
-                  <span class="dread"><span class="rdg">{#if cells}<span class="pitch" title="pitch accent (Kanjium)">{#each cells as c}<span class="pmora" class:phigh={c.high} class:pdrop={c.drop}>{c.mora}</span>{/each}</span>{:else}{dispReading(r.variety, r.reading)}{/if}{#if speakOn}<button class="spk spk-sm" class:speaking={playingKey === r.variety + ':' + r.reading} onclick={() => speak(r.variety + ':' + r.reading, r.reading, r.variety, r.form, r.accent)} aria-label="listen" title="listen"><Volume2 size={13} /></button>{/if}</span></span>
+                  <span class="dread dreads plainread" class:clamp={!readOpen.has(r.id)} class:faded={readOver.has(r.id) && !readOpen.has(r.id)} use:readProbe={(v) => setReadOver(r.id, v)}><span class="rdg">{#if cells}<span class="pitch" title="pitch accent (Kanjium)">{#each cells as c}<span class="pmora" class:phigh={c.high} class:pdrop={c.drop}>{c.mora}</span>{/each}</span>{:else}{dispReading(r.variety, r.reading)}{/if}{#if speakOn}<button class="spk spk-sm" class:speaking={playingKey === r.variety + ':' + r.reading} onclick={() => speak(r.variety + ':' + r.reading, r.reading, r.variety, r.form, r.accent)} aria-label="listen" title="listen"><Volume2 size={13} /></button>{/if}</span></span>{#if readOver.has(r.id)}<button class="rmore" onclick={() => toggleRead(r.id)} aria-label={readOpen.has(r.id) ? 'collapse reading' : 'show full reading'}>{#if readOpen.has(r.id)}<Minus size={15} />{:else}<Plus size={15} />{/if}</button>{/if}
                 {/if}
                 {#if r.variety === 'zh' && headJyutList.length && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread dreads" class:clamp={!yueReadOpen} class:faded={yueReadOver && !yueReadOpen} use:readProbe={(v) => (yueReadOver = v)}>{#each headJyutList as j, i}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{settings.romanization === 'yale' ? jyutpingToYale(j) : j}{#if speakOn}<button class="spk spk-sm" class:speaking={playingKey === 'yue:' + j} onclick={() => speak('yue:' + j, j, 'yue', r.form)} aria-label="listen to {j}, Cantonese" title="listen (Cantonese)"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if yueReadOver}<button class="rmore" onclick={toggleYueRead} aria-label={yueReadOpen ? 'show fewer readings' : 'show more readings'}>{#if yueReadOpen}<Minus size={15} />{:else}<Plus size={15} />{/if}</button>{/if}{/if}
               </span>
@@ -1284,6 +1309,11 @@
      save/share buttons that overlap the top-right corner of the card (item 3). */
   .glyphrow { display: flex; align-items: flex-start; gap: 0.5rem; padding-right: 5.6rem; }
   .glyph { font-family: var(--han); font-size: clamp(2.8rem, 14vw, 3.8rem); line-height: 1.05; margin: 0 0 1.1rem; font-weight: 500; overflow-wrap: anywhere; min-width: 0; }
+  /* clamped: the headword stays ONE line (never grows tall into the save/share buttons); the "+" un-
+     clamps it to wrap downward. */
+  .glyph.clamp { white-space: nowrap; overflow: hidden; }
+  .headmore { align-self: flex-start; margin-top: 0.5rem; flex: none; display: inline-flex; padding: 0.15rem; background: none; border: none; color: var(--muted); }
+  .headmore:hover { color: var(--text); background: none; }
   /* tiny two-arrow switch to the TC/SC counterpart, top-right of the header glyph (item 161) */
   /* just the two-arrow icon, no box around it (item) */
   .scswitch { display: inline-flex; align-items: center; justify-content: center; margin-top: 0.45rem; padding: 0.15rem; color: var(--muted); background: none; border: none; }
@@ -1407,6 +1437,9 @@
   /* fade the last renderable character into nothing (like a "show more" cue) instead of a hard cut —
      only when the readings actually overflow */
   .dreads.faded { -webkit-mask-image: linear-gradient(to right, #000 80%, transparent); mask-image: linear-gradient(to right, #000 80%, transparent); }
+  /* a single long plain reading (multi-syllable pinyin/jyutping) WRAPS when expanded rather than
+     overflowing — its .rdg is otherwise nowrap (which keeps the speaker tight while clamped). */
+  .plainread:not(.clamp) .rdg { white-space: normal; overflow-wrap: anywhere; }
   /* radical line (#16) + usage badge (#17) + script-strip caption (#7) */
   .radline { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 0.55rem; font-size: 0.9rem; }
   .radline .part { font-size: 1.15rem; }

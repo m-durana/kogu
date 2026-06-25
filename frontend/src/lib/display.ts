@@ -86,10 +86,10 @@ export function varietyName(v: Variety): string {
  * collide with the save/share buttons overlapping the top-right of the card. `len` is the headword's
  * Unicode code-point count ([...head].length). */
 export function headwordGlyphSize(len: number): string {
-  if (len <= 2) return 'clamp(2.8rem, 14vw, 3.8rem)'
-  if (len <= 4) return 'clamp(2.2rem, 10vw, 2.9rem)'
-  if (len <= 7) return 'clamp(1.7rem, 7vw, 2.1rem)'
-  return 'clamp(1.35rem, 5.5vw, 1.7rem)'
+  // full size up to 4 characters; one modest step down beyond that. A really long word is NOT shrunk
+  // further — it clamps to one line and the UI offers a "+" to expand it downward instead.
+  if (len <= 4) return 'clamp(2.8rem, 14vw, 3.8rem)'
+  return 'clamp(2.0rem, 9vw, 2.6rem)'
 }
 
 /** BCP-47 lang tag for a variety, stamped on glyph elements so screen readers / text selection know

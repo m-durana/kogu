@@ -810,7 +810,7 @@
         </p>
         <p class="intropos"><span class="intropron">/ko.gu/</span> <span class="introtag">noun</span></p>
 
-        <p class="introgloss">A dictionary for the living Han script. Type one character or word and see it across <b>中文</b> (Mandarin), <b>粵語</b> (Cantonese), and <b>日本語</b> (Japanese) at once: how each language reads it, what it means, and how the 20th-century reforms pulled the written forms apart (<b>廣</b> → <b>广</b> in China, <b>広</b> in Japan). Search by hanzi or kanji, pinyin or jyutping, kana, or plain English.</p>
+        <p class="introgloss">A dictionary for the living Han script. Type one character or word and see it across <b>中文</b> (Mandarin), <b>粵語</b> (Cantonese), and <b>日本語</b> (Japanese) at once: how each language reads it, what it means, and how the 20th-century reforms pulled the written forms apart.</p>
 
         <h2 class="abh">On each page</h2>
         <dl class="ablist">
