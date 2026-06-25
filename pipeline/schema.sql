@@ -90,6 +90,17 @@ CREATE INDEX idx_glyph_edge_child  ON glyph_edge(child_cp);
 CREATE INDEX idx_glyph_edge_parent ON glyph_edge(parent_cp);
 CREATE INDEX idx_glyph_edge_type   ON glyph_edge(type);
 
+-- Confusable look-alikes (Unihan kSpoofingVariant): homoglyphs that are easily MISREAD for each other
+-- (日/曰, 未/末, 土/士). This is a visual-confusability signal ONLY — not identity or shared meaning —
+-- so it is deliberately kept OUT of glyph_edge and the variant graph, and surfaced as a quiet note.
+-- kSpoofingVariant is symmetric; both directions are stored.
+CREATE TABLE char_confusable (
+    cp             INTEGER NOT NULL REFERENCES character(cp),
+    confusable_cp  INTEGER NOT NULL REFERENCES character(cp),
+    PRIMARY KEY (cp, confusable_cp)
+) WITHOUT ROWID;
+CREATE INDEX idx_char_confusable_cp ON char_confusable(cp);
+
 -- ============================================================================
 -- 2. Lexeme layer (DESIGN.md §2.2)
 -- ============================================================================

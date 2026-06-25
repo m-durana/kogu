@@ -1128,6 +1128,21 @@ fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<C
             }
         }
     }
+    // confusable look-alikes (Unihan kSpoofingVariant): a visual-confusability note, not identity or
+    // meaning. The table may be absent on an older DB, so degrade gracefully if the query fails.
+    let mut confusables: Vec<String> = Vec::new();
+    if let Ok(mut s) =
+        conn.prepare("SELECT confusable_cp FROM char_confusable WHERE cp = ?1 ORDER BY confusable_cp LIMIT 12")
+    {
+        if let Ok(rows) = s.query_map([cp], |r| r.get::<_, i64>(0)) {
+            for cpx in rows.flatten() {
+                if let Some(c) = char::from_u32(cpx as u32) {
+                    confusables.push(c.to_string());
+                }
+            }
+        }
+    }
+
     let rad_gloss = is_radical_gloss(gloss_en.as_deref());
     // a genuine bound radical flags as a radical in its gloss AND appears in almost no words of its
     // own (彳: 4, 辵: 0). 山/木/水 carry a radical gloss too but head thousands of words → not radicals.
@@ -1153,6 +1168,7 @@ fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<C
         readings,
         variants,
         script_forms,
+        confusables,
         decomp,
         components,
         is_radical,

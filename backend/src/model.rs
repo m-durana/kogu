@@ -134,6 +134,9 @@ pub struct CharInfo {
     /// the character's script family across reforms (繁→简·日), for the forms strip. None when the
     /// glyph has no living cross-script branches and isn't a kokuji (nothing to show).
     pub script_forms: Option<ScriptForms>,
+    /// confusable look-alikes (Unihan kSpoofingVariant) — glyphs easily MISREAD for this one (㓕/滅).
+    /// Purely a visual-confusability note, NOT identity or meaning; empty for most characters.
+    pub confusables: Vec<String>,
     /// when the character is built entirely from repetitions of ONE simpler glyph (森 = three 木,
     /// 晶 = three 日, 淼 = three 水), resolved recursively through "doubled" intermediates (林, 昍, 沝).
     /// None for mixed-component characters (好 = 女 + 子) — the frontend then shows the flat parts.

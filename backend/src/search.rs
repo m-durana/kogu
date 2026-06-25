@@ -289,6 +289,36 @@ const W_WILDCARD: f64 = 0.5; // flat base weight for a wildcard hit; the freq fa
 // frequent fringe word (freq→2× boost) outrank an exact match. Additive + small keeps the match tier
 // dominant (an exact reading always beats a prefix; an exact sense always beats an incidental one).
 const FREQ_BONUS: f64 = 0.15;
+/// English results: at most this many consecutive hits may share a variety before a different-variety
+/// hit is pulled forward (see the reflow at the end of `search`).
+const CAP_RUN: usize = 3;
+
+/// Stable "no more than `cap` consecutive results from the same variety" reflow. Walks the already
+/// score-sorted list and, once a variety hits the cap, pulls forward the next-best hit of a DIFFERENT
+/// variety (if any) instead of continuing the run. Within each variety the score order is preserved.
+fn cap_consecutive_variety(sorted: Vec<Hit>, cap: usize) -> Vec<Hit> {
+    let mut rest = sorted;
+    let mut out: Vec<Hit> = Vec::with_capacity(rest.len());
+    let mut run_var: Option<String> = None;
+    let mut run = 0usize;
+    while !rest.is_empty() {
+        let idx = if run < cap {
+            0
+        } else {
+            // cap reached: take the highest-scored hit of a different variety; none → keep order
+            rest.iter().position(|h| Some(&h.variety) != run_var.as_ref()).unwrap_or(0)
+        };
+        let h = rest.remove(idx);
+        if run_var.as_deref() == Some(h.variety.as_str()) {
+            run += 1;
+        } else {
+            run_var = Some(h.variety.clone());
+            run = 1;
+        }
+        out.push(h);
+    }
+    out
+}
 
 /// Escape LIKE wildcards so a typed % or _ is matched literally (used with `ESCAPE '\'`).
 fn escape_like(s: &str) -> String {
@@ -678,6 +708,15 @@ pub fn search(
             .then(meaningful_gloss_count(&b.glosses).cmp(&meaningful_gloss_count(&a.glosses)))
             .then(a.lexeme_id.cmp(&b.lexeme_id))
     });
+
+    // English (Latin) queries: a common word's meaning-match tiers collapse to a near-tie, so the freq
+    // tiebreak decides — and freq is systematically higher for Japanese (separate corpora, not
+    // cross-comparable), which stacked 10+ ja hits before the first Chinese one. Reflow so at most
+    // CAP_RUN in a row share a variety, surfacing a 中/粵 result near the top, without disturbing the
+    // score order within each variety. Latin-only so Han/kana/wildcard ordering is untouched.
+    if kind == Kind::Latin && hits.len() > CAP_RUN {
+        hits = cap_consecutive_variety(hits, CAP_RUN);
+    }
 
     // kokuji fallback: a single valid character with no word-lexeme (峠 has one; 込/凪 don't)
     // still deserves a character page. Synthesise a hit keyed by a negative codepoint id.

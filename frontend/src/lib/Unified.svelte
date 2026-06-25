@@ -1132,6 +1132,14 @@
           <span class="dim">{headChar.strokes} strokes</span>
         </div>
       {/if}
+      {#if headChar.confusables.length}
+        <!-- Unihan kSpoofingVariant: glyphs easily MISREAD for this one. A look-alike note, NOT a
+             variant/meaning link — kept visually distinct from the "across scripts" strip. -->
+        <div class="confus">
+          <span class="sublabel">easily confused with</span>
+          <div class="confrow">{#each headChar.confusables as cf}<button class="part confbtn" onclick={() => onsearch(cf)} title="look up {cf} (look-alike)"><Glyph ch={cf} font="var(--han)" /></button>{/each}</div>
+        </div>
+      {/if}
     </section>
   {:else if isGlyphSearch && activeTab === 'forms' && entry && entry.characters.length}
     <!-- jukugo: break the word into its component characters. Same tappable row system as the
@@ -1455,6 +1463,11 @@
   .comp .part { white-space: nowrap; }
   .part { font-family: var(--han); color: var(--text); background: none; border: none; padding: 0 0.1rem; font-size: 1.25rem; line-height: 1; }
   .part:hover { color: var(--hi); background: none; }
+  /* confusable look-alikes row (kSpoofingVariant) */
+  .confus { margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--border); }
+  .confrow { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .confbtn { font-size: 1.5rem; padding: 0.1rem 0.25rem; border: 1px solid var(--border); border-radius: var(--r); color: var(--muted); }
+  .confbtn:hover { color: var(--text); border-color: var(--border-strong); }
   .comp .dim { font-size: 0.95rem; }
   .plus { color: var(--faint); font-family: var(--mono); margin: 0 0.35rem; }
   /* a component's meaning, e.g. 木 (tree) — the "explain the parts" layer */

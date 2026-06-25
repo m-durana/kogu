@@ -107,6 +107,31 @@ async fn english_pivot() {
     assert!(hw.contains(&"機場".to_string()), "missing zh 機場");
 }
 
+// 4a2. English results are language-balanced: the freq tiebreak (higher for ja) used to stack 10+
+//      Japanese hits before the first Chinese one. A per-variety consecutive cap (Latin-only) reflows
+//      so no more than 3 in a row share a variety and a 中/粵 result surfaces near the top.
+#[tokio::test]
+async fn english_results_language_balanced() {
+    let v = search("unity").await;
+    let vars = varieties(&v);
+    assert!(vars.len() >= 4, "expected several results for unity");
+    // Check the HEAD, where interleaving is possible. (Deep in the list one variety is exhausted and
+    // the remainder naturally clusters — that's expected, the cap only governs the dominated head.)
+    let head: Vec<&String> = vars.iter().take(12).collect();
+    let mut run = 1usize;
+    let mut max_run = 1usize;
+    for i in 1..head.len() {
+        if head[i] == head[i - 1] {
+            run += 1;
+            max_run = max_run.max(run);
+        } else {
+            run = 1;
+        }
+    }
+    assert!(max_run <= 3, "more than 3 consecutive same-variety in the head: {head:?}");
+    assert!(vars.iter().take(4).any(|x| x != "ja"), "top 4 are all Japanese: {vars:?}");
+}
+
 // 4b. English results are ranked by relevance: an exact "airport" word ranks at the very top,
 //     not an incidental match like デッキ (deck). Regression for the bad-ranking report.
 #[tokio::test]
@@ -312,6 +337,30 @@ async fn characters_breakdown_excludes_kana() {
         })),
         "characters breakdown leaked a non-Han glyph: {chars:?}"
     );
+}
+
+// Loanword origin from JMdict <lsource>: アールデコ (art déco) has no Wiktionary etymology, so the
+// JMdict language-source gap-fills a "From French" origin (structured passthrough, not LLM prose).
+#[tokio::test]
+async fn loanword_origin_from_lsource() {
+    let hit = entry_of(&search("アールデコ").await, "ja", "アールデコ");
+    let e = get(&format!("/entry/{}", hit["lexeme_id"].as_i64().unwrap())).await.1;
+    let origins = e["origins"].as_array().unwrap();
+    assert!(
+        origins.iter().any(|o| o["text"].as_str().unwrap_or("").contains("French")),
+        "expected a French loanword origin for アールデコ, got {origins:?}"
+    );
+}
+
+// Confusable look-alikes (Unihan kSpoofingVariant): 滅 has the look-alike 㓕. It's a confusability
+// note on the character, NOT a variant/identity edge.
+#[tokio::test]
+async fn confusables_surface_on_character() {
+    let v = search("滅").await;
+    let id = v["results"][0]["lexeme_id"].as_i64().unwrap();
+    let e = get(&format!("/entry/{id}")).await.1;
+    let conf = e["characters"][0]["confusables"].as_array().unwrap();
+    assert!(conf.iter().any(|c| c == "㓕"), "expected 㓕 as a confusable of 滅, got {conf:?}");
 }
 
 // P3. false friend: 手紙 is zh "toilet paper" / ja "letter" -> same form, no shared concept.
