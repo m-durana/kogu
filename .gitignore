@@ -1,6 +1,3 @@
-# --- Working / planning docs (kept local, never committed) ---
-docs/
-
 # --- Rust backend ---
 /backend/target/
 /backend/target
@@ -42,3 +39,6 @@ __pycache__/
 *.swp
 .idea/
 .vscode/
+
+# local working docs (design notes, plans) stay on the server
+docs/

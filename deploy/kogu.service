@@ -4,19 +4,19 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/srv/miro/kanzi/backend
-ExecStart=/srv/miro/kanzi/bin/kogu
+WorkingDirectory=/srv/miro/kogu/backend
+ExecStart=/srv/miro/kogu/bin/kogu
 Restart=on-failure
 RestartSec=2
-Environment=KANZI_DB=/srv/miro/kanzi/data/kanzi.sqlite
-Environment=KANZI_PORT=4100
-Environment=RUST_LOG=kanzi=info
+Environment=KOGU_DB=/srv/miro/kogu/data/kogu.sqlite
+Environment=KOGU_PORT=4100
+Environment=RUST_LOG=kogu=info
 # OCR: dlopen the official onnxruntime .so (load-dynamic) + PP-OCRv5 models, both on the volume
 Environment=KOGU_OAR_DIR=/mnt/HC_Volume_102319212/wenbun/oar
 Environment=ORT_DYLIB_PATH=/mnt/HC_Volume_102319212/wenbun/oar/libonnxruntime.so
 # read-only service: reads the DB + OCR models, proxies handwriting ink
 ProtectSystem=strict
-ReadOnlyPaths=/srv/miro/kanzi /mnt/HC_Volume_102319212/wenbun/oar
+ReadOnlyPaths=/srv/miro/kogu /mnt/HC_Volume_102319212/wenbun/oar
 ProtectHome=true
 PrivateTmp=true
 NoNewPrivileges=true

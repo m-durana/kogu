@@ -16,7 +16,7 @@ import urllib.request
 
 from .db import DB_PATH, SOURCES_DIR
 
-UA = "wenbun-pipeline/0.0 (+https://miro.build)"
+UA = "kogu-pipeline/0.0 (+https://miro.build)"
 KAIKKI = {
     "zh": "https://kaikki.org/dictionary/Chinese/kaikki.org-dictionary-Chinese.jsonl",
     "ja": "https://kaikki.org/dictionary/Japanese/kaikki.org-dictionary-Japanese.jsonl",

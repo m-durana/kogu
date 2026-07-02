@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
-# Kogu deploy — builds the release binary + static frontend and installs the systemd service
+# Kogu deploy: builds the release binary + static frontend and installs the systemd service
 # and nginx vhost. Idempotent. Run as root on the VPS from the repo root or anywhere.
 #
 #   sudo deploy/deploy.sh           # full build + install
 #   sudo deploy/deploy.sh --app     # rebuild + restart app only (skip nginx)
 #
+# NOTE: this script encodes this particular VPS's conventions (paths under /srv/miro and
+# /var/www/miro, letsencrypt webroot, Cloudflare DNS). It is not a generic installer; adapt
+# the variables below for your own host.
+#
 # DNS + TLS are NOT done here (they need the Cloudflare record + a cert); see deploy/README.md.
 set -euo pipefail
 
-ROOT="/srv/miro/kanzi"
+ROOT="/srv/miro/kogu"
 DOMAIN="kogu.miro.build"
 WEBROOT="/var/www/miro/kogu"
 BIN="$ROOT/bin/kogu"
@@ -21,10 +25,10 @@ source "$HOME/.cargo/env" 2>/dev/null || true
 echo "==> building release binary"
 ( cd backend && cargo build --release )
 mkdir -p "$ROOT/bin"
-install -m 0755 backend/target/release/kanzi "$BIN"
+install -m 0755 backend/target/release/kogu "$BIN"
 
 echo "==> ensuring database"
-[ -f "$ROOT/data/kanzi.sqlite" ] || { echo "!! data/kanzi.sqlite missing — run: pipeline/.venv/bin/python -m kanzipipe.build"; exit 1; }
+[ -f "$ROOT/data/kogu.sqlite" ] || { echo "!! data/kogu.sqlite missing - run: pipeline/.venv/bin/python -m kogupipe.build"; exit 1; }
 
 echo "==> building frontend"
 ( cd frontend && pnpm install --frozen-lockfile && pnpm run build )
@@ -32,8 +36,6 @@ mkdir -p "$WEBROOT"
 rsync -a --delete frontend/dist/ "$WEBROOT/"
 
 echo "==> installing systemd service"
-# free the port from the old Wenbun service if present (pivot)
-systemctl disable --now wenbun.service 2>/dev/null || true
 install -m 0644 deploy/$SERVICE /etc/systemd/system/$SERVICE
 systemctl daemon-reload
 systemctl enable "$SERVICE"
@@ -52,7 +54,7 @@ if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
   nginx -t && systemctl reload nginx
   echo "==> live at https://$DOMAIN"
 else
-  echo "!! no TLS cert for $DOMAIN yet — vhost staged but NOT enabled."
+  echo "!! no TLS cert for $DOMAIN yet - vhost staged but NOT enabled."
   echo "   1) ensure Cloudflare A record:  $DOMAIN -> $(curl -s https://api.ipify.org)"
   echo "   2) certbot certonly --webroot -w /var/www/letsencrypt -d $DOMAIN"
   echo "   3) re-run this script (it will enable the vhost)."

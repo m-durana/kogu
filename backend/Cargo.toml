@@ -3,7 +3,7 @@ name = "kogu"
 version = "0.0.0"
 edition = "2021"
 description = "Serving binary for the kogu CJK dictionary (Axum + SQLite/FTS5)"
-license = "CC-BY-SA-4.0"
+license = "MIT"
 publish = false
 
 [lib]
@@ -37,6 +37,13 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 oar-ocr = { version = "0.7.0", default-features = false, features = ["simd"] }
 ort = { version = "=2.0.0-rc.12", features = ["load-dynamic"] }
 image = "0.25.10"
+# OpenAPI spec generation (code-first, framework-agnostic macros; the spec is dumped to a static
+# openapi.json by src/bin/dump_openapi.rs, not served by the router).
+utoipa = "5"
+
+[[bin]]
+name = "dump_openapi"
+path = "src/bin/dump_openapi.rs"
 
 [profile.release]
 opt-level = 3
