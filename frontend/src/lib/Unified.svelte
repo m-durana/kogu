@@ -963,7 +963,7 @@
 
 <svelte:window onkeydown={(e) => { if (e.key === 'Escape') { if (boundOpen) closeBound(); openTerm = null } }} />
 
-<article class="u">
+<article class="u" class:split={isGlyphSearch}>
   <!-- one tappable cross-language row (bridge band + plain results list) -->
   {#snippet rowItem(r: Row)}
     <!-- the ONE shared entry-row style (same as the search results list): glyph left, reading + 中/粵/日
@@ -1597,4 +1597,28 @@
   .skel-chip { height: 1.8rem; width: 3.4rem; border-radius: var(--r); background: var(--surface); }
   .skel-h, .skel-line, .skel-chip { animation: skelpulse 1.3s ease-in-out infinite; }
   @keyframes skelpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+  /* ── desktop: a real two-column entry page ──────────────────────────────────────────────────────
+     The word (glyph + per-language definitions) anchors a sticky left column; the tab bar and its
+     content get the right column. The article widens past the phone column via symmetric negative
+     margins (NOT transform: the term/bound popups inside are position:fixed, and a transformed
+     ancestor would re-root them). Only entry pages split; plain result lists stay one column. */
+  @media (min-width: 1100px) {
+    article.u.split {
+      --pcw: min(1080px, calc(100vw - 4rem));
+      margin-inline: calc((var(--pcw) - 100%) / -2);
+      display: grid;
+      grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+      column-gap: 3.2rem;
+      align-items: start;
+    }
+    article.u.split > * { grid-column: 2; min-width: 0; }
+    article.u.split > .def {
+      grid-column: 1;
+      grid-row: 1 / span 64;
+      position: sticky;
+      top: 1.2rem;
+      border-bottom: none;
+    }
+  }
 </style>
