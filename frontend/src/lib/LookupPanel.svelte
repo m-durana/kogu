@@ -130,7 +130,7 @@
   /* track-style segmented control (matches Settings): only the selected tab is filled, no per-cell
      outline on the unselected one (item 7/8). */
   .lptabs { display: inline-flex; gap: 2px; padding: 2px; background: var(--surface); border-radius: 999px; margin-bottom: 0.9rem; }
-  .lptabs button { font-family: var(--mono); font-size: 0.74rem; color: var(--muted); background: none; border: none; border-radius: 999px; padding: 0.35rem 0.9rem; }
+  .lptabs button { font-family: var(--mono); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); background: none; border: none; border-radius: 999px; padding: 0.38rem 0.95rem; }
   .lptabs button:hover { color: var(--text); background: none; }
   .lptabs button.on { background: var(--text); color: var(--bg); }
   .lptabs button.on:hover { color: var(--bg); }

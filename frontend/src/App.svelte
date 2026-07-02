@@ -851,7 +851,7 @@
           <li><b><a href="https://omwn.org/" target="_blank" rel="noopener noreferrer external">Open Multilingual Wordnet</a></b>: part of the cross-language concept links</li>
           <li>Pronunciation clips: <b><a href="https://github.com/davinfifield/mp3-chinese-pinyin-sound" target="_blank" rel="noopener noreferrer external">mp3-chinese-pinyin-sound</a></b> (Mandarin) and <b><a href="https://jyutping.org/" target="_blank" rel="noopener noreferrer external">jyutping.org</a></b> (Cantonese); Japanese is synthesized locally with <b><a href="https://open-jtalk.sourceforge.net/" target="_blank" rel="noopener noreferrer external">Open JTalk</a></b></li>
         </ul>
-        <p class="abnote">Everything is passed through from these open datasets directly. Nothing here is written by an AI. Kogu is open source (code MIT, data licences in the repo's NOTICE.md), and was inspired by <b><a href="https://cjkvdict.com/" target="_blank" rel="noopener noreferrer external">CJKV Dict</a></b>.</p>
+        <p class="abnote">Everything is passed through from these open datasets directly. Nothing here is written by an AI. Kogu is <a href="https://github.com/m-durana/kogu" target="_blank" rel="noopener noreferrer external">open source</a> (code MIT, data licences in NOTICE.md), and was inspired by <b><a href="https://cjkvdict.com/" target="_blank" rel="noopener noreferrer external">CJKV Dict</a></b>.</p>
       </div>
     {/if}
   {/if}
@@ -868,7 +868,7 @@
           <li><span class="instep"><Share2 size={18} /></span><span>Tap the <b>Share</b> button {isIOS ? 'in the toolbar below' : 'in your browser menu'}</span></li>
           <li><span class="instep"><SquarePlus size={18} /></span><span>Choose <b>Add to Home Screen</b></span></li>
         </ol>
-        <button class="setclose" onclick={() => (showInstallHelp = false)}>got it</button>
+        <button class="instok" onclick={() => (showInstallHelp = false)}>got it</button>
       </div>
       {#if isIOS}<div class="instpoint" aria-hidden="true"><ChevronDown size={18} /></div>{/if}
     </div>
@@ -948,7 +948,7 @@
   .setbg { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 70; }
   .setcard { width: min(22rem, 100%); background: var(--surface-2, #1c1c1f); border: 0.5px solid var(--border-strong); border-radius: 16px; box-shadow: 0 12px 40px -12px rgba(0,0,0,0.7); padding: 1.1rem 1.1rem 0.9rem; }
   .sethrow { display: flex; align-items: center; justify-content: space-between; margin: 0 0 1.1rem; }
-  .seth { font-family: var(--sans); font-size: 1.15rem; font-weight: 500; color: var(--text); margin: 0; }
+  .seth { font-family: var(--mono); font-size: 0.72rem; font-weight: 400; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0; }
   .setx { display: inline-flex; background: none; border: none; color: var(--muted); padding: 0.2rem; border-radius: var(--r); }
   .setx:hover { color: var(--text); background: var(--surface); }
   .setrow { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.9rem 0; border-top: 0.5px solid var(--border); }
@@ -1083,7 +1083,7 @@
   .lookup { display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 1rem; font-family: var(--mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: var(--r); padding: 0.4rem 0.7rem; }
   .lookup:hover { color: var(--text); border-color: var(--border-strong); background: var(--surface); }
   /* About page (item 2): what Kogu is, what each section means, and the data sources */
-  .about { padding: 1rem 0.2rem 2rem; max-width: 40ch; }
+  .about { padding: 1rem 0.2rem 2rem; max-width: 58ch; }
   .introhw { margin: 0; display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
   .introhw .intromark { font-family: var(--han); font-weight: 500; font-size: 2.1rem; letter-spacing: -0.04em; color: var(--text); }
   .introhw .introword { font-family: var(--sans); font-size: 1.4rem; letter-spacing: 0.04em; color: var(--muted); }
@@ -1097,7 +1097,7 @@
   /* guided add-to-home-screen overlay */
   .instbg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4); z-index: 80; display: flex; align-items: center; justify-content: center; padding: 1.2rem; }
   .instcard { width: min(22rem, 100%); background: var(--surface-2, #1c1c1f); border: 0.5px solid var(--border-strong); border-radius: 16px; box-shadow: 0 12px 40px -12px rgba(0,0,0,0.7); padding: 1.1rem; }
-  .insth { font-family: var(--sans); font-size: 1.1rem; font-weight: 500; color: var(--text); margin: 0 0 0.8rem; }
+  .insth { font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 0.9rem; }
   .inststeps { margin: 0 0 1rem; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.7rem; }
   .inststeps li { display: flex; align-items: center; gap: 0.6rem; font-size: 0.95rem; line-height: 1.4; color: var(--muted); }
   .inststeps b { color: var(--text); font-weight: 500; }
@@ -1128,4 +1128,21 @@
   .ps-line.w70 { width: 70%; } .ps-line.w85 { width: 85%; }
   @keyframes psshimmer { to { transform: translateX(100%); } }
   @media (prefers-reduced-motion: reduce) { .ps-line::after { animation: none; } }
+
+  /* popup close language (matches the bound-form modal's mono text close) */
+  .instok { display: block; margin-left: auto; font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); background: none; border: none; padding: 0.3rem 0; }
+  .instok:hover { color: var(--text); background: none; border: none; }
+
+  /* ── desktop ──────────────────────────────────────────────────────────────────────────────────
+     the phone-first column reads lost on a large screen: give the content a wider measure and pin
+     the handwriting dock to the column instead of the full viewport edge. */
+  @media (min-width: 1100px) {
+    .wrap { max-width: 780px; }
+    .drawpanel {
+      left: 50%; right: auto; transform: translateX(-50%);
+      width: min(820px, calc(100vw - 2rem));
+      border: 1px solid var(--border-strong); border-bottom: none;
+      border-radius: 16px 16px 0 0;
+    }
+  }
 </style>
