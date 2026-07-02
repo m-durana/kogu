@@ -18,20 +18,27 @@ const ENDPOINT: &str = "https://inputtools.google.com/request?ime=handwriting&ap
 /// A stroke is an ordered list of [x, y, t] points (t = ms timestamp, may be 0).
 type Point = [f64; 3];
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct RecognizeRequest {
+    /// drawing area width in px
     pub width: f64,
+    /// drawing area height in px
     pub height: f64,
+    /// ordered strokes; each stroke is a list of [x, y, t] points (t = ms timestamp, may be 0)
+    #[schema(value_type = Vec<Vec<Vec<f64>>>)]
     pub strokes: Vec<Vec<Point>>,
     /// Recogniser language(s). Default ["zh"] (a Han superset). Pass e.g. ["zh","ja"] for any-to-any.
     #[serde(default)]
     pub languages: Vec<String>,
+    /// maximum number of candidates (default 20, clamped to 1..=50)
     pub limit: Option<usize>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct RecognizeResponse {
+    /// ranked candidate characters/words, merged across the requested languages
     pub candidates: Vec<String>,
+    /// the languages actually queried
     pub languages: Vec<String>,
 }
 
@@ -86,6 +93,18 @@ pub fn parse_candidates(resp: &Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// Handwriting recognition (stroke-order-independent) for Han / kana input.
+///
+/// This endpoint PROXIES the Google Input Tools handwriting service; treat it as a convenience,
+/// not a stable data endpoint (availability and results depend on the third-party upstream).
+#[utoipa::path(
+    post, path = "/recognize", tag = "input",
+    request_body = RecognizeRequest,
+    responses(
+        (status = 200, description = "Ranked candidates", body = RecognizeResponse),
+        (status = 502, description = "Upstream recognizer unavailable", body = crate::model::ApiError),
+    )
+)]
 pub async fn recognize_handler(
     State(st): State<AppState>,
     Json(req): Json<RecognizeRequest>,

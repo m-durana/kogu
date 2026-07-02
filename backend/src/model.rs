@@ -1,8 +1,9 @@
 //! Response shapes for the JSON API.
 
 use serde::Serialize;
+use utoipa::ToSchema;
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct SearchResponse {
     pub query: String,
     pub classified_as: String,
@@ -10,20 +11,20 @@ pub struct SearchResponse {
 }
 
 /// /suggest response: lightweight autocomplete candidates (no senses), fast per-keystroke.
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct SuggestResponse {
     pub query: String,
     pub suggestions: Vec<SuggestItem>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct SuggestItem {
     pub headword: String,
     pub reading: Option<String>,
     pub variety: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct Hit {
     pub lexeme_id: i64,
     pub variety: String,        // zh | yue | ja
@@ -44,7 +45,7 @@ pub struct Hit {
     pub score: f64,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, ToSchema)]
 pub struct Form {
     pub form: String,
     pub script: String,
@@ -52,7 +53,7 @@ pub struct Form {
     pub is_primary: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct Entry {
     pub lexeme_id: i64,
     pub variety: String,
@@ -82,7 +83,7 @@ pub struct Entry {
     pub appears_in: Vec<CharLite>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct OriginAccount {
     pub variety: String,
     pub headword: String,
@@ -96,7 +97,7 @@ pub struct OriginAccount {
     pub note: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct CharLite {
     pub ch: String,
     pub gloss: Option<String>,
@@ -105,7 +106,7 @@ pub struct CharLite {
     pub rare: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ReadingKV {
     pub kind: String,
     pub value: String,
@@ -116,13 +117,13 @@ pub struct ReadingKV {
     pub accent: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct Sense {
     pub pos: Option<String>,
     pub gloss_en: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct CharInfo {
     pub ch: String,
     pub is_orthodox: bool,
@@ -169,7 +170,7 @@ pub struct CharInfo {
     pub freq_by_variety: std::collections::HashMap<String, f64>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct Component {
     pub ch: String,
     pub gloss: Option<String>,
@@ -186,13 +187,13 @@ pub struct Component {
     pub mc_sound: Vec<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct CharDecomp {
     pub base: String,
     pub count: i64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct VariantEdge {
     pub parent: String,
     pub edge_type: String,
@@ -203,14 +204,14 @@ pub struct VariantEdge {
 
 /// The script forms of one character family, anchored on the orthodox glyph. Branches include the
 /// orthodox form itself plus its living simplified/shinjitai/z-variant children.
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ScriptForms {
     pub orthodox: String,
     pub is_kokuji: bool,
     pub branches: Vec<FormBranch>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct FormBranch {
     pub form: String,
     pub script: String, // "traditional" | "simplified" | "shinjitai" | "z-variant"
@@ -220,7 +221,7 @@ pub struct FormBranch {
 }
 
 /// /why response - the orthographic + phonological "why" for a word (DESIGN.md §4).
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct WhyResponse {
     pub lexeme_id: i64,
     pub headword: String,
@@ -264,7 +265,7 @@ pub fn zh_jyutping(conn: &rusqlite::Connection, lexeme_id: i64, variety: &str) -
     .ok()
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct LinkLite {
     pub lexeme_id: i64,
     pub variety: String,
@@ -284,13 +285,13 @@ pub struct LinkLite {
 }
 
 /// /translate response: an English term → concepts → equivalents across all systems.
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct TranslateResponse {
     pub query: String,
     pub concepts: Vec<ConceptGroup>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ConceptGroup {
     pub concept: String,
     pub members: Vec<LinkLite>,
@@ -298,13 +299,13 @@ pub struct ConceptGroup {
 
 /// /segment response: an unrecognized Han query greedily split into the longest known sub-words, each
 /// with a short gloss, so the "literally" hint reads 紅出口 → "red · exit" instead of "red · go out · mouth".
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct SegmentResponse {
     pub query: String,
     pub segments: Vec<SegmentPart>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct SegmentPart {
     /// the matched sub-word (one or more characters)
     pub form: String,
@@ -316,7 +317,7 @@ pub struct SegmentPart {
 }
 
 /// /ocr response - recognized text laid out over the image for tap-to-select (DESIGN: OCR feature).
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct OcrResponse {
     /// the (possibly downscaled) image dimensions the boxes are in
     pub width: u32,
@@ -324,7 +325,7 @@ pub struct OcrResponse {
     pub lines: Vec<OcrLine>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct OcrLine {
     pub text: String,
     pub confidence: f32,
@@ -335,7 +336,16 @@ pub struct OcrLine {
     pub chars: Vec<OcrChar>,
 }
 
-#[derive(Serialize)]
+/// Error body shape used by every JSON endpoint (400 / 404 / 5xx): `{ "error": "<code or message>" }`.
+/// Documentation-only: handlers build it with `serde_json::json!`.
+#[derive(Serialize, ToSchema)]
+pub struct ApiError {
+    /// short machine-readable code ("not_found", "bad_image") or an error message
+    #[schema(example = "not_found")]
+    pub error: String,
+}
+
+#[derive(Serialize, ToSchema)]
 pub struct OcrChar {
     pub ch: String,
     #[serde(rename = "box")]

@@ -23,8 +23,8 @@ pub fn load_engine() -> Option<OAROCR> {
         tracing::info!("KOGU_SKIP_OCR set - /ocr disabled");
         return None;
     }
-    let dir = std::env::var("KOGU_OAR_DIR")
-        .unwrap_or_else(|_| "/mnt/HC_Volume_102319212/wenbun/oar".to_string());
+    // production sets KOGU_OAR_DIR in the unit file; the fallback suits a local checkout
+    let dir = std::env::var("KOGU_OAR_DIR").unwrap_or_else(|_| "models/oar".to_string());
     let det = format!("{dir}/pp-ocrv5_mobile_det.onnx");
     let rec = format!("{dir}/pp-ocrv5_mobile_rec.onnx");
     let dict = format!("{dir}/ppocrv5_dict.txt");
@@ -51,6 +51,21 @@ pub fn load_engine() -> Option<OAROCR> {
     }
 }
 
+/// OCR an image (PaddleOCR PP-OCRv5, run locally).
+///
+/// POST the raw image bytes (JPEG/PNG/WebP…, max 12 MiB) as the request body. Returns recognized
+/// lines with axis-aligned pixel boxes, each split into per-character cells for tap-to-look-up.
+/// Vertical text is detected and handled. Returns 503 when the OCR models are not loaded.
+#[utoipa::path(
+    post, path = "/ocr", tag = "input",
+    request_body(content = Vec<u8>, content_type = "application/octet-stream",
+        description = "Raw image bytes (any format the `image` crate decodes), max 12 MiB"),
+    responses(
+        (status = 200, description = "Recognized lines with boxes", body = OcrResponse),
+        (status = 400, description = "Empty body or undecodable image", body = crate::model::ApiError),
+        (status = 503, description = "OCR engine not available on this deployment", body = crate::model::ApiError),
+    )
+)]
 pub async fn ocr_handler(
     State(st): State<AppState>,
     body: Bytes,

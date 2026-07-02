@@ -5,6 +5,7 @@ pub mod handlers;
 pub mod model;
 pub mod mt;
 pub mod ocr;
+pub mod openapi;
 pub mod recognize;
 pub mod search;
 pub mod state;

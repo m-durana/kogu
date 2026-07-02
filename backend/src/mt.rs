@@ -11,8 +11,10 @@ use serde_json::{json, Value};
 
 use crate::state::AppState;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct MtParams {
+    /// text to translate to English (max 200 characters)
     q: String,
     /// source language hint (zh-CN / zh-TW / ja / yue); defaults to auto-detect
     sl: Option<String>,
@@ -70,6 +72,17 @@ async fn mymemory(http: &reqwest::Client, q: &str, sl: &str) -> Option<String> {
     }
 }
 
+/// Machine translation to English (sentence-level).
+///
+/// This endpoint PROXIES third-party services (Google translate_a/single, with a MyMemory
+/// fallback); treat it as a convenience for the in-app "Translate" panel, not a stable data
+/// endpoint. Always returns 200; failures are reported in the body as {"error": "translate_failed"}.
+#[utoipa::path(
+    get, path = "/mt", tag = "input",
+    params(MtParams),
+    responses((status = 200, description = "Translation (or an in-body error)", body = Value,
+        example = json!({"translation": "hello", "source": "zh-CN", "engine": "google"})))
+)]
 pub async fn translate_handler(State(st): State<AppState>, Query(p): Query<MtParams>) -> Json<Value> {
     let q = p.q.trim().to_string();
     if q.is_empty() || q.chars().count() > 200 {

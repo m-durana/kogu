@@ -7,22 +7,45 @@ use axum::{
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
+use utoipa::IntoParams;
 
 use crate::model::*;
 use crate::search;
 use crate::state::AppState;
 
+/// Liveness probe: service name and version.
+#[utoipa::path(
+    get, path = "/health", tag = "meta",
+    responses((status = 200, description = "Service is up", body = Value,
+        example = json!({"status": "ok", "service": "kogu", "version": "0.0.0"})))
+)]
 pub async fn health() -> Json<Value> {
     Json(json!({ "status": "ok", "service": "kogu", "version": env!("CARGO_PKG_VERSION") }))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct SearchParams {
+    /// search text: Han (any script), kana, a romanized reading (romaji / pinyin / jyutping), or English
     pub q: String,
+    /// preferred Han script for the displayed form: "trad" or "simp" (also "kana", "shinjitai")
     pub script: Option<String>,
+    /// maximum number of hits (default 50, clamped to 1..=200)
     pub limit: Option<usize>,
 }
 
+/// Dictionary search across Mandarin (zh), Cantonese (yue) and Japanese (ja).
+///
+/// The query is classified (Han / kana / reading / English) and matched against surface forms,
+/// readings and English glosses; results are ranked hits with per-hit match type and score.
+#[utoipa::path(
+    get, path = "/search", tag = "dictionary",
+    params(SearchParams),
+    responses(
+        (status = 200, description = "Ranked hits across all three languages", body = SearchResponse),
+        (status = 500, description = "Internal error", body = ApiError),
+    )
+)]
 pub async fn search_handler(
     State(st): State<AppState>,
     Query(p): Query<SearchParams>,
@@ -33,12 +56,24 @@ pub async fn search_handler(
     Ok(Json(resp))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct SuggestParams {
+    /// the typed prefix to complete
     pub q: String,
+    /// maximum number of suggestions (default 8, clamped to 1..=20)
     pub limit: Option<usize>,
 }
 
+/// Lightweight autocomplete: headword + reading candidates for a typed prefix (no senses).
+#[utoipa::path(
+    get, path = "/suggest", tag = "dictionary",
+    params(SuggestParams),
+    responses(
+        (status = 200, description = "Autocomplete candidates", body = SuggestResponse),
+        (status = 500, description = "Internal error", body = ApiError),
+    )
+)]
 pub async fn suggest_handler(
     State(st): State<AppState>,
     Query(p): Query<SuggestParams>,
@@ -49,6 +84,21 @@ pub async fn suggest_handler(
     Ok(Json(resp))
 }
 
+/// Full dictionary entry for one lexeme.
+///
+/// Includes surface forms, readings (with Japanese pitch accent and Cantonese jyutping where
+/// known), senses, per-character breakdowns, same-form cognates / false friends, cross-language
+/// synonyms, compounds and etymology. A negative id addresses a character-only entry keyed by
+/// codepoint (id = -codepoint). Get ids from /search or /suggest.
+#[utoipa::path(
+    get, path = "/entry/{id}", tag = "dictionary",
+    params(("id" = i64, Path, description = "lexeme id from /search; negative = character entry (-codepoint)")),
+    responses(
+        (status = 200, description = "The entry", body = Entry),
+        (status = 404, description = "No such lexeme", body = ApiError),
+        (status = 500, description = "Internal error", body = ApiError),
+    )
+)]
 pub async fn entry_handler(
     State(st): State<AppState>,
     Path(id): Path<i64>,
@@ -644,6 +694,17 @@ fn classify_relation(conn: &rusqlite::Connection, a: i64, b: i64) -> rusqlite::R
     Ok(if diverges { "false-friend" } else { "cognate" })
 }
 
+/// The orthographic and phonological "why" of a word: its characters with components, roles
+/// (semantic / phonetic), script-reform variants, and Middle Chinese sound links.
+#[utoipa::path(
+    get, path = "/why/{id}", tag = "dictionary",
+    params(("id" = i64, Path, description = "lexeme id from /search")),
+    responses(
+        (status = 200, description = "Per-character explanation", body = WhyResponse),
+        (status = 404, description = "No such lexeme", body = ApiError),
+        (status = 500, description = "Internal error", body = ApiError),
+    )
+)]
 pub async fn why_handler(
     State(st): State<AppState>,
     Path(id): Path<i64>,
@@ -1336,12 +1397,22 @@ fn link_lite(
     Ok(Some(LinkLite { lexeme_id: id, variety, headword, reading, accent, jyut, glosses, relation: relation.to_string(), concept }))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct TranslateParams {
+    /// an English term (exact concept-label match, case-insensitive)
     pub q: String,
 }
 
 /// English-pivot translation: term → concepts → equivalents across all four systems.
+#[utoipa::path(
+    get, path = "/translate", tag = "dictionary",
+    params(TranslateParams),
+    responses(
+        (status = 200, description = "Concept groups with their members per language", body = TranslateResponse),
+        (status = 500, description = "Internal error", body = ApiError),
+    )
+)]
 pub async fn translate_handler(
     State(st): State<AppState>,
     Query(p): Query<TranslateParams>,
@@ -1380,11 +1451,23 @@ fn build_translate(conn: &rusqlite::Connection, q: &str) -> rusqlite::Result<Tra
     Ok(TranslateResponse { query: q.to_string(), concepts: groups })
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct SegmentParams {
+    /// text containing Han characters to segment
     pub q: String,
 }
 
+/// Greedy longest-match segmentation of a Han string into known sub-words, each with a short
+/// gloss (紅出口 → 紅 "red" · 出口 "exit"). Non-Han characters are skipped.
+#[utoipa::path(
+    get, path = "/segment", tag = "dictionary",
+    params(SegmentParams),
+    responses(
+        (status = 200, description = "The segments in order", body = SegmentResponse),
+        (status = 500, description = "Internal error", body = ApiError),
+    )
+)]
 pub async fn segment_handler(
     State(st): State<AppState>,
     Query(p): Query<SegmentParams>,

@@ -24,6 +24,19 @@ const YUE_BASE: &str = "https://jyutping.org/audio/";
 /// `GET /clip/:variety/:file` — proxy a single zh/yue pronunciation clip, cached in memory and served
 /// same-origin. `file` is a strict syllable (lowercase letters + a tone digit) + ".mp3" so this can't
 /// be turned into an open proxy / SSRF.
+#[utoipa::path(
+    get, path = "/clip/{variety}/{file}", tag = "audio",
+    params(
+        ("variety" = String, Path, description = "\"zh\" (Mandarin, numbered pinyin) or \"yue\" (Cantonese, jyutping)"),
+        ("file" = String, Path, description = "syllable clip name: lowercase letters + tone digit + \".mp3\" (e.g. ma3.mp3, jyut6.mp3)"),
+    ),
+    responses(
+        (status = 200, description = "MP3 clip (cacheable, immutable)", content_type = "audio/mpeg", body = Vec<u8>),
+        (status = 400, description = "Malformed clip name (plain-text message)"),
+        (status = 404, description = "Unknown variety or no such syllable (plain-text message)"),
+        (status = 502, description = "Upstream clip source unreachable (plain-text message)"),
+    )
+)]
 pub async fn clip_handler(
     State(st): State<AppState>,
     Path((variety, file)): Path<(String, String)>,
@@ -90,9 +103,10 @@ fn clip_ok(bytes: Vec<u8>) -> axum::response::Response {
         .into_response()
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct TtsParams {
-    /// the kana reading to speak
+    /// the kana reading to speak (max 32 characters)
     kana: String,
     /// Kanjium downstep index ("0" = heiban .. n); optional — without it OpenJTalk picks its default.
     accent: Option<String>,
@@ -101,6 +115,17 @@ pub struct TtsParams {
 /// Local pyopenjtalk synth sidecar (see `tts/synth_service.py`, kogu-tts.service).
 const SYNTH_URL: &str = "http://127.0.0.1:4120/synth";
 
+/// Japanese TTS with forced pitch accent (OpenJTalk): a kana reading synthesized to a short MP3
+/// honouring the Kanjium downstep, which browser SpeechSynthesis cannot do.
+#[utoipa::path(
+    get, path = "/tts/ja", tag = "audio",
+    params(TtsParams),
+    responses(
+        (status = 200, description = "MP3 audio (cacheable per kana+accent)", content_type = "audio/mpeg", body = Vec<u8>),
+        (status = 400, description = "Empty or over-long kana (plain-text message)"),
+        (status = 502, description = "Synth sidecar unavailable (plain-text message)"),
+    )
+)]
 pub async fn ja_handler(State(st): State<AppState>, Query(p): Query<TtsParams>) -> impl IntoResponse {
     let kana = p.kana.trim();
     // guard: a single reading is short; reject anything that isn't (keeps the synth fed clean input)

@@ -9,7 +9,8 @@ export default defineConfig({
   plugins: [svelte()],
   server: {
     proxy: {
-      '/api': { target: BACKEND, changeOrigin: true, rewrite: (p) => p.replace(/^\/api/, '') },
+      // trailing slash so /api-docs/ (a static page) isn't swallowed by the prefix match
+      '/api/': { target: BACKEND, changeOrigin: true, rewrite: (p) => p.replace(/^\/api/, '') },
     },
   },
   test: {

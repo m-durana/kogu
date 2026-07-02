@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>Kogu API</title>
+  <meta name="description" content="Free public read-only API of kogu, an open-source CJKV dictionary." />
+  <style>
+    /* black base so the page never flashes white before Scalar mounts */
+    html, body { margin: 0; padding: 0; background: #0b0b0e; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="./scalar.min.js"></script>
+  <script>
+    Scalar.createApiReference('#app', {
+      url: './openapi.json',
+      darkMode: true,
+      hideDarkModeToggle: true,
+    })
+  </script>
+</body>
+</html>

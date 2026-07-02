@@ -1,0 +1,1606 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Kogu API",
+    "description": "Free public read-only API of [kogu](https://kogu.miro.build), an open-source CJKV dictionary covering Mandarin (zh), Cantonese (yue) and Japanese (ja).\n\n- No authentication; requests are rate-limited by nginx. Be gentle and cache what you fetch.\n- Dictionary content is licensed CC BY-SA 4.0 (aggregating CC-CEDICT, JMdict, Unihan, Wiktionary, Kanjium and other sources); see NOTICE.md in the repository for attribution details.\n- `/recognize` and `/mt` proxy third-party services (Google handwriting input / translation): they exist for the app UI and are NOT stable data endpoints; do not build on them.\n- Lexeme ids come from `/search` or `/suggest` and are stable within one database build, but may change between data releases; treat them as opaque and re-resolve via search.",
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    },
+    "version": "0.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://kogu.miro.build/api",
+      "description": "Public server (nginx adds the /api prefix)"
+    }
+  ],
+  "paths": {
+    "/clip/{variety}/{file}": {
+      "get": {
+        "tags": [
+          "audio"
+        ],
+        "summary": "`GET /clip/:variety/:file` — proxy a single zh/yue pronunciation clip, cached in memory and served\nsame-origin. `file` is a strict syllable (lowercase letters + a tone digit) + \".mp3\" so this can't\nbe turned into an open proxy / SSRF.",
+        "operationId": "clip_handler",
+        "parameters": [
+          {
+            "name": "variety",
+            "in": "path",
+            "description": "\"zh\" (Mandarin, numbered pinyin) or \"yue\" (Cantonese, jyutping)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "file",
+            "in": "path",
+            "description": "syllable clip name: lowercase letters + tone digit + \".mp3\" (e.g. ma3.mp3, jyut6.mp3)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "MP3 clip (cacheable, immutable)",
+            "content": {
+              "audio/mpeg": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed clip name (plain-text message)"
+          },
+          "404": {
+            "description": "Unknown variety or no such syllable (plain-text message)"
+          },
+          "502": {
+            "description": "Upstream clip source unreachable (plain-text message)"
+          }
+        }
+      }
+    },
+    "/entry/{id}": {
+      "get": {
+        "tags": [
+          "dictionary"
+        ],
+        "summary": "Full dictionary entry for one lexeme.",
+        "description": "Includes surface forms, readings (with Japanese pitch accent and Cantonese jyutping where\nknown), senses, per-character breakdowns, same-form cognates / false friends, cross-language\nsynonyms, compounds and etymology. A negative id addresses a character-only entry keyed by\ncodepoint (id = -codepoint). Get ids from /search or /suggest.",
+        "operationId": "entry_handler",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "lexeme id from /search; negative = character entry (-codepoint)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The entry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Entry"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such lexeme",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "Liveness probe: service name and version.",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "Service is up",
+            "content": {
+              "application/json": {
+                "schema": {},
+                "example": {
+                  "service": "kogu",
+                  "status": "ok",
+                  "version": "0.0.0"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mt": {
+      "get": {
+        "tags": [
+          "input"
+        ],
+        "summary": "Machine translation to English (sentence-level).",
+        "description": "This endpoint PROXIES third-party services (Google translate_a/single, with a MyMemory\nfallback); treat it as a convenience for the in-app \"Translate\" panel, not a stable data\nendpoint. Always returns 200; failures are reported in the body as {\"error\": \"translate_failed\"}.",
+        "operationId": "translate_handler",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "text to translate to English (max 200 characters)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sl",
+            "in": "query",
+            "description": "source language hint (zh-CN / zh-TW / ja / yue); defaults to auto-detect",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Translation (or an in-body error)",
+            "content": {
+              "application/json": {
+                "schema": {},
+                "example": {
+                  "engine": "google",
+                  "source": "zh-CN",
+                  "translation": "hello"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ocr": {
+      "post": {
+        "tags": [
+          "input"
+        ],
+        "summary": "OCR an image (PaddleOCR PP-OCRv5, run locally).",
+        "description": "POST the raw image bytes (JPEG/PNG/WebP…, max 12 MiB) as the request body. Returns recognized\nlines with axis-aligned pixel boxes, each split into per-character cells for tap-to-look-up.\nVertical text is detected and handled. Returns 503 when the OCR models are not loaded.",
+        "operationId": "ocr_handler",
+        "requestBody": {
+          "description": "Raw image bytes (any format the `image` crate decodes), max 12 MiB",
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Recognized lines with boxes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OcrResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty body or undecodable image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "OCR engine not available on this deployment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/recognize": {
+      "post": {
+        "tags": [
+          "input"
+        ],
+        "summary": "Handwriting recognition (stroke-order-independent) for Han / kana input.",
+        "description": "This endpoint PROXIES the Google Input Tools handwriting service; treat it as a convenience,\nnot a stable data endpoint (availability and results depend on the third-party upstream).",
+        "operationId": "recognize_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecognizeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Ranked candidates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecognizeResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream recognizer unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/search": {
+      "get": {
+        "tags": [
+          "dictionary"
+        ],
+        "summary": "Dictionary search across Mandarin (zh), Cantonese (yue) and Japanese (ja).",
+        "description": "The query is classified (Han / kana / reading / English) and matched against surface forms,\nreadings and English glosses; results are ranked hits with per-hit match type and score.",
+        "operationId": "search_handler",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "search text: Han (any script), kana, a romanized reading (romaji / pinyin / jyutping), or English",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "script",
+            "in": "query",
+            "description": "preferred Han script for the displayed form: \"trad\" or \"simp\" (also \"kana\", \"shinjitai\")",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "maximum number of hits (default 50, clamped to 1..=200)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ranked hits across all three languages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/segment": {
+      "get": {
+        "tags": [
+          "dictionary"
+        ],
+        "summary": "Greedy longest-match segmentation of a Han string into known sub-words, each with a short\ngloss (紅出口 → 紅 \"red\" · 出口 \"exit\"). Non-Han characters are skipped.",
+        "operationId": "segment_handler",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "text containing Han characters to segment",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The segments in order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SegmentResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggest": {
+      "get": {
+        "tags": [
+          "dictionary"
+        ],
+        "summary": "Lightweight autocomplete: headword + reading candidates for a typed prefix (no senses).",
+        "operationId": "suggest_handler",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "the typed prefix to complete",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "maximum number of suggestions (default 8, clamped to 1..=20)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Autocomplete candidates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/translate": {
+      "get": {
+        "tags": [
+          "dictionary"
+        ],
+        "summary": "English-pivot translation: term → concepts → equivalents across all four systems.",
+        "operationId": "translate_handler",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "an English term (exact concept-label match, case-insensitive)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Concept groups with their members per language",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranslateResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tts/ja": {
+      "get": {
+        "tags": [
+          "audio"
+        ],
+        "summary": "Japanese TTS with forced pitch accent (OpenJTalk): a kana reading synthesized to a short MP3\nhonouring the Kanjium downstep, which browser SpeechSynthesis cannot do.",
+        "operationId": "ja_handler",
+        "parameters": [
+          {
+            "name": "kana",
+            "in": "query",
+            "description": "the kana reading to speak (max 32 characters)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "accent",
+            "in": "query",
+            "description": "Kanjium downstep index (\"0\" = heiban .. n); optional — without it OpenJTalk picks its default.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "MP3 audio (cacheable per kana+accent)",
+            "content": {
+              "audio/mpeg": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty or over-long kana (plain-text message)"
+          },
+          "502": {
+            "description": "Synth sidecar unavailable (plain-text message)"
+          }
+        }
+      }
+    },
+    "/why/{id}": {
+      "get": {
+        "tags": [
+          "dictionary"
+        ],
+        "summary": "The orthographic and phonological \"why\" of a word: its characters with components, roles\n(semantic / phonetic), script-reform variants, and Middle Chinese sound links.",
+        "operationId": "why_handler",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "lexeme id from /search",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Per-character explanation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhyResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such lexeme",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApiError": {
+        "type": "object",
+        "description": "Error body shape used by every JSON endpoint (400 / 404 / 5xx): `{ \"error\": \"<code or message>\" }`.\nDocumentation-only: handlers build it with `serde_json::json!`.",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "short machine-readable code (\"not_found\", \"bad_image\") or an error message",
+            "example": "not_found"
+          }
+        }
+      },
+      "CharDecomp": {
+        "type": "object",
+        "required": [
+          "base",
+          "count"
+        ],
+        "properties": {
+          "base": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CharInfo": {
+        "type": "object",
+        "required": [
+          "ch",
+          "is_orthodox",
+          "readings",
+          "variants",
+          "confusables",
+          "components",
+          "is_radical",
+          "used_count",
+          "used_by_variety",
+          "freq_by_variety"
+        ],
+        "properties": {
+          "ch": {
+            "type": "string"
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Component"
+            },
+            "description": "the character's distinct components WITH their meanings (森 → 木 \"tree\"; 好 → 女 \"woman\", 子\n\"child\"), so the structure section explains the parts, not just lists them. Radical-variant\nforms are glossed via their parent character (亻 → \"person\")."
+          },
+          "confusables": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "confusable look-alikes (Unihan kSpoofingVariant) — glyphs easily MISREAD for this one (㓕/滅).\nPurely a visual-confusability note, NOT identity or meaning; empty for most characters."
+          },
+          "decomp": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CharDecomp",
+                "description": "when the character is built entirely from repetitions of ONE simpler glyph (森 = three 木,\n晶 = three 日, 淼 = three 水), resolved recursively through \"doubled\" intermediates (林, 昍, 沝).\nNone for mixed-component characters (好 = 女 + 子) — the frontend then shows the flat parts."
+              }
+            ]
+          },
+          "freq_by_variety": {
+            "type": "object",
+            "description": "per-language MAX word-frequency (wordfreq Zipf score, 0..1) among words containing this glyph.\nThe real rarity signal that drives the \"rarely used\"/\"uncommon\" tag; a count mislabels common\nparticles (嗎/也). Absent variety = no scored word in that language.",
+            "additionalProperties": {
+              "type": "number",
+              "format": "double"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "gloss_en": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "gloss_ja": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Kanjidic Japanese-perspective English meaning (津 → \"haven; port; harbor\"), distinct from the\nChinese-centric Unihan gloss_en. Present only for characters in actual Japanese use."
+          },
+          "ids": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_orthodox": {
+            "type": "boolean"
+          },
+          "is_radical": {
+            "type": "boolean",
+            "description": "true when this glyph is primarily a Kangxi RADICAL / bound component, not a standalone word\n(彳, 辵, 氵, 艹…). Detected from a radical-flagging gloss AND near-zero containing words."
+          },
+          "radical": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "radical_number": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "the Kangxi radical number when known (parsed from the gloss), for the radical line."
+          },
+          "readings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingKV"
+            }
+          },
+          "script_forms": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ScriptForms",
+                "description": "the character's script family across reforms (繁→简·日), for the forms strip. None when the\nglyph has no living cross-script branches and isn't a kokuji (nothing to show)."
+              }
+            ]
+          },
+          "standalone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the standalone character a radical-variant form stands for (氵→水, 辶→辵), when it differs."
+          },
+          "strokes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "used_by_variety": {
+            "type": "object",
+            "description": "per-language containing-word counts ({\"zh\":449,\"yue\":57,\"ja\":7}), so the \"rarely used\" tag can\nbe language-specific (巴 is common in Chinese but rare in Japanese). Absent varieties = 0.",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "used_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "how many lexemes contain this character (a usage signal): 0 = archaic/unused, large = core.\nGlobal across languages; used for radical detection (a radical is bound in every language)."
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VariantEdge"
+            },
+            "description": "orthographic \"why\" seed: identity edges to orthodox parents with the reform that produced them"
+          }
+        }
+      },
+      "CharLite": {
+        "type": "object",
+        "required": [
+          "ch",
+          "rare"
+        ],
+        "properties": {
+          "ch": {
+            "type": "string"
+          },
+          "gloss": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rare": {
+            "type": "boolean",
+            "description": "true for rare extension-plane glyphs (cp ≥ U+20000) the device font likely renders as tofu;\nthe UI de-emphasises these and labels them with their codepoint rather than a blank box."
+          }
+        }
+      },
+      "Component": {
+        "type": "object",
+        "required": [
+          "ch"
+        ],
+        "properties": {
+          "ch": {
+            "type": "string"
+          },
+          "gloss": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mc_sound": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "for a phonetic component, its Middle Chinese (廣韻 / Baxter) reading(s) — the HISTORICAL sound\nit lent (同 → \"duwng\"), so the structure section can show the phonological \"why\": the modern\npinyin link plus the older Middle Chinese one. Empty for non-phonetic components or no MC data."
+          },
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "'semantic' (carries the meaning) | 'phonetic' (carries the sound) | 'form' | 'iconic' | None.\nFrom Wiktionary's structured Han-compound data — 媽 = 女 (semantic) + 馬 (phonetic)."
+          },
+          "sound": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "for a phonetic component, the sound it lends — the component's own reading (馬 → \"ma3\"), so the\nUI can show \"(sound: mǎ)\". None for non-phonetic components or when no reading is known."
+          }
+        }
+      },
+      "ConceptGroup": {
+        "type": "object",
+        "required": [
+          "concept",
+          "members"
+        ],
+        "properties": {
+          "concept": {
+            "type": "string"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinkLite"
+            }
+          }
+        }
+      },
+      "Entry": {
+        "type": "object",
+        "required": [
+          "lexeme_id",
+          "variety",
+          "headword",
+          "forms",
+          "readings",
+          "senses",
+          "characters",
+          "same_form",
+          "translations",
+          "compounds",
+          "origin_badges",
+          "origins",
+          "appears_in"
+        ],
+        "properties": {
+          "appears_in": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CharLite"
+            },
+            "description": "For a radical/bound-component entry (彳, 辵, 氵…): the characters that CONTAIN it, replacing the\nword \"used in\" list (a radical isn't a morpheme in words). Empty for ordinary entries."
+          },
+          "characters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CharInfo"
+            }
+          },
+          "compounds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinkLite"
+            },
+            "description": "熟語 - common words that contain this character (single-character entries only)."
+          },
+          "etymology": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Wiktionary etymology paragraph for the looked-up lexeme, passthrough (kept for back-compat)."
+          },
+          "forms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Form"
+            }
+          },
+          "freq": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "headword": {
+            "type": "string"
+          },
+          "lexeme_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "origin_badges": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "lexical \"why\": origin badges (wasei-kango, borrowed-from-japanese, calque, …) - no LLM."
+          },
+          "origins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OriginAccount"
+            },
+            "description": "Per-language origin accounts (中 Sinitic, 日 Japonic, …) for the SAME glyph. The Chinese and\nJapanese etymologies of 山 are both true and complementary; we surface each, labelled by\nvariety, instead of silently showing whichever lexeme happened to rank first."
+          },
+          "reading": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "readings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingKV"
+            }
+          },
+          "same_form": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinkLite"
+            },
+            "description": "同字 - other lexemes sharing this word's backbone form, each labelled cognate / false-friend."
+          },
+          "senses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Sense"
+            }
+          },
+          "translations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LinkLite"
+            },
+            "description": "同義 - lexemes sharing a concept (a different word, same meaning) across the systems."
+          },
+          "variety": {
+            "type": "string"
+          }
+        }
+      },
+      "Form": {
+        "type": "object",
+        "required": [
+          "form",
+          "script",
+          "is_primary"
+        ],
+        "properties": {
+          "form": {
+            "type": "string"
+          },
+          "is_primary": {
+            "type": "boolean"
+          },
+          "region": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "script": {
+            "type": "string"
+          }
+        }
+      },
+      "FormBranch": {
+        "type": "object",
+        "required": [
+          "form",
+          "script",
+          "is_orthodox"
+        ],
+        "properties": {
+          "form": {
+            "type": "string"
+          },
+          "is_orthodox": {
+            "type": "boolean"
+          },
+          "reform_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reform_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "script": {
+            "type": "string"
+          }
+        }
+      },
+      "Hit": {
+        "type": "object",
+        "required": [
+          "lexeme_id",
+          "variety",
+          "headword",
+          "forms",
+          "glosses",
+          "match_type",
+          "score"
+        ],
+        "properties": {
+          "accent": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Japanese pitch accent (Kanjium) for the kana reading, ja only; drives the synth + contour even\nwhen this word is shown as a cross-listed row under another variety's entry."
+          },
+          "forms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Form"
+            }
+          },
+          "glosses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "headword": {
+            "type": "string"
+          },
+          "jyut": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Cantonese reading (jyutping) for a zh word, so the 粵 reading shows on the Chinese row even\nwhen the word is rendered from a search hit rather than its full entry (Cantonese shares the\nwritten form; only the pronunciation differs)."
+          },
+          "lexeme_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "match_type": {
+            "type": "string"
+          },
+          "reading": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "score": {
+            "type": "number",
+            "format": "double"
+          },
+          "variety": {
+            "type": "string"
+          }
+        }
+      },
+      "LinkLite": {
+        "type": "object",
+        "required": [
+          "lexeme_id",
+          "variety",
+          "headword",
+          "glosses",
+          "relation"
+        ],
+        "properties": {
+          "accent": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Japanese pitch accent (Kanjium) for the kana reading, ja only (see [`Hit::accent`])."
+          },
+          "concept": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the shared concept label (for 同義 links), when known"
+          },
+          "glosses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "headword": {
+            "type": "string"
+          },
+          "jyut": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Cantonese reading (jyutping) for a zh word (see [`Hit::jyut`])."
+          },
+          "lexeme_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "reading": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "relation": {
+            "type": "string",
+            "description": "relation to the anchor word: \"cognate\" | \"false-friend\" | \"synonym\""
+          },
+          "variety": {
+            "type": "string"
+          }
+        }
+      },
+      "OcrChar": {
+        "type": "object",
+        "required": [
+          "ch",
+          "box"
+        ],
+        "properties": {
+          "box": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "float"
+            }
+          },
+          "ch": {
+            "type": "string"
+          }
+        }
+      },
+      "OcrLine": {
+        "type": "object",
+        "required": [
+          "text",
+          "confidence",
+          "box",
+          "chars"
+        ],
+        "properties": {
+          "box": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "float"
+            },
+            "description": "axis-aligned bounding box [x, y, w, h] in image pixels"
+          },
+          "chars": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OcrChar"
+            },
+            "description": "per-character cells (line box split by character count - Han is ~monospace)"
+          },
+          "confidence": {
+            "type": "number",
+            "format": "float"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "OcrResponse": {
+        "type": "object",
+        "description": "/ocr response - recognized text laid out over the image for tap-to-select (DESIGN: OCR feature).",
+        "required": [
+          "width",
+          "height",
+          "lines"
+        ],
+        "properties": {
+          "height": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OcrLine"
+            }
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32",
+            "description": "the (possibly downscaled) image dimensions the boxes are in",
+            "minimum": 0
+          }
+        }
+      },
+      "OriginAccount": {
+        "type": "object",
+        "required": [
+          "variety",
+          "headword",
+          "text"
+        ],
+        "properties": {
+          "headword": {
+            "type": "string"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "a clarifying note when this glyph ALSO doubles as the simplified form of a distinct character\n(丑 is the earthly branch AND the simplified form of 醜 \"ugly\"). Prevents the reader from\nthinking the origin paragraph below describes the merged-in traditional character."
+          },
+          "script": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "which script this glyph is, when it diverges across reforms: \"traditional\" | \"simplified\".\nNone when the glyph is the same in every script (山, 古) — nothing to disambiguate."
+          },
+          "text": {
+            "type": "string"
+          },
+          "variety": {
+            "type": "string"
+          }
+        }
+      },
+      "ReadingKV": {
+        "type": "object",
+        "required": [
+          "kind",
+          "value"
+        ],
+        "properties": {
+          "accent": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Japanese pitch accent (Kanjium, CC BY-SA 4.0) on a ja kind='kana' reading: the downstep mora\nindex as a string (\"0\"=heiban, \"1\"=atamadaka, n=drop after mora n; a multi-accent word keeps\nthe comma list \"2,1\"). Omitted (null) for every reading without Kanjium accent data."
+          },
+          "kind": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "RecognizeRequest": {
+        "type": "object",
+        "required": [
+          "width",
+          "height",
+          "strokes"
+        ],
+        "properties": {
+          "height": {
+            "type": "number",
+            "format": "double",
+            "description": "drawing area height in px"
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Recogniser language(s). Default [\"zh\"] (a Han superset). Pass e.g. [\"zh\",\"ja\"] for any-to-any."
+          },
+          "limit": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "maximum number of candidates (default 20, clamped to 1..=50)",
+            "minimum": 0
+          },
+          "strokes": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "format": "double"
+                }
+              }
+            },
+            "description": "ordered strokes; each stroke is a list of [x, y, t] points (t = ms timestamp, may be 0)"
+          },
+          "width": {
+            "type": "number",
+            "format": "double",
+            "description": "drawing area width in px"
+          }
+        }
+      },
+      "RecognizeResponse": {
+        "type": "object",
+        "required": [
+          "candidates",
+          "languages"
+        ],
+        "properties": {
+          "candidates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "ranked candidate characters/words, merged across the requested languages"
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "the languages actually queried"
+          }
+        }
+      },
+      "ScriptForms": {
+        "type": "object",
+        "description": "The script forms of one character family, anchored on the orthodox glyph. Branches include the\northodox form itself plus its living simplified/shinjitai/z-variant children.",
+        "required": [
+          "orthodox",
+          "is_kokuji",
+          "branches"
+        ],
+        "properties": {
+          "branches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FormBranch"
+            }
+          },
+          "is_kokuji": {
+            "type": "boolean"
+          },
+          "orthodox": {
+            "type": "string"
+          }
+        }
+      },
+      "SearchResponse": {
+        "type": "object",
+        "required": [
+          "query",
+          "classified_as",
+          "results"
+        ],
+        "properties": {
+          "classified_as": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Hit"
+            }
+          }
+        }
+      },
+      "SegmentPart": {
+        "type": "object",
+        "required": [
+          "form",
+          "gloss"
+        ],
+        "properties": {
+          "form": {
+            "type": "string",
+            "description": "the matched sub-word (one or more characters)"
+          },
+          "gloss": {
+            "type": "string",
+            "description": "its short gloss (first cleaned sense segment); empty if nothing is known for the character"
+          },
+          "lexeme_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "the lexeme this gloss came from, when the segment is a known word (null for a character fallback)"
+          }
+        }
+      },
+      "SegmentResponse": {
+        "type": "object",
+        "description": "/segment response: an unrecognized Han query greedily split into the longest known sub-words, each\nwith a short gloss, so the \"literally\" hint reads 紅出口 → \"red · exit\" instead of \"red · go out · mouth\".",
+        "required": [
+          "query",
+          "segments"
+        ],
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SegmentPart"
+            }
+          }
+        }
+      },
+      "Sense": {
+        "type": "object",
+        "required": [
+          "gloss_en"
+        ],
+        "properties": {
+          "gloss_en": {
+            "type": "string"
+          },
+          "pos": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "SuggestItem": {
+        "type": "object",
+        "required": [
+          "headword",
+          "variety"
+        ],
+        "properties": {
+          "headword": {
+            "type": "string"
+          },
+          "reading": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "variety": {
+            "type": "string"
+          }
+        }
+      },
+      "SuggestResponse": {
+        "type": "object",
+        "description": "/suggest response: lightweight autocomplete candidates (no senses), fast per-keystroke.",
+        "required": [
+          "query",
+          "suggestions"
+        ],
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuggestItem"
+            }
+          }
+        }
+      },
+      "TranslateResponse": {
+        "type": "object",
+        "description": "/translate response: an English term → concepts → equivalents across all systems.",
+        "required": [
+          "query",
+          "concepts"
+        ],
+        "properties": {
+          "concepts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConceptGroup"
+            }
+          },
+          "query": {
+            "type": "string"
+          }
+        }
+      },
+      "VariantEdge": {
+        "type": "object",
+        "required": [
+          "parent",
+          "edge_type"
+        ],
+        "properties": {
+          "edge_type": {
+            "type": "string"
+          },
+          "parent": {
+            "type": "string"
+          },
+          "reform": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reform_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reform_year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "WhyResponse": {
+        "type": "object",
+        "description": "/why response - the orthographic + phonological \"why\" for a word (DESIGN.md §4).",
+        "required": [
+          "lexeme_id",
+          "headword",
+          "characters"
+        ],
+        "properties": {
+          "characters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CharInfo"
+            }
+          },
+          "headword": {
+            "type": "string"
+          },
+          "lexeme_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "meta",
+      "description": "Service metadata"
+    },
+    {
+      "name": "dictionary",
+      "description": "Dictionary lookups over the kogu database"
+    },
+    {
+      "name": "input",
+      "description": "Input helpers (handwriting, OCR, machine translation)"
+    },
+    {
+      "name": "audio",
+      "description": "Pronunciation audio"
+    }
+  ]
+}
