@@ -33,6 +33,11 @@ pub struct Hit {
     /// when this word is shown as a cross-listed row under another variety's entry.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub accent: Option<String>,
+    /// Cantonese reading (jyutping) for a zh word, so the 粵 reading shows on the Chinese row even
+    /// when the word is rendered from a search hit rather than its full entry (Cantonese shares the
+    /// written form; only the pronunciation differs).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jyut: Option<String>,
     pub forms: Vec<Form>,
     pub glosses: Vec<String>,
     pub match_type: String,     // exact | variant | reading | english
@@ -244,6 +249,21 @@ pub fn ja_reading_accent(
     .flatten()
 }
 
+/// Cantonese reading (jyutping) for a zh word lexeme, None for other varieties or when absent.
+/// Cantonese shares the written form with Chinese, so a zh word's 粵 pronunciation belongs on the
+/// same row wherever the word appears (hit, same_form link), not only on its full entry.
+pub fn zh_jyutping(conn: &rusqlite::Connection, lexeme_id: i64, variety: &str) -> Option<String> {
+    if variety != "zh" {
+        return None;
+    }
+    conn.query_row(
+        "SELECT value FROM lexeme_reading WHERE lexeme_id=?1 AND kind='jyutping' LIMIT 1",
+        [lexeme_id],
+        |r| r.get::<_, String>(0),
+    )
+    .ok()
+}
+
 #[derive(Serialize)]
 pub struct LinkLite {
     pub lexeme_id: i64,
@@ -253,6 +273,9 @@ pub struct LinkLite {
     /// Japanese pitch accent (Kanjium) for the kana reading, ja only (see [`Hit::accent`]).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub accent: Option<String>,
+    /// Cantonese reading (jyutping) for a zh word (see [`Hit::jyut`]).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jyut: Option<String>,
     pub glosses: Vec<String>,
     /// relation to the anchor word: "cognate" | "false-friend" | "synonym"
     pub relation: String,

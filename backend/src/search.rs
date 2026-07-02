@@ -780,6 +780,7 @@ fn char_only_hit(conn: &Connection, ch: char) -> rusqlite::Result<Option<Hit>> {
         headword: ch.to_string(),
         reading,
         accent: None, // a char-only hit has no word lexeme; the char page derives accent in char_info
+        jyut: None,   // likewise: the char page shows jyutping from char_reading, not the lexeme
         forms: vec![Form { form: ch.to_string(), script: "other".into(), region: None, is_primary: true }],
         glosses: gloss.into_iter().collect(),
         match_type: "exact".into(),
@@ -837,12 +838,14 @@ fn build_hit(
     }
 
     let accent = crate::model::ja_reading_accent(conn, id, &variety, reading.as_deref());
+    let jyut = crate::model::zh_jyutping(conn, id, &variety);
     Ok(Some(Hit {
         lexeme_id: id,
         variety,
         headword,
         reading,
         accent,
+        jyut,
         forms,
         glosses,
         match_type: match_type.to_string(),

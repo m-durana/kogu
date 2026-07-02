@@ -15,6 +15,7 @@ export interface Hit {
   headword: string
   reading: string | null
   accent?: string | null // Japanese pitch accent (Kanjium) on the kana reading, ja only
+  jyut?: string | null // Cantonese reading (jyutping) for a zh word, shown on the Chinese row
   forms: Form[]
   glosses: string[]
   match_type: string
@@ -114,6 +115,7 @@ export interface LinkLite {
   headword: string
   reading: string | null
   accent?: string | null // Japanese pitch accent (Kanjium) on the kana reading, ja only
+  jyut?: string | null // Cantonese reading (jyutping) for a zh word, shown on the Chinese row
   glosses: string[]
   relation: string // 'cognate' | 'false-friend' | 'synonym'
   concept: string | null

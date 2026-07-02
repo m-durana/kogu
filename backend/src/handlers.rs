@@ -367,12 +367,14 @@ fn link_lite_compound(
     let mut s = conn.prepare("SELECT gloss_en FROM sense WHERE lexeme_id=?1 ORDER BY sense_order LIMIT 3")?;
     let glosses: Vec<String> = s.query_map([id], |r| r.get(0))?.collect::<Result<_, _>>()?;
     let accent = crate::model::ja_reading_accent(conn, id, &variety, reading.as_deref());
+    let jyut = crate::model::zh_jyutping(conn, id, &variety);
     Ok(Some(LinkLite {
         lexeme_id: id,
         variety,
         headword: display,
         reading,
         accent,
+        jyut,
         glosses,
         relation: relation.to_string(),
         concept: None,
@@ -1330,7 +1332,8 @@ fn link_lite(
     let mut s = conn.prepare("SELECT gloss_en FROM sense WHERE lexeme_id=?1 ORDER BY sense_order LIMIT 3")?;
     let glosses: Vec<String> = s.query_map([id], |r| r.get(0))?.collect::<Result<_, _>>()?;
     let accent = crate::model::ja_reading_accent(conn, id, &variety, reading.as_deref());
-    Ok(Some(LinkLite { lexeme_id: id, variety, headword, reading, accent, glosses, relation: relation.to_string(), concept }))
+    let jyut = crate::model::zh_jyutping(conn, id, &variety);
+    Ok(Some(LinkLite { lexeme_id: id, variety, headword, reading, accent, jyut, glosses, relation: relation.to_string(), concept }))
 }
 
 #[derive(Deserialize)]

@@ -1800,3 +1800,92 @@ async fn rare_forms_hidden_from_display() {
     assert!(forms.contains(&"会う".to_string()), "primary form present");
     assert!(!forms.contains(&"遇う".to_string()), "rare rK form 遇う must be hidden: {forms:?}");
 }
+
+// ── word-level jyutping on zh hits and links (Cantonese shows on every Chinese word row) ──────────
+
+#[tokio::test]
+async fn zh_word_hit_carries_jyutping() {
+    // 香港 is a zh lexeme with jyutping "hoeng1 gong2"; the search hit must carry it so the UI can
+    // render the 粵 reading without fetching the full entry.
+    let v = search("香港").await;
+    let hit = v["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["variety"] == "zh" && r["headword"] == "香港")
+        .expect("zh 香港 present");
+    assert_eq!(hit["jyut"], "hoeng1 gong2", "zh word hit carries jyutping: {hit}");
+}
+
+#[tokio::test]
+async fn zh_word_hit_jyutping_from_simplified_query() {
+    // querying the simplified skin must yield the same jyutping on the zh hit (this is the case where
+    // the ja entry wins the page and the zh row renders purely from the hit).
+    let v = search("学校").await;
+    let hit = v["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["variety"] == "zh")
+        .expect("zh 學校 present");
+    assert_eq!(hit["jyut"], "hok6 haau6", "zh hit from simplified query carries jyutping: {hit}");
+}
+
+#[tokio::test]
+async fn ja_hit_has_no_jyut() {
+    let v = search("学校").await;
+    let hit = v["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["variety"] == "ja")
+        .expect("ja 学校 present");
+    assert!(hit.get("jyut").is_none() || hit["jyut"].is_null(), "ja hit must not carry jyut: {hit}");
+}
+
+#[tokio::test]
+async fn char_only_hit_has_no_jyut() {
+    // a char-only (negative-id) hit derives readings on the char page; no lexeme jyutping here.
+    let v = search("𠀋").await;
+    let hit = v["results"].as_array().unwrap().iter().find(|r| r["lexeme_id"].as_i64().unwrap() < 0);
+    if let Some(hit) = hit {
+        assert!(hit.get("jyut").is_none() || hit["jyut"].is_null(), "char-only hit carries no jyut: {hit}");
+    }
+}
+
+#[tokio::test]
+async fn same_form_link_carries_jyutping() {
+    // from the ja 学校 entry, the same_form link back to zh 學校 must carry jyutping so the unified
+    // view's zh row shows 粵 even when the page anchors on the Japanese lexeme.
+    let v = search("学校").await;
+    let ja_id = v["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["variety"] == "ja")
+        .and_then(|r| r["lexeme_id"].as_i64())
+        .expect("ja 学校 id");
+    let (st, e) = get(&format!("/entry/{ja_id}")).await;
+    assert_eq!(st, StatusCode::OK);
+    let link = e["same_form"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|l| l["variety"] == "zh")
+        .expect("zh same_form link present");
+    assert_eq!(link["jyut"], "hok6 haau6", "same_form zh link carries jyutping: {link}");
+}
+
+#[tokio::test]
+async fn yue_lexeme_hit_has_no_redundant_jyut() {
+    // a yue-variety word (唔該) shows its jyutping as its PRIMARY reading; the jyut field is for
+    // zh rows only, so it must stay empty here.
+    let v = search("唔該").await;
+    let hit = v["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["variety"] == "yue")
+        .expect("yue 唔該 present");
+    assert!(hit.get("jyut").is_none() || hit["jyut"].is_null(), "yue hit must not carry jyut: {hit}");
+}

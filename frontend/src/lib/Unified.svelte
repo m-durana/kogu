@@ -116,6 +116,7 @@
     altScript: string
     reading: string
     accent?: string | null // Japanese pitch accent (Kanjium) for the displayed ja kana reading
+    jyut?: string | null // Cantonese reading (jyutping) for a zh word row; absent on ja/yue/equiv rows
     glosses: string[]
     relation: string
     kind: 'form' | 'equiv' // same characters, vs a meaning-equivalent written differently
@@ -139,6 +140,7 @@
         altScript: d?.alternate?.script ?? '',
         reading: h.reading ?? '',
         accent: h.accent ?? null,
+        jyut: h.jyut ?? null,
         glosses: h.glosses,
         relation: relFor(h.lexeme_id),
         kind: 'form',
@@ -156,6 +158,10 @@
         altScript: d?.alternate?.script ?? '',
         reading: readingFor(entry.variety, entry.readings),
         accent: accentFor(entry.variety, entry.readings),
+        jyut:
+          entry.variety === 'zh'
+            ? (entry.readings.find((r) => r.kind === 'jyutping')?.value ?? null)
+            : null,
         glosses: entry.senses.map((s) => s.gloss_en),
         relation: 'self',
         kind: 'form',
@@ -174,6 +180,7 @@
           altScript: '',
           reading: l.reading ?? '',
           accent: l.accent ?? null,
+          jyut: l.jyut ?? null,
           glosses: l.glosses,
           relation: l.relation,
           kind: 'form',
@@ -217,7 +224,9 @@
       // a false friend only if NO member shares meaning with the other language (every one is one);
       // 京都 has a cognate sense (Kyoto) so it isn't flagged, 手紙 (all false-friend) still is.
       const relation = members.find((m) => m.relation !== 'false-friend')?.relation ?? 'false-friend'
-      deduped.push({ ...best, glosses, relation })
+      // any member may carry the Cantonese reading (a hit does, a bare link may not) — keep it
+      const jyut = best.jyut ?? members.find((m) => m.jyut)?.jyut ?? null
+      deduped.push({ ...best, glosses, relation, jyut })
     }
     // drop rows whose only content is a surname/variant cross-reference - unless it's the row you
     // looked up, or it's the sole row for its language (so a purely-minor entry still shows).
@@ -398,6 +407,13 @@
       ? headChar.readings.filter((r) => r.kind === 'jyutping').map((r) => r.value)
       : [],
   )
+  // Cantonese readings for a zh row: a single character uses ALL the char's jyutping readings
+  // (polyphones keep several); a multi-character word uses the word lexeme's own jyutping carried
+  // on the row (hit / entry / link) — one customary reading.
+  function rowJyutList(r: Row): string[] {
+    if (single && headChar) return headJyutList
+    return r.jyut ? [r.jyut] : []
+  }
   const hasYueDef = $derived(defRows.some((r) => r.variety === 'yue'))
   // single character's composition (what parts make it up, with structure kept): 森 = three 木
   const comp = $derived(single && headChar ? describeIds(headChar.ids, head) : null)
@@ -1029,7 +1045,7 @@
                        monochrome pitch contour (overline over high morae + a downstep tick) instead. -->
                   <span class="dread dreads plainread" class:clamp={!readOpen.has(r.id)} class:faded={readOver.has(r.id) && !readOpen.has(r.id)} use:readProbe={(v) => setReadOver(r.id, v)}><span class="rdg">{#if cells}<span class="pitch" title="pitch accent (Kanjium)">{#each cells as c}<span class="pmora" class:phigh={c.high} class:pdrop={c.drop}>{c.mora}</span>{/each}</span>{:else}{dispReading(r.variety, r.reading)}{/if}{#if speakOn}<button class="spk spk-sm" class:speaking={playingKey === r.variety + ':' + r.reading} onclick={() => speak(r.variety + ':' + r.reading, r.reading, r.variety, r.form, r.accent)} aria-label="listen" title="listen"><Volume2 size={13} /></button>{/if}</span></span>{#if readOver.has(r.id)}<button class="rmore" onclick={() => toggleRead(r.id)} aria-label={readOpen.has(r.id) ? 'collapse reading' : 'show full reading'}>{#if readOpen.has(r.id)}<Minus size={15} />{:else}<Plus size={15} />{/if}</button>{/if}
                 {/if}
-                {#if r.variety === 'zh' && headJyutList.length && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread dreads" class:clamp={!yueReadOpen} class:faded={yueReadOver && !yueReadOpen} use:readProbe={(v) => (yueReadOver = v)}>{#each headJyutList as j, i}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{settings.romanization === 'yale' ? jyutpingToYale(j) : j}{#if speakOn}<button class="spk spk-sm" class:speaking={playingKey === 'yue:' + j} onclick={() => speak('yue:' + j, j, 'yue', r.form)} aria-label="listen to {j}, Cantonese" title="listen (Cantonese)"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if yueReadOver}<button class="rmore" onclick={toggleYueRead} aria-label={yueReadOpen ? 'show fewer readings' : 'show more readings'}>{#if yueReadOpen}<Minus size={15} />{:else}<Plus size={15} />{/if}</button>{/if}{/if}
+                {#if r.variety === 'zh' && rowJyutList(r).length && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread dreads" class:clamp={!yueReadOpen} class:faded={yueReadOver && !yueReadOpen} use:readProbe={(v) => (yueReadOver = v)}>{#each rowJyutList(r) as j, i}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{settings.romanization === 'yale' ? jyutpingToYale(j) : j}{#if speakOn}<button class="spk spk-sm" class:speaking={playingKey === 'yue:' + j} onclick={() => speak('yue:' + j, j, 'yue', r.form)} aria-label="listen to {j}, Cantonese" title="listen (Cantonese)"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if yueReadOver}<button class="rmore" onclick={toggleYueRead} aria-label={yueReadOpen ? 'show fewer readings' : 'show more readings'}>{#if yueReadOpen}<Minus size={15} />{:else}<Plus size={15} />{/if}</button>{/if}{/if}
               </span>
             </div>
             {#if boundKind(r) || (soundLoan && r.variety === 'zh') || (single && headChar && (isRadicalChar || rowUsage(r.variety)))}
