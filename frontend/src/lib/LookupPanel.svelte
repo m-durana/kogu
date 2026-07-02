@@ -83,8 +83,9 @@
   })
 </script>
 
+<!-- svelte-ignore a11y_click_events_have_key_events -- backdrop dismiss; Escape (svelte:window) is the keyboard path -->
 <div class="lpbg" role="presentation" onclick={onclose}>
-  <div class="lp" role="dialog" aria-modal="true" aria-label="look up {term}" onclick={(e) => e.stopPropagation()}>
+  <div class="lp" role="dialog" aria-modal="true" aria-label="look up {term}" tabindex="-1" onclick={(e) => e.stopPropagation()}>
     <div class="lph">
       <span class="lpterm">{term}</span>
       <button class="lpx" onclick={onclose} aria-label="close"><X size={18} /></button>

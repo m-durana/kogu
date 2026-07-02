@@ -1286,8 +1286,9 @@
   {#if openTerm}
     <!-- term/explainer popup (origin jargon + the "written for sound" chip) — at the component root so
          it opens from any tab, not only the Origin section. -->
+    <!-- svelte-ignore a11y_click_events_have_key_events -- backdrop dismiss; Escape (svelte:window) is the keyboard path -->
     <div class="termpop" role="presentation" onclick={() => (openTerm = null)}>
-      <div class="termcard" role="dialog" aria-modal="true" onclick={(e) => e.stopPropagation()}>
+      <div class="termcard" role="dialog" aria-modal="true" tabindex="-1" onclick={(e) => e.stopPropagation()}>
         <p>{openTerm}</p>
         <button class="mclose" onclick={() => (openTerm = null)}>close</button>
       </div>
@@ -1297,8 +1298,9 @@
   {#if boundOpen}
     {@const bc = boundCompounds(boundOpen)}
     {@const often = boundKind(boundOpen) === 'often'}
+    <!-- svelte-ignore a11y_click_events_have_key_events -- backdrop dismiss; Escape (svelte:window) is the keyboard path -->
     <div class="mbg" role="presentation" onclick={closeBound}>
-      <div class="modal" role="dialog" aria-modal="true" aria-label="bound form" onclick={(e) => e.stopPropagation()}>
+      <div class="modal" role="dialog" aria-modal="true" aria-label="bound form" tabindex="-1" onclick={(e) => e.stopPropagation()}>
         <div class="mh"><span class="mglyph">{boundOpen.form}</span><span class="mtag">{often ? 'often in compounds' : 'bound form'}</span></div>
         <p class="mexp">{often ? 'Used as a word on its own in some senses, but often appears only inside compounds.' : 'Not used as a word on its own; it carries meaning only inside compounds.'}</p>
         {#if bc.length}

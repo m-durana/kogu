@@ -2,6 +2,7 @@
   import { search, entry as fetchEntry, segment as fetchSegment, suggest as fetchSuggest, type SegmentPart, type Suggestion } from './lib/api'
   import type { Entry, Hit, CharInfo } from './lib/types'
   import { primaryForm, varietyLabel, regionsOf, shortGloss, cleanGloss, langTag, hanFont, placeholderAt, formatReading } from './lib/display'
+  import { typoCandidates } from './lib/typo'
   import Unified from './lib/Unified.svelte'
   import EntryRow from './lib/EntryRow.svelte'
   import LookupPanel from './lib/LookupPanel.svelte'
@@ -141,6 +142,12 @@
       : queryLang === 'yue'
         ? '-apple-system, system-ui, var(--han-tc), sans-serif'
         : 'var(--sans)',
+  )
+  // CJK glyphs sit high in the box: their ink rides above the Latin baseline the input's line box is
+  // placed by (measured ~3px high at 16px). Nudge the padding down 2px, but only while the text
+  // actually contains Han/kana: Latin text (and the placeholder) is already centered.
+  const inputHan = $derived(
+    /[\u{2e80}-\u{9fff}\u{3040}-\u{30ff}\u{31f0}-\u{31ff}\u{f900}-\u{faff}\u{20000}-\u{3ffff}]/u.test(q),
   )
 
   // first language-flagged meaning for a component character, kept short
@@ -321,12 +328,12 @@
     }
   }
 
-  // closest real entries for a query that matched nothing. /suggest is prefix-based, so we also retry
-  // with progressively shorter prefixes — that recovers a trailing typo or extra character
-  // ("mountainz" → "mountain", "発展xx" → "発展") on top of plain truncation ("moun" → "mountain").
+  // closest real entries for a query that matched nothing. /suggest is prefix-based, so we try the
+  // term, its adjacent-letter transpositions ("xuexaio" → "xuexiao"), then progressively shorter
+  // prefixes ("mountainz" → "mountain") — see typoCandidates for the reasoning and ordering.
   async function loadDidYouMean(term: string) {
-    let t = term.trim()
-    for (let i = 0; i < 3 && [...t].length >= 2; i++) {
+    for (const t of typoCandidates(term.trim())) {
+      if (q.trim() !== term) return // superseded by a newer query
       try {
         const s = await fetchSuggest(t)
         const hits = s.filter((x) => x.headword !== term)
@@ -337,7 +344,6 @@
       } catch {
         /* a stale/aborted suggest is fine — leave didYouMean empty */
       }
-      t = [...t].slice(0, -1).join('') // drop a trailing char and try again
     }
   }
 
@@ -589,7 +595,17 @@
     clearTimeout(timer)
     doSearch(q, 'replace')
   }
+
+  // Escape closes the topmost overlay (keyboard path for the click-to-dismiss backdrops)
+  function onEscape(e: KeyboardEvent) {
+    if (e.key !== 'Escape') return
+    if (showInstallHelp) showInstallHelp = false
+    else if (showSettings) showSettings = false
+    else if (lookupOpen) lookupOpen = false
+  }
 </script>
+
+<svelte:window onkeydown={onEscape} />
 
 <div class="wrap" class:drawing={panel === 'draw'}>
   <header class="bar">
@@ -612,6 +628,7 @@
         type="text"
         enterkeyhint="search"
         lang={langTag(queryLang)}
+        class:hanq={inputHan}
         style="font-family:{inputFont}"
         aria-label="Search by hanzi, kanji, pinyin, jyutping, kana, or English"
         placeholder={placeholder}
@@ -829,20 +846,27 @@
           <li><b><a href="https://www.unicode.org/charts/unihan.html" target="_blank" rel="noopener noreferrer external">Unihan</a></b> and <b><a href="https://github.com/cjkvi/cjkvi-ids" target="_blank" rel="noopener noreferrer external">cjkvi-ids</a></b>: characters, stroke data, and how they decompose</li>
           <li><b><a href="https://github.com/nk2028/tshet-uinh-data" target="_blank" rel="noopener noreferrer external">Tshet-uinh</a></b> (廣韻, Baxter): Middle Chinese readings behind the phonological notes</li>
           <li><b><a href="https://www.wiktionary.org/" target="_blank" rel="noopener noreferrer external">Wiktionary</a></b>: etymologies and phono-semantic component roles</li>
+          <li><b><a href="https://github.com/BYVoid/OpenCC" target="_blank" rel="noopener noreferrer external">OpenCC</a></b>: traditional / simplified / shinjitai conversion tables behind the variant graph</li>
+          <li><b><a href="https://github.com/rspeer/wordfreq" target="_blank" rel="noopener noreferrer external">wordfreq</a></b> and <b><a href="https://github.com/hermitdave/FrequencyWords" target="_blank" rel="noopener noreferrer external">FrequencyWords</a></b>: word frequency</li>
+          <li><b><a href="https://omwn.org/" target="_blank" rel="noopener noreferrer external">Open Multilingual Wordnet</a></b>: part of the cross-language concept links</li>
+          <li>Pronunciation clips: <b><a href="https://github.com/davinfifield/mp3-chinese-pinyin-sound" target="_blank" rel="noopener noreferrer external">mp3-chinese-pinyin-sound</a></b> (Mandarin) and <b><a href="https://jyutping.org/" target="_blank" rel="noopener noreferrer external">jyutping.org</a></b> (Cantonese); Japanese is synthesized locally with <b><a href="https://open-jtalk.sourceforge.net/" target="_blank" rel="noopener noreferrer external">Open JTalk</a></b></li>
         </ul>
-        <p class="abnote">Everything is passed through from these open datasets directly. Nothing here is written by an AI. Kogu is open source, and was inspired by <b><a href="https://cjkvdict.com/" target="_blank" rel="noopener noreferrer external">CJKV Dict</a></b>.</p>
+        <p class="abnote">Everything is passed through from these open datasets directly. Nothing here is written by an AI. Kogu is open source (code MIT, data licences in the repo's NOTICE.md), and was inspired by <b><a href="https://cjkvdict.com/" target="_blank" rel="noopener noreferrer external">CJKV Dict</a></b>.</p>
       </div>
     {/if}
   {/if}
 
   {#if showInstallHelp}
     <!-- guided add-to-home-screen (iOS has no install API; Android uses the native prompt instead) -->
+    <!-- svelte-ignore a11y_click_events_have_key_events -- backdrop dismiss; Escape (svelte:window) is the keyboard path -->
     <div class="instbg" role="presentation" onclick={() => (showInstallHelp = false)}>
-      <div class="instcard" role="dialog" aria-modal="true" aria-label="install instructions" onclick={(e) => e.stopPropagation()}>
+      <div class="instcard" role="dialog" aria-modal="true" aria-label="install instructions" tabindex="-1" onclick={(e) => e.stopPropagation()}>
         <p class="insth">Add Kogu to your Home Screen</p>
         <ol class="inststeps">
-          <li><span class="instep"><Share2 size={18} /></span> Tap the <b>Share</b> button {isIOS ? 'in the toolbar below' : 'in your browser menu'}</li>
-          <li><span class="instep"><SquarePlus size={18} /></span> Choose <b>Add to Home Screen</b></li>
+          <!-- the li is a flex row: keep the whole sentence ONE flex item (bare text nodes become
+               separate items and wrap into broken columns) -->
+          <li><span class="instep"><Share2 size={18} /></span><span>Tap the <b>Share</b> button {isIOS ? 'in the toolbar below' : 'in your browser menu'}</span></li>
+          <li><span class="instep"><SquarePlus size={18} /></span><span>Choose <b>Add to Home Screen</b></span></li>
         </ol>
         <button class="setclose" onclick={() => (showInstallHelp = false)}>got it</button>
       </div>
@@ -855,8 +879,9 @@
   {#if toast}<div class="toast" role="status">{toast}</div>{/if}
 
   {#if showSettings}
+    <!-- svelte-ignore a11y_click_events_have_key_events -- backdrop dismiss; Escape (svelte:window) is the keyboard path -->
     <div class="setbg" role="presentation" onclick={() => (showSettings = false)}>
-      <div class="setcard" role="dialog" aria-modal="true" aria-label="settings" onclick={(e) => e.stopPropagation()}>
+      <div class="setcard" role="dialog" aria-modal="true" aria-label="settings" tabindex="-1" onclick={(e) => e.stopPropagation()}>
         <div class="sethrow">
           <h2 class="seth">Settings</h2>
           <button class="setx" onclick={() => (showSettings = false)} aria-label="close"><X size={20} /></button>
@@ -953,6 +978,8 @@
     font-family: var(--sans); color: var(--text); -webkit-appearance: none; appearance: none;
     background: var(--surface); border: 1px solid transparent; border-radius: 18px;
   }
+  /* optical correction: CJK ink is top-heavy relative to the Latin baseline (see inputHan) */
+  .field input.hanq { padding-top: calc(0.6rem + 2px); padding-bottom: calc(0.6rem - 2px); }
   .field input::-webkit-search-decoration, .field input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
   .field input:focus { border-color: transparent; background: var(--surface-2); }
   .field input::placeholder { color: var(--faint); }
