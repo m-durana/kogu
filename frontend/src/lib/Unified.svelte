@@ -331,7 +331,13 @@
     // mis-rendered 合 as its spurious Unihan "traditional" 閤 (a kSimplifiedVariant artifact, not a real
     // reform). The PRC-only-simplified case (电→電) never reaches here: 电 has no Kanjidic readings.
     const sf = headChar.script_forms
-    const jaForm = sf?.branches.find((b) => b.script.includes('shinjitai'))?.form ?? head
+    const jaForm =
+      sf?.branches.find((b) => b.script.includes('shinjitai'))?.form ??
+      // no shinjitai reform: Japan kept the orthodox glyph, so a typed PRC simplification (桥, 电)
+      // must still map to it (headChar IS the orthodox char here, so its readings gated us in)
+      (sf && sf.branches.some((b) => b.form === head && b.script === 'simplified')
+        ? sf.orthodox
+        : head)
     return {
       id: -(head.codePointAt(0) ?? 1) - 1,
       variety: 'ja',
@@ -708,7 +714,13 @@
   // even with no okurigana — detected by a real same-glyph ja word-lexeme among the rows. Without this,
   // the synthetic Kanjidic row for such a noun-kanji was mislabelled "only in compounds".
   const hasStandaloneJaWord = $derived(
-    rows.some((r) => r.variety === 'ja' && r.kind === 'form' && !r.synthetic && r.form === head),
+    rows.some(
+      (r) =>
+        r.variety === 'ja' &&
+        r.kind === 'form' &&
+        !r.synthetic &&
+        (r.form === head || r.form === (synthJaRow?.form ?? head)),
+    ),
   )
   // bound classification for a row: 'always' (only ever in compounds), 'often' (bound in some senses
   // but free in others, e.g. 日), or null (not bound / a word stem).

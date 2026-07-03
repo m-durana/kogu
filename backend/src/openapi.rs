@@ -4,25 +4,27 @@
 //! static `frontend/public/api-docs/openapi.json` rendered by a self-hosted Scalar page; the
 //! router itself does not serve it. Paths are described WITHOUT the `/api` prefix nginx adds on
 //! the public site; the `servers` URL carries the prefix instead.
+//!
+//! Deliberately NOT documented (they exist for the app UI only): `/recognize` and `/mt` proxy
+//! Google services, `/ocr` runs the local recognizer on uploads. None of them are dictionary
+//! data, so they stay out of the public reference.
 
 use utoipa::OpenApi;
 
 const DESCRIPTION: &str = "\
-Free public read-only API of [kogu](https://kogu.miro.build), an open-source CJKV dictionary \
-covering Mandarin (zh), Cantonese (yue) and Japanese (ja).
+The JSON API behind [kogu](https://kogu.miro.build), an open-source dictionary of Mandarin (zh), \
+Cantonese (yue) and Japanese (ja). Read-only, no keys, rate-limited.
 
-- No authentication; requests are rate-limited by nginx. Be gentle and cache what you fetch.
-- Dictionary content is licensed CC BY-SA 4.0 (aggregating CC-CEDICT, JMdict, Unihan, \
-Wiktionary, Kanjium and other sources); see NOTICE.md in the repository for attribution details.
-- `/recognize` and `/mt` proxy third-party services (Google handwriting input / translation): \
-they exist for the app UI and are NOT stable data endpoints; do not build on them.
-- Lexeme ids come from `/search` or `/suggest` and are stable within one database build, but may \
-change between data releases; treat them as opaque and re-resolve via search.";
+The dictionary content is compiled from open datasets (CC-CEDICT, JMdict, Unihan, Wiktionary, \
+Kanjium and others) and is licensed CC BY-SA 4.0; NOTICE.md in the repository has the full list.
+
+Lexeme ids are stable within one database build but can change when the data is rebuilt, so \
+treat them as opaque and re-resolve through `/search` when in doubt.";
 
 #[derive(OpenApi)]
 #[openapi(
     info(title = "Kogu API", description = DESCRIPTION),
-    servers((url = "https://kogu.miro.build/api", description = "Public server (nginx adds the /api prefix)")),
+    servers((url = "https://kogu.miro.build/api", description = "nginx adds the /api prefix")),
     paths(
         crate::handlers::health,
         crate::handlers::search_handler,
@@ -31,9 +33,6 @@ change between data releases; treat them as opaque and re-resolve via search.";
         crate::handlers::why_handler,
         crate::handlers::translate_handler,
         crate::handlers::segment_handler,
-        crate::mt::translate_handler,
-        crate::recognize::recognize_handler,
-        crate::ocr::ocr_handler,
         crate::tts::ja_handler,
         crate::tts::clip_handler,
     ),
@@ -60,17 +59,11 @@ change between data releases; treat them as opaque and re-resolve via search.";
         crate::model::ConceptGroup,
         crate::model::SegmentResponse,
         crate::model::SegmentPart,
-        crate::model::OcrResponse,
-        crate::model::OcrLine,
-        crate::model::OcrChar,
         crate::model::ApiError,
-        crate::recognize::RecognizeRequest,
-        crate::recognize::RecognizeResponse,
     )),
     tags(
         (name = "meta", description = "Service metadata"),
-        (name = "dictionary", description = "Dictionary lookups over the kogu database"),
-        (name = "input", description = "Input helpers (handwriting, OCR, machine translation)"),
+        (name = "dictionary", description = "Lookups over the kogu database"),
         (name = "audio", description = "Pronunciation audio"),
     )
 )]

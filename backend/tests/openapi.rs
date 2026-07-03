@@ -31,9 +31,6 @@ fn all_public_paths_documented() {
         "/why/{id}",
         "/translate",
         "/segment",
-        "/mt",
-        "/recognize",
-        "/ocr",
         "/tts/ja",
         "/clip/{variety}/{file}",
     ];

@@ -29,14 +29,18 @@
     onclick: () => void
     title?: string
   } = $props()
+
+  // long headwords (idioms, katakana loanwords) step the type down so the row still shows the
+  // reading and gloss instead of one giant ellipsised glyph column
+  const hwSize = $derived([...glyph].length > 12 ? '1.05rem' : [...glyph].length > 6 ? '1.3rem' : '1.7rem')
 </script>
 
 <li>
   <button class="hit" {onclick} title={title || `look up ${glyph}`}>
-    <span class="hw" {lang} style="font-family:{font}"><Glyph ch={glyph} {font} {lang} />{#if alt}<span class="alt">{alt}</span>{/if}</span>
+    <span class="hw" {lang} style="font-family:{font};font-size:{hwSize}"><Glyph ch={glyph} {font} {lang} />{#if alt}<span class="alt">{alt}</span>{/if}</span>
     <span class="meta-col">
       <span class="line1">
-        {#if reading}<span class="rd">{reading}</span>{/if}
+        {#if reading && reading !== glyph}<span class="rd">{reading}</span>{/if}
         {#if tags.length || regions.length}<span class="tags">{#each tags as t}<span class="var">{t}</span>{/each}{#each regions as rg}<span class="rg">{rg}</span>{/each}</span>{/if}
       </span>
       {#if gloss}<span class="gl">{gloss}</span>{/if}
@@ -55,7 +59,7 @@
   .hit:hover { background: var(--surface); color: var(--text); }
   /* headword: reserve a 2.2em column for short glyphs, but cap long headwords (idioms like
      親の意見と茄子の花は千に一つも無駄はない) and ellipsise them so a row never widens the layout. */
-  .hw { font-family: var(--han); font-size: 1.7rem; line-height: 1.05; flex: none; min-width: 2.2em; max-width: 8.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hw { font-family: var(--han); line-height: 1.05; flex: none; min-width: 2.2em; max-width: 8.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hw .alt { color: var(--faint); font-size: 0.95rem; margin-left: 0.35rem; }
   .meta-col { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }
   /* keep the reading line to ONE line: a long reading ellipsises rather than wrapping the row to a

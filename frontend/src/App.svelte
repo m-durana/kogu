@@ -81,10 +81,12 @@
   async function shareCurrent() {
     if (!currentItem) return
     const it = currentItem
-    const path = it.id < 0 ? `#/entry/${it.id}` : `?q=${encodeURIComponent(it.headword)}`
+    // share the page as TYPED: a 桥 lookup must link (and title) 桥, not the trad headword 橋
+    const term = view === 'results' && q.trim() ? q.trim() : it.headword
+    const path = it.id < 0 ? `#/entry/${it.id}` : `?q=${encodeURIComponent(term)}`
     const url = `${location.origin}/${path}`
     try {
-      if (navigator.share) await navigator.share({ title: `${it.headword} · Kogu`, url })
+      if (navigator.share) await navigator.share({ title: `${term} · Kogu`, url })
       else {
         await navigator.clipboard.writeText(url)
         flash('Link copied')
@@ -678,18 +680,19 @@
         <Bookmark size={22} fill={savedNow ? 'currentColor' : 'none'} />
       </button>
       <button class="actbtn" onclick={shareCurrent} aria-label="share" title="share">
-        <Share2 size={22} />
+        {#if isIOS}<Share size={22} />{:else}<Share2 size={22} />{/if}
       </button>
     </div>
   {/if}
 
   {#snippet savedRow(it: SavedItem)}
+    <!-- no variety chip for an ASCII text search ("dog"): it isn't a word OF one language -->
     <EntryRow
       glyph={it.headword}
       font={hanFont(it.variety)}
       lang={langTag(it.variety)}
       reading={formatReading(it.variety, it.reading, settings.romanization === 'yale')}
-      tags={[varietyLabel(it.variety)]}
+      tags={/^[\x20-\x7e]+$/.test(it.headword) ? [] : [varietyLabel(it.variety)]}
       gloss={it.gloss ? shortGloss([it.gloss]) : ''}
       onclick={() => (it.query ? doSearch(it.headword) : openEntry(it.id, 'push', it.headword))}
     />
@@ -1146,6 +1149,8 @@
     .searchrow { max-width: 656px; }
     /* reading surfaces keep a readable measure inside the wide wrap */
     .results, .empty, .dym, .noword { max-width: 780px; }
+    /* sit the save/share icons level with the tab bar (they read as floating on desktop otherwise) */
+    .actions { margin: 0.45rem 0 -3.05rem; }
     .drawpanel {
       left: max(calc(50vw - 564px + 1.5rem), 1rem); right: auto;
       width: min(880px, calc(100vw - 2rem));

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Kogu API",
-    "description": "Free public read-only API of [kogu](https://kogu.miro.build), an open-source CJKV dictionary covering Mandarin (zh), Cantonese (yue) and Japanese (ja).\n\n- No authentication; requests are rate-limited by nginx. Be gentle and cache what you fetch.\n- Dictionary content is licensed CC BY-SA 4.0 (aggregating CC-CEDICT, JMdict, Unihan, Wiktionary, Kanjium and other sources); see NOTICE.md in the repository for attribution details.\n- `/recognize` and `/mt` proxy third-party services (Google handwriting input / translation): they exist for the app UI and are NOT stable data endpoints; do not build on them.\n- Lexeme ids come from `/search` or `/suggest` and are stable within one database build, but may change between data releases; treat them as opaque and re-resolve via search.",
+    "description": "The JSON API behind [kogu](https://kogu.miro.build), an open-source dictionary of Mandarin (zh), Cantonese (yue) and Japanese (ja). Read-only, no keys, rate-limited.\n\nThe dictionary content is compiled from open datasets (CC-CEDICT, JMdict, Unihan, Wiktionary, Kanjium and others) and is licensed CC BY-SA 4.0; NOTICE.md in the repository has the full list.\n\nLexeme ids are stable within one database build but can change when the data is rebuilt, so treat them as opaque and re-resolve through `/search` when in doubt.",
     "license": {
       "name": "MIT",
       "identifier": "MIT"
@@ -12,7 +12,7 @@
   "servers": [
     {
       "url": "https://kogu.miro.build/api",
-      "description": "Public server (nginx adds the /api prefix)"
+      "description": "nginx adds the /api prefix"
     }
   ],
   "paths": {
@@ -142,151 +142,6 @@
                   "service": "kogu",
                   "status": "ok",
                   "version": "0.0.0"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/mt": {
-      "get": {
-        "tags": [
-          "input"
-        ],
-        "summary": "Machine translation to English (sentence-level).",
-        "description": "This endpoint PROXIES third-party services (Google translate_a/single, with a MyMemory\nfallback); treat it as a convenience for the in-app \"Translate\" panel, not a stable data\nendpoint. Always returns 200; failures are reported in the body as {\"error\": \"translate_failed\"}.",
-        "operationId": "translate_handler",
-        "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "description": "text to translate to English (max 200 characters)",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "sl",
-            "in": "query",
-            "description": "source language hint (zh-CN / zh-TW / ja / yue); defaults to auto-detect",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Translation (or an in-body error)",
-            "content": {
-              "application/json": {
-                "schema": {},
-                "example": {
-                  "engine": "google",
-                  "source": "zh-CN",
-                  "translation": "hello"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/ocr": {
-      "post": {
-        "tags": [
-          "input"
-        ],
-        "summary": "OCR an image (PaddleOCR PP-OCRv5, run locally).",
-        "description": "POST the raw image bytes (JPEG/PNG/WebP…, max 12 MiB) as the request body. Returns recognized\nlines with axis-aligned pixel boxes, each split into per-character cells for tap-to-look-up.\nVertical text is detected and handled. Returns 503 when the OCR models are not loaded.",
-        "operationId": "ocr_handler",
-        "requestBody": {
-          "description": "Raw image bytes (any format the `image` crate decodes), max 12 MiB",
-          "content": {
-            "application/octet-stream": {
-              "schema": {
-                "type": "array",
-                "items": {
-                  "type": "integer",
-                  "format": "int32",
-                  "minimum": 0
-                }
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Recognized lines with boxes",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OcrResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Empty body or undecodable image",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "OCR engine not available on this deployment",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/recognize": {
-      "post": {
-        "tags": [
-          "input"
-        ],
-        "summary": "Handwriting recognition (stroke-order-independent) for Han / kana input.",
-        "description": "This endpoint PROXIES the Google Input Tools handwriting service; treat it as a convenience,\nnot a stable data endpoint (availability and results depend on the third-party upstream).",
-        "operationId": "recognize_handler",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RecognizeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Ranked candidates",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RecognizeResponse"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "Upstream recognizer unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -1153,86 +1008,6 @@
           }
         }
       },
-      "OcrChar": {
-        "type": "object",
-        "required": [
-          "ch",
-          "box"
-        ],
-        "properties": {
-          "box": {
-            "type": "array",
-            "items": {
-              "type": "number",
-              "format": "float"
-            }
-          },
-          "ch": {
-            "type": "string"
-          }
-        }
-      },
-      "OcrLine": {
-        "type": "object",
-        "required": [
-          "text",
-          "confidence",
-          "box",
-          "chars"
-        ],
-        "properties": {
-          "box": {
-            "type": "array",
-            "items": {
-              "type": "number",
-              "format": "float"
-            },
-            "description": "axis-aligned bounding box [x, y, w, h] in image pixels"
-          },
-          "chars": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/OcrChar"
-            },
-            "description": "per-character cells (line box split by character count - Han is ~monospace)"
-          },
-          "confidence": {
-            "type": "number",
-            "format": "float"
-          },
-          "text": {
-            "type": "string"
-          }
-        }
-      },
-      "OcrResponse": {
-        "type": "object",
-        "description": "/ocr response - recognized text laid out over the image for tap-to-select (DESIGN: OCR feature).",
-        "required": [
-          "width",
-          "height",
-          "lines"
-        ],
-        "properties": {
-          "height": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          },
-          "lines": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/OcrLine"
-            }
-          },
-          "width": {
-            "type": "integer",
-            "format": "int32",
-            "description": "the (possibly downscaled) image dimensions the boxes are in",
-            "minimum": 0
-          }
-        }
-      },
       "OriginAccount": {
         "type": "object",
         "required": [
@@ -1285,78 +1060,6 @@
           },
           "value": {
             "type": "string"
-          }
-        }
-      },
-      "RecognizeRequest": {
-        "type": "object",
-        "required": [
-          "width",
-          "height",
-          "strokes"
-        ],
-        "properties": {
-          "height": {
-            "type": "number",
-            "format": "double",
-            "description": "drawing area height in px"
-          },
-          "languages": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Recogniser language(s). Default [\"zh\"] (a Han superset). Pass e.g. [\"zh\",\"ja\"] for any-to-any."
-          },
-          "limit": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "description": "maximum number of candidates (default 20, clamped to 1..=50)",
-            "minimum": 0
-          },
-          "strokes": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": {
-                "type": "array",
-                "items": {
-                  "type": "number",
-                  "format": "double"
-                }
-              }
-            },
-            "description": "ordered strokes; each stroke is a list of [x, y, t] points (t = ms timestamp, may be 0)"
-          },
-          "width": {
-            "type": "number",
-            "format": "double",
-            "description": "drawing area width in px"
-          }
-        }
-      },
-      "RecognizeResponse": {
-        "type": "object",
-        "required": [
-          "candidates",
-          "languages"
-        ],
-        "properties": {
-          "candidates": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "ranked candidate characters/words, merged across the requested languages"
-          },
-          "languages": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "the languages actually queried"
           }
         }
       },
@@ -1592,11 +1295,7 @@
     },
     {
       "name": "dictionary",
-      "description": "Dictionary lookups over the kogu database"
-    },
-    {
-      "name": "input",
-      "description": "Input helpers (handwriting, OCR, machine translation)"
+      "description": "Lookups over the kogu database"
     },
     {
       "name": "audio",
