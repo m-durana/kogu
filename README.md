@@ -2,8 +2,7 @@
 
 A dictionary for the Han script: one word across Mandarin, Cantonese and Japanese at once,
 and why the written forms differ (reforms, character mergers, readings back to Middle
-Chinese). Cantonese is first-class (粵字, jyutping); everything is compiled from open
-datasets, nothing is generated.
+Chinese). Inspired by [CJKV-Dict](cjkvdict.com).
 
 **Live at <https://kogu.miro.build>.** The site runs on a free JSON API, documented at
 [kogu.miro.build/api-docs](https://kogu.miro.build/api-docs/).
