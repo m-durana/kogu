@@ -49,6 +49,12 @@ Middle Chinese (廣韻/Guangyun) phonological data, romanized with Baxter's tran
 `pipeline/scripts/gen_mc.mjs` into `char_mc.json`. **CC0** (public domain dedication).
 <https://github.com/nk2028/tshet-uinh-data>
 
+### Open JTalk (via pyopenjtalk)
+Japanese pronunciation audio is synthesized locally by the TTS sidecar (`tts/synth_service.py`)
+using **pyopenjtalk** (MIT), which bundles the Open JTalk engine (Modified BSD, Nagoya Institute
+of Technology), the NAIST Japanese dictionary (BSD-style), and the
+`hts_voice_nitech_jp_atr503_m001` voice (CC BY 3.0). <https://github.com/r9y9/pyopenjtalk>
+
 ### Wiktionary (via kaikki.org / wiktextract)
 Etymology text, origin badges, phono-semantic component roles (Han compound templates), and
 English-pivot translation tables. Dual-licensed **CC BY-SA 3.0 + GFDL**, per Wikimedia terms.
