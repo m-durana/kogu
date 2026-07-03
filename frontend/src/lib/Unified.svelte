@@ -1338,7 +1338,7 @@
   .scswitch:hover { color: var(--text); background: none; }
   /* small country tag(s) for a region-exclusive word (Taiwan/Hong Kong) — sits up by the headword */
   .regiontags { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.55rem; }
-  .rtag { font-family: var(--mono); font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); line-height: 1.5; }
+  .rtag { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.02em; color: var(--muted); line-height: 1.5; }
   .defs { display: flex; flex-direction: column; gap: 1.1rem; }
   .dlh { display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap; }
   /* the language leads (it's the heading of the definition); the reading is secondary */
@@ -1379,7 +1379,7 @@
   /* always number senses — including a single-sense definition — so "1." reads as a definition, not
      as loose text bumping against the language tag. */
   .senses li::before { content: counter(s) '.'; position: absolute; left: 0; top: 0.05rem; font-family: var(--mono); font-size: 0.78rem; color: var(--faint); }
-  .more { background: none; border: none; padding: 0.3rem 0; margin-top: 0.1rem; font-family: var(--mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .more { background: none; border: none; padding: 0.3rem 0; margin-top: 0.1rem; font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.02em; color: var(--muted); }
   /* tappable cross-reference target inside a gloss ("variant of 著" → jump to 著) */
   .xref { font-family: var(--han); color: var(--text); background: none; border: none; padding: 0; font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
   .xref:hover { color: var(--hi); background: none; }
@@ -1390,14 +1390,14 @@
 
   /* bound-form popup — minimal monochrome dialog */
   .mbg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 50; }
-  .modal { width: min(28rem, 100%); max-height: 80vh; overflow-y: auto; background: var(--surface-2); border: 0.5px solid var(--border-strong); border-radius: 16px; box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.7); padding: 1.2rem 1.2rem 1rem; }
+  .modal { width: min(28rem, 100%); max-height: 80vh; overflow-y: auto; background: var(--bg); border: 1px solid var(--border-strong); border-radius: 16px; box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.7); padding: 1.2rem 1.2rem 1rem; }
   .mh { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
   .mglyph { font-family: var(--han); font-size: 1.9rem; line-height: 1; }
-  .mtag { font-family: var(--mono); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .mtag { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.02em; color: var(--muted); }
   .mexp { margin: 0 0 0.9rem; font-size: 0.92rem; line-height: 1.5; color: var(--text); }
-  .mlabel { font-family: var(--mono); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); margin-bottom: 0.5rem; }
+  .mlabel { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.02em; color: var(--faint); margin-bottom: 0.5rem; }
   .modal .chips { margin-bottom: 0.4rem; }
-  .mclose { display: block; margin-top: 0.9rem; margin-left: auto; font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); background: none; border: none; padding: 0.3rem 0; cursor: pointer; }
+  .mclose { display: block; margin-top: 0.9rem; margin-left: auto; font-family: var(--mono); font-size: 0.76rem; letter-spacing: 0.02em; color: var(--muted); background: none; border: none; padding: 0.3rem 0; cursor: pointer; }
   .mclose:hover { color: var(--text); background: none; }
 
   /* Block B - the bridge: the same meaning written differently elsewhere. Tappable rows. */
@@ -1410,7 +1410,7 @@
   .strip { margin-top: 0.5rem; }
   /* item: visually separate the structure sub-sections (forms/simplification vs composition/why) with
      a faint label and a hairline rule, so they don't read as one undifferentiated run. */
-  .sublabel { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); margin-bottom: 0.45rem; }
+  .sublabel { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.02em; color: var(--faint); margin-bottom: 0.45rem; }
   .substep { margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--border); }
   /* the first sub-section (the forms strip) follows the heading directly — no rule above it */
   .substep:first-of-type { margin-top: 0.6rem; padding-top: 0; border-top: none; }
@@ -1430,12 +1430,12 @@
   .segb.on::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--text); border-radius: 2px; }
   .segsep { display: none; }
   /* a single toggle that re-sorts the Related / Used-in lists (default ⇄ by language) */
-  .sortrow { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; margin: 0.7rem 0 0.2rem; }
+  .sortrow { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; margin: 0.55rem 0 0; }
   /* one cycling pill, same outlined-pill style as the app's other small buttons */
-  .sortbtn { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); background: none; border: 1px solid var(--border); border-radius: 999px; padding: 0.22rem 0.62rem; cursor: pointer; }
-  .sortbtn:hover { color: var(--text); border-color: var(--border-strong); }
+  .sortbtn { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.02em; color: var(--muted); background: none; border: none; border-radius: 999px; padding: 0.2rem 0; cursor: pointer; }
+  .sortbtn:hover { color: var(--text); background: none; }
   /* band label above each Related group ("everyday word" / "written differently" / "related") */
-  .blabel { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); margin: 0 0 0.4rem; }
+  .blabel { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.02em; color: var(--faint); margin: 0 0 0.4rem; }
   .dim { color: var(--faint); }
 
   /* jukugo component characters now reuse the shared .langs/.lang row system (see "written
@@ -1480,7 +1480,7 @@
   /* one unified style for every small row tag: radical, rarely used, uncommon, only/often in compounds */
   /* soft filled pill — noticeable (uncommon / only-in-compounds shouldn't be missed) without the harsh
      outlined box used on row variety tags */
-  .ltag { font-family: var(--mono); font-size: 0.56rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); background: var(--surface-2); border: none; border-radius: 999px; padding: 0.12rem 0.5rem; line-height: 1.5; }
+  .ltag { font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.02em; color: var(--muted); background: var(--surface-2); border: none; border-radius: 999px; padding: 0.12rem 0.5rem; line-height: 1.5; }
   .ltag.rad { color: var(--text); }
   .ltag.tappable { cursor: pointer; }
   .ltag.tappable:hover { color: var(--text); background: var(--border-strong); }
@@ -1539,8 +1539,8 @@
   /* words: a tab panel; grouped by language with breathing room */
   .words { margin-top: 0.4rem; }
   /* divider before the cross-script-variant words (氷 for 冰), inside the shared .langs list (item 155) */
-  .wdiv { list-style: none; font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); margin: 0.7rem 0 0.3rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
-  .langdiv { list-style: none; font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); margin: 0.7rem 0 0.3rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+  .wdiv { list-style: none; font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.02em; color: var(--faint); margin: 0.7rem 0 0.3rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+  .langdiv { list-style: none; font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.02em; color: var(--faint); margin: 0.7rem 0 0.3rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
   .langdiv:first-child { margin-top: 0; padding-top: 0; border-top: none; }
   .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
   .chip { display: inline-flex; align-items: center; gap: 0.35rem; font-family: var(--han); font-size: 1.05rem; padding: 0.25rem 0.55rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); max-width: 14em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1550,7 +1550,7 @@
   .origin { margin-top: 0.4rem; }
   .etylist { margin-top: 0.5rem; }
   /* "show deeper cognates" toggle + the collapsed deep block (kept at normal brightness) */
-  .deeptoggle { display: inline-flex; background: none; border: none; padding: 0.3rem 0; margin-top: 0.6rem; font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+  .deeptoggle { display: inline-flex; background: none; border: none; padding: 0.3rem 0; margin-top: 0.6rem; font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.02em; color: var(--muted); }
   .deeptoggle:hover { color: var(--text); background: none; }
   .etydeep { margin-top: 0.2rem; padding-top: 0.3rem; border-top: 1px solid var(--border); }
   /* one flowing account: plain stacked paragraphs, no dividing rule, no fake numbering */
@@ -1560,7 +1560,7 @@
   .etyseg.sub { margin-top: 0.25rem; padding-left: calc(0.7rem + (var(--depth) - 1) * 0.9rem); }
   .etyseg.sub .ety { position: relative; }
   .etyseg.sub .ety::before { content: '‣'; position: absolute; left: -0.7rem; color: var(--faint); }
-  .etyhead { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); margin-bottom: 0.2rem; }
+  .etyhead { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.02em; color: var(--faint); margin-bottom: 0.2rem; }
   .ety { font-size: 0.95rem; color: var(--muted); line-height: 1.9; margin: 0; }
   .ety ruby { font-family: var(--han); }
   .ety rt { font-size: 0.55em; color: var(--faint); font-family: var(--han); }
@@ -1585,7 +1585,7 @@
 
   /* tapped-term explanation — a small centred card (mobile-friendly; no hover needed) */
   .termpop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 50; }
-  .termcard { width: min(24rem, 100%); background: var(--surface-2); border: 0.5px solid var(--border-strong); border-radius: 16px; box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.7); padding: 1.1rem 1.1rem 0.9rem; }
+  .termcard { width: min(24rem, 100%); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 16px; box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.7); padding: 1.1rem 1.1rem 0.9rem; }
   .termcard p { margin: 0; font-size: 0.95rem; line-height: 1.5; color: var(--text); }
 
   /* loading skeleton - reserves the lower sections' space so they don't pop in */
@@ -1605,8 +1605,6 @@
      ancestor would re-root them). Only entry pages split; plain result lists stay one column. */
   @media (min-width: 1100px) {
     article.u.split {
-      --pcw: min(1080px, calc(100vw - 4rem));
-      margin-inline: calc((var(--pcw) - 100%) / -2);
       display: grid;
       grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
       column-gap: 3.2rem;
@@ -1620,5 +1618,6 @@
       top: 1.2rem;
       border-bottom: none;
     }
+    article.u:not(.split) { max-width: 780px; }
   }
 </style>

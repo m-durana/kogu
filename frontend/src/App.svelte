@@ -8,7 +8,7 @@
   import LookupPanel from './lib/LookupPanel.svelte'
   import Pad from './lib/Pad.svelte'
   import Ocr from './lib/Ocr.svelte'
-  import { Search, X, Brush, Camera, Bookmark, Clock, Share2, Trash2, ArrowRight, Download, Settings, SquarePlus, ExternalLink, ChevronDown } from '@lucide/svelte'
+  import { Search, X, Brush, Camera, Bookmark, Clock, Share, Share2, Trash2, ArrowRight, Download, Settings, SquarePlus, ExternalLink, ChevronDown } from '@lucide/svelte'
   import { settings, setRomanization, setPitchAccent, setAudio } from './lib/settings.svelte'
   import { onMount } from 'svelte'
   import { getSaved, getHistory, isSaved, toggleSaved, recordHistory, clearHistory, type SavedItem } from './lib/store'
@@ -827,7 +827,7 @@
         </p>
         <p class="intropos"><span class="intropron">/ko.gu/</span> <span class="introtag">noun</span></p>
 
-        <p class="introgloss">A dictionary for the living Han script. Type one character or word and see it across <b>中文</b> (Mandarin), <b>粵語</b> (Cantonese), and <b>日本語</b> (Japanese) at once: how each language reads it, what it means, and how the 20th-century reforms pulled the written forms apart.</p>
+        <p class="introgloss">A dictionary for the living Han script: one word across <b>中文</b> (Mandarin), <b>粵語</b> (Cantonese), and <b>日本語</b> (Japanese) at once, and why the written forms differ.</p>
 
         <h2 class="abh">On each page</h2>
         <dl class="ablist">
@@ -851,7 +851,10 @@
           <li><b><a href="https://omwn.org/" target="_blank" rel="noopener noreferrer external">Open Multilingual Wordnet</a></b>: part of the cross-language concept links</li>
           <li>Pronunciation clips: <b><a href="https://github.com/davinfifield/mp3-chinese-pinyin-sound" target="_blank" rel="noopener noreferrer external">mp3-chinese-pinyin-sound</a></b> (Mandarin) and <b><a href="https://jyutping.org/" target="_blank" rel="noopener noreferrer external">jyutping.org</a></b> (Cantonese); Japanese is synthesized locally with <b><a href="https://open-jtalk.sourceforge.net/" target="_blank" rel="noopener noreferrer external">Open JTalk</a></b></li>
         </ul>
-        <p class="abnote">Everything is passed through from these open datasets directly. Nothing here is written by an AI. Kogu is <a href="https://github.com/m-durana/kogu" target="_blank" rel="noopener noreferrer external">open source</a> (code MIT, data licences in NOTICE.md), and was inspired by <b><a href="https://cjkvdict.com/" target="_blank" rel="noopener noreferrer external">CJKV Dict</a></b>.</p>
+        <h2 class="abh">API</h2>
+        <p class="abapi">Everything on this site is served by a free, open JSON API: see the <a href="/api-docs/" target="_blank" rel="noopener">API reference</a>.</p>
+
+        <p class="abnote">Every entry is compiled directly from these open datasets. Kogu is <a href="https://github.com/m-durana/kogu" target="_blank" rel="noopener noreferrer external">open source</a> (code MIT, data licences in NOTICE.md), and was inspired by <b><a href="https://cjkvdict.com/" target="_blank" rel="noopener noreferrer external">CJKV Dict</a></b>.</p>
       </div>
     {/if}
   {/if}
@@ -865,7 +868,7 @@
         <ol class="inststeps">
           <!-- the li is a flex row: keep the whole sentence ONE flex item (bare text nodes become
                separate items and wrap into broken columns) -->
-          <li><span class="instep"><Share2 size={18} /></span><span>Tap the <b>Share</b> button {isIOS ? 'in the toolbar below' : 'in your browser menu'}</span></li>
+          <li><span class="instep">{#if isIOS}<Share size={18} />{:else}<Share2 size={18} />{/if}</span><span>Tap the <b>Share</b> button {isIOS ? 'in the toolbar below' : 'in your browser menu'}</span></li>
           <li><span class="instep"><SquarePlus size={18} /></span><span>Choose <b>Add to Home Screen</b></span></li>
         </ol>
         <button class="instok" onclick={() => (showInstallHelp = false)}>got it</button>
@@ -940,15 +943,15 @@
   /* saved / history list views */
   .listview { padding-top: 0.2rem; }
   .lvh { display: flex; align-items: center; gap: 0.7rem; font-family: var(--sans); font-size: 1.2rem; font-weight: 500; color: var(--text); margin: 0 0 0.6rem; }
-  .lvclear { display: inline-flex; align-items: center; gap: 0.3rem; font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); background: none; border: 1px solid var(--border); border-radius: 999px; padding: 0.15rem 0.5rem; }
+  .lvclear { display: inline-flex; align-items: center; gap: 0.3rem; font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.02em; color: var(--faint); background: none; border: 1px solid var(--border); border-radius: 999px; padding: 0.15rem 0.5rem; }
   .lvclear:hover { color: var(--text); border-color: var(--border-strong); }
   /* transient "Link copied" toast for share fallback */
   .toast { position: fixed; left: 50%; bottom: calc(2rem + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--surface-2, #1c1c1f); color: var(--text); border: 1px solid var(--border-strong); border-radius: 999px; padding: 0.5rem 1rem; font-size: 0.85rem; z-index: 60; }
   /* settings panel */
   .setbg { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 70; }
-  .setcard { width: min(22rem, 100%); background: var(--surface-2, #1c1c1f); border: 0.5px solid var(--border-strong); border-radius: 16px; box-shadow: 0 12px 40px -12px rgba(0,0,0,0.7); padding: 1.1rem 1.1rem 0.9rem; }
+  .setcard { width: min(22rem, 100%); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 16px; box-shadow: 0 12px 40px -12px rgba(0,0,0,0.7); padding: 1.1rem 1.1rem 0.9rem; }
   .sethrow { display: flex; align-items: center; justify-content: space-between; margin: 0 0 1.1rem; }
-  .seth { font-family: var(--mono); font-size: 0.72rem; font-weight: 400; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0; }
+  .seth { font-family: var(--mono); font-size: 0.76rem; font-weight: 400; letter-spacing: 0.02em; color: var(--muted); margin: 0; }
   .setx { display: inline-flex; background: none; border: none; color: var(--muted); padding: 0.2rem; border-radius: var(--r); }
   .setx:hover { color: var(--text); background: var(--surface); }
   .setrow { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.9rem 0; border-top: 0.5px solid var(--border); }
@@ -958,7 +961,7 @@
   /* track-style segmented control: a quiet rounded track, only the SELECTED segment is filled. No
      per-segment border/divider, so the unselected side has no stray outline of the selector (item 7). */
   .seg { display: inline-flex; gap: 2px; padding: 2px; background: var(--surface); border-radius: 999px; align-self: start; margin-top: 0.15rem; }
-  .seg button { font-family: var(--mono); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); background: none; border: none; border-radius: 999px; padding: 0.38rem 0.95rem; }
+  .seg button { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.02em; color: var(--muted); background: none; border: none; border-radius: 999px; padding: 0.38rem 0.95rem; }
   .seg button:hover { color: var(--text); background: none; }
   .seg button.on { background: var(--text); color: var(--bg); }
   .seg button.on:hover { color: var(--bg); }
@@ -1042,7 +1045,7 @@
   /* inline photo selection, shown directly under the search row */
   .inputpanel { margin-bottom: 1.2rem; }
 
-  .meta { color: var(--faint); font-size: 0.7rem; margin-bottom: 0.6rem; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.1em; }
+  .meta { color: var(--faint); font-size: 0.76rem; margin-bottom: 0.6rem; font-family: var(--mono); letter-spacing: 0.02em; }
   .err { color: var(--text); margin: 0.5rem 0; }
 
   /* results - an editorial list of EntryRow rows (the one shared row style); the <ul> just resets. */
@@ -1053,7 +1056,7 @@
   .noword { padding: 0.6rem 0; }
   .nw-head { display: flex; align-items: baseline; gap: 0.9rem; margin-bottom: 0.9rem; flex-wrap: wrap; }
   .nw-q { font-family: var(--han); font-size: 2.1rem; line-height: 1.05; color: var(--text); }
-  .nw-note { color: var(--faint); font-size: 0.7rem; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.1em; }
+  .nw-note { color: var(--faint); font-size: 0.76rem; font-family: var(--mono); letter-spacing: 0.02em; }
   .nw-list { list-style: none; margin: 0; padding: 0; }
   .nw-list li + li { border-top: 1px solid var(--border); }
   .nw-char {
@@ -1068,10 +1071,10 @@
   .nw-mean { color: var(--muted); font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* a literal character-by-character gloss chain for an unmatched query (honest hint, not a definition) */
   .nw-lit { margin: 0 0 0.9rem; font-size: 0.95rem; line-height: 1.5; color: var(--muted); }
-  .nw-lit-k { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); margin-right: 0.5rem; }
+  .nw-lit-k { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.02em; color: var(--faint); margin-right: 0.5rem; }
   /* "did you mean …": closest real entries for a query that matched nothing */
   .dym { margin: 0.9rem 0 0.2rem; }
-  .dym-k { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); }
+  .dym-k { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.02em; color: var(--faint); }
   .dym-list { list-style: none; margin: 0.4rem 0 0; padding: 0; }
   .dym-list li + li { border-top: 1px solid var(--border); }
   .dym-item { display: flex; align-items: baseline; gap: 0.6rem; width: 100%; text-align: left; background: none; border: none; border-radius: var(--r); padding: 0.55rem 0.5rem; }
@@ -1080,7 +1083,7 @@
   .dym-rd { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dym-var { font-family: var(--han); font-size: 0.78rem; color: var(--faint); margin-left: auto; flex: none; }
   /* "look it up on the web" — an external lookup that works regardless of whether Kogu has the word */
-  .lookup { display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 1rem; font-family: var(--mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: var(--r); padding: 0.4rem 0.7rem; }
+  .lookup { display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 1rem; font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.02em; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: var(--r); padding: 0.4rem 0.7rem; }
   .lookup:hover { color: var(--text); border-color: var(--border-strong); background: var(--surface); }
   /* About page (item 2): what Kogu is, what each section means, and the data sources */
   .about { padding: 1rem 0.2rem 2rem; max-width: 58ch; }
@@ -1089,15 +1092,15 @@
   .introhw .introword { font-family: var(--sans); font-size: 1.4rem; letter-spacing: 0.04em; color: var(--muted); }
   .intropos { margin: 0.35rem 0 1rem; display: flex; align-items: baseline; gap: 0.6rem; }
   .intropron { font-family: var(--mono); font-size: 0.95rem; color: var(--faint); }
-  .introtag { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); }
+  .introtag { font-family: var(--mono); font-size: 0.76rem; letter-spacing: 0.02em; color: var(--faint); }
   /* install-as-web-app button (item 2) */
   /* install button sits to the right of the 古古 Kogu wordmark (item 139) */
-  .installbtn { display: inline-flex; align-items: center; gap: 0.35rem; margin-left: auto; align-self: center; font-family: var(--mono); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text); background: none; border: 1px solid var(--border-strong); border-radius: var(--r); padding: 0.3rem 0.6rem; }
+  .installbtn { display: inline-flex; align-items: center; gap: 0.35rem; margin-left: auto; align-self: center; font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.02em; color: var(--text); background: none; border: 1px solid var(--border-strong); border-radius: var(--r); padding: 0.3rem 0.6rem; }
   .installbtn:hover { background: var(--surface); }
   /* guided add-to-home-screen overlay */
   .instbg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4); z-index: 80; display: flex; align-items: center; justify-content: center; padding: 1.2rem; }
-  .instcard { width: min(22rem, 100%); background: var(--surface-2, #1c1c1f); border: 0.5px solid var(--border-strong); border-radius: 16px; box-shadow: 0 12px 40px -12px rgba(0,0,0,0.7); padding: 1.1rem; }
-  .insth { font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 0.9rem; }
+  .instcard { width: min(22rem, 100%); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 16px; box-shadow: 0 12px 40px -12px rgba(0,0,0,0.7); padding: 1.1rem; }
+  .insth { font-family: var(--mono); font-size: 0.76rem; letter-spacing: 0.02em; color: var(--muted); margin: 0 0 0.9rem; }
   .inststeps { margin: 0 0 1rem; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.7rem; }
   .inststeps li { display: flex; align-items: center; gap: 0.6rem; font-size: 0.95rem; line-height: 1.4; color: var(--muted); }
   .inststeps b { color: var(--text); font-weight: 500; }
@@ -1107,7 +1110,7 @@
   @media (prefers-reduced-motion: reduce) { .instpoint { animation: none; } }
   .introgloss { font-family: var(--sans); font-size: 1.05rem; line-height: 1.7; color: var(--text); margin: 0 0 1.6rem; }
   .introgloss b, .ablist b, .absrc b { font-family: var(--han); font-weight: 500; }
-  .abh { font-family: var(--mono); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--faint); margin: 1.6rem 0 0.6rem; }
+  .abh { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.02em; color: var(--faint); margin: 1.6rem 0 0.6rem; }
   .ablist { margin: 0; }
   .ablist dt { font-family: var(--sans); font-size: 0.98rem; color: var(--text); font-weight: 500; margin-top: 0.7rem; }
   .ablist dd { margin: 0.1rem 0 0; font-size: 0.92rem; line-height: 1.6; color: var(--muted); }
@@ -1116,7 +1119,7 @@
   .absrc li { font-size: 0.92rem; line-height: 1.55; color: var(--muted); padding: 0.28rem 0; border-top: 1px solid var(--border); }
   .absrc li:first-child { border-top: none; }
   .absrc b { color: var(--text); font-family: var(--sans); font-weight: 500; }
-  .abnote { font-size: 0.88rem; line-height: 1.6; color: var(--faint); margin: 1.3rem 0 0; }
+  .abnote, .abapi { font-size: 0.88rem; line-height: 1.6; color: var(--faint); margin: 1.3rem 0 0; }
   /* easter egg (item 8) */
   /* whole-page loading skeleton (item 3): a quiet shimmer, monochrome */
   .pskel { padding: 0.6rem 0.2rem; }
@@ -1130,17 +1133,22 @@
   @media (prefers-reduced-motion: reduce) { .ps-line::after { animation: none; } }
 
   /* popup close language (matches the bound-form modal's mono text close) */
-  .instok { display: block; margin-left: auto; font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); background: none; border: none; padding: 0.3rem 0; }
+  .instok { display: block; margin-left: auto; font-family: var(--mono); font-size: 0.76rem; letter-spacing: 0.02em; color: var(--muted); background: none; border: none; padding: 0.3rem 0; }
   .instok:hover { color: var(--text); background: none; border: none; }
 
   /* ── desktop ──────────────────────────────────────────────────────────────────────────────────
      the phone-first column reads lost on a large screen: give the content a wider measure and pin
      the handwriting dock to the column instead of the full viewport edge. */
   @media (min-width: 1100px) {
-    .wrap { max-width: 780px; }
+    .wrap { max-width: 1128px; }
+    /* the bar keeps a hand-sized measure and shares the left edge with everything else
+       (a full-width centered bar floated awkwardly over the two-column entry pages) */
+    .searchrow { max-width: 656px; }
+    /* reading surfaces keep a readable measure inside the wide wrap */
+    .results, .empty, .dym, .noword { max-width: 780px; }
     .drawpanel {
-      left: 50%; right: auto; transform: translateX(-50%);
-      width: min(820px, calc(100vw - 2rem));
+      left: max(calc(50vw - 564px + 1.5rem), 1rem); right: auto;
+      width: min(880px, calc(100vw - 2rem));
       border: 1px solid var(--border-strong); border-bottom: none;
       border-radius: 16px 16px 0 0;
     }

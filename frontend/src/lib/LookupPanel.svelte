@@ -122,7 +122,7 @@
 
 <style>
   .lpbg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 60; }
-  .lp { width: min(30rem, 100%); max-height: 80vh; overflow-y: auto; background: var(--surface-2); border: 0.5px solid var(--border-strong); border-radius: 16px; box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.7); padding: 1rem 1.1rem 0.9rem; }
+  .lp { width: min(30rem, 100%); max-height: 80vh; overflow-y: auto; background: var(--bg); border: 1px solid var(--border-strong); border-radius: 16px; box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.7); padding: 1rem 1.1rem 0.9rem; }
   .lph { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin-bottom: 0.7rem; }
   .lpterm { font-family: var(--han); font-size: 1.6rem; line-height: 1.1; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .lpx { display: inline-flex; background: none; border: none; color: var(--muted); padding: 0.2rem; border-radius: var(--r); }
@@ -130,18 +130,18 @@
   /* track-style segmented control (matches Settings): only the selected tab is filled, no per-cell
      outline on the unselected one (item 7/8). */
   .lptabs { display: inline-flex; gap: 2px; padding: 2px; background: var(--surface); border-radius: 999px; margin-bottom: 0.9rem; }
-  .lptabs button { font-family: var(--mono); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); background: none; border: none; border-radius: 999px; padding: 0.38rem 0.95rem; }
+  .lptabs button { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.02em; color: var(--muted); background: none; border: none; border-radius: 999px; padding: 0.38rem 0.95rem; }
   .lptabs button:hover { color: var(--text); background: none; }
   .lptabs button.on { background: var(--text); color: var(--bg); }
   .lptabs button.on:hover { color: var(--bg); }
   .lpbody { min-height: 3rem; }
   .lpdim { color: var(--faint); font-size: 0.92rem; }
   .lptr { font-size: 1.3rem; line-height: 1.4; color: var(--text); margin: 0; font-family: var(--sans); }
-  .lpsrc { font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); margin: 0.4rem 0 0; }
+  .lpsrc { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.02em; color: var(--faint); margin: 0.4rem 0 0; }
   .lpsense { margin-bottom: 0.8rem; }
-  .lppos { font-family: var(--mono); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .lppos { font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.02em; color: var(--muted); }
   .lpsense ol { margin: 0.3rem 0 0; padding-left: 1.2rem; }
   .lpsense li { font-size: 0.95rem; line-height: 1.5; color: var(--text); margin-bottom: 0.2rem; }
-  .lpweb { display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 0.6rem; font-family: var(--mono); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); text-decoration: none; }
+  .lpweb { display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 0.6rem; font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.02em; color: var(--muted); text-decoration: none; }
   .lpweb:hover { color: var(--text); }
 </style>
