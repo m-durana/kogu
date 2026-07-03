@@ -60,6 +60,9 @@
   /* headword: reserve a 2.2em column for short glyphs, but cap long headwords (idioms like
      親の意見と茄子の花は千に一つも無駄はない) and ellipsise them so a row never widens the layout. */
   .hw { font-family: var(--han); line-height: 1.05; flex: none; min-width: 2.2em; max-width: 8.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* the phone cap is far too tight for the 780px desktop list: コントラクトブリッジ was ellipsised
+     with half the row empty. Let long headwords breathe where there is room. */
+  @media (min-width: 1100px) { .hw { max-width: 16em; } }
   .hw .alt { color: var(--faint); font-size: 0.95rem; margin-left: 0.35rem; }
   .meta-col { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; flex: 1; }
   /* keep the reading line to ONE line: a long reading ellipsises rather than wrapping the row to a

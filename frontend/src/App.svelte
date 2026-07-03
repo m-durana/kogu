@@ -67,10 +67,13 @@
   const onWordPage = $derived(view === 'entry' || (view === 'results' && unified && results.length > 0))
   const canSaveShare = $derived(currentItem != null && onWordPage)
 
-  // record each visited word in history, and keep the bookmark toggle in sync with what's shown
+  // record each visited word in history, and keep the bookmark toggle in sync with what's shown.
+  // Wait until enrichment settles: while /entry is in flight, currentItem is the top SEARCH hit
+  // (學校, zh) and flips to the enriched lexeme (学校, ja) when it lands — recording both wrote two
+  // history rows for one visit.
   $effect(() => {
     const it = currentItem
-    if (it && onWordPage) {
+    if (it && onWordPage && !enriching) {
       recordHistory(it)
       savedNow = isSaved(it)
     }
@@ -441,6 +444,10 @@
       if (mode === 'push') {
         history.pushState({ view: 'entry', id, hw: e.headword }, '', `#/entry/${id}`)
         window.scrollTo(0, 0) // a freshly opened entry starts at the top
+      } else if (mode === 'replace') {
+        // a deep link must ALSO stamp its state: without it, navigating away and pressing Back
+        // pops a null-state #/entry URL and the entry never comes back (stale card stays on screen)
+        history.replaceState({ view: 'entry', id, hw: e.headword }, '', `#/entry/${id}`)
       }
     } catch {
       // a saved/history id that no longer exists (reassigned/removed by a DB rebuild): if we know the
@@ -494,11 +501,18 @@
     } else if (st?.view === 'entry' && st.id != null) {
       await openEntry(st.id, 'none', st.hw ?? '')
     } else {
-      view = 'results'
-      entry = null
-      const term = st?.q ?? ''
-      if (term && term !== q) await doSearch(term, 'none')
-      else q = term
+      // a null-state pop whose URL is still an entry deep link (stamped before the replaceState
+      // fix, or by an external navigation): re-resolve from the URL instead of blanking the view
+      const m = !st && location.hash.match(/^#\/entry\/(-?\d+)$/)
+      if (m) {
+        await openEntry(Number(m[1]), 'none')
+      } else {
+        view = 'results'
+        entry = null
+        const term = st?.q ?? ''
+        if (term && term !== q) await doSearch(term, 'none')
+        else q = term
+      }
     }
     restoreScroll(key)
   }
@@ -634,6 +648,7 @@
     if (showInstallHelp) showInstallHelp = false
     else if (showSettings) showSettings = false
     else if (lookupOpen) lookupOpen = false
+    else if (panel !== 'none') panel = 'none' // the draw/photo dock dismisses like every other overlay
   }
 </script>
 
@@ -1006,7 +1021,9 @@
   /* track-style segmented control: a quiet rounded track, only the SELECTED segment is filled. No
      per-segment border/divider, so the unselected side has no stray outline of the selector (item 7). */
   .seg { display: inline-flex; gap: 2px; padding: 2px; background: var(--surface); border-radius: 999px; align-self: start; margin-top: 0.15rem; }
-  .seg button { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.02em; color: var(--muted); background: none; border: none; border-radius: 999px; padding: 0.38rem 0.95rem; }
+  /* 0.6rem vertical padding keeps each toggle ~34px tall — the old 0.38rem gave 25px targets,
+     well under a comfortable touch size on phones */
+  .seg button { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.02em; color: var(--muted); background: none; border: none; border-radius: 999px; padding: 0.6rem 0.95rem; }
   .seg button:hover { color: var(--text); background: none; }
   .seg button.on { background: var(--text); color: var(--bg); }
   .seg button.on:hover { color: var(--bg); }
@@ -1199,8 +1216,10 @@
     /* sit the save/share icons level with the tab bar (they read as floating on desktop otherwise) */
     .actions { margin: 0.45rem 0 -3.05rem; }
     .drawpanel {
-      left: max(calc(50vw - 564px + 1.5rem), 1rem); right: auto;
-      width: min(880px, calc(100vw - 2rem));
+      /* floor matches the wrap's own 1.5rem padding edge, so the dock stays flush with the content
+         column in the narrow 1100-1127px window (a 1rem floor sat 8px left of it) */
+      left: max(calc(50vw - 564px + 1.5rem), 1.5rem); right: auto;
+      width: min(880px, calc(100vw - 3rem));
       border: 1px solid var(--border-strong); border-bottom: none;
       border-radius: 16px 16px 0 0;
     }

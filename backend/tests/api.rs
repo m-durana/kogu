@@ -1980,3 +1980,13 @@ async fn ayu_namazu_stay_distinct() {
         assert!(!hw.contains('鯰'), "鮎 search must not pull 鯰 words: {hw}");
     }
 }
+
+#[tokio::test]
+async fn typed_spelling_outranks_variant_spelling() {
+    // ボーリング (boring) is the PRIMARY spelling of one word and an alt spelling of ボウリング
+    // (bowling). The word whose canonical spelling is what the user typed must lead, however
+    // common the other word is.
+    let v = search("ボーリング").await;
+    let first = v["results"][0]["headword"].as_str().unwrap_or("");
+    assert_eq!(first, "ボーリング", "typed primary spelling first: got {first}");
+}

@@ -338,22 +338,18 @@
     // mis-rendered 合 as its spurious Unihan "traditional" 閤 (a kSimplifiedVariant artifact, not a real
     // reform). The PRC-only-simplified case (电→電) never reaches here: 电 has no Kanjidic readings.
     const sf = headChar.script_forms
-    const derivedJa =
+    const jaForm =
       sf?.branches.find((b) => b.script.includes('shinjitai'))?.form ??
       // no shinjitai reform: Japan kept the orthodox glyph, so a typed PRC simplification (桥, 电)
       // must still map to it — but ONLY when the typed glyph is simplified-ONLY. A merger target
       // that is a traditional character in its own right (干 ← 乾/幹, 周 ← 週/賙) IS what Japan
       // writes; mapping it to sf.orthodox would invent a form (干す is never written 乾す).
+      // Same-script variant splits (裡/裏, 鈎/鉤) deliberately keep the typed glyph: it is a real
+      // kanji in its own right, and "evidence" from the hits proved unreliable (the 幅/布 alt-form
+      // of の made 佈's kanji row claim 幅).
       (sf && sf.branches.some((b) => b.form === head && b.script === 'simplified' && !b.is_orthodox)
         ? sf.orthodox
         : head)
-    // evidence beats derivation: reform branches don't cover same-script variant splits (裡/裏,
-    // 鈎/鉤), so when the derived glyph appears in NO real Japanese word but the hits contain a
-    // single-char glyph that does, use the evidenced one.
-    const jaForm =
-      jaHitForms.has(derivedJa) || !jaHitForms.size
-        ? derivedJa
-        : ([...jaHitForms].find((f) => [...f].length === 1) ?? derivedJa)
     return {
       id: -(head.codePointAt(0) ?? 1) - 1,
       variety: 'ja',

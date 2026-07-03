@@ -280,6 +280,10 @@ fn meaningful_gloss_count(glosses: &[String]) -> usize {
 }
 
 const W_EXACT: f64 = 1.0;
+// the typed string being a lexeme's PRIMARY spelling outranks it being an alt spelling of another
+// word: ボーリング (boring) must lead over ボウリング (bowling), which merely lists ボーリング as a
+// variant kana form. Exceeds FREQ_BONUS so frequency can never flip it back.
+const W_EXACT_PRIMARY: f64 = 1.16;
 const W_VARIANT: f64 = 0.85;
 const W_READING: f64 = 0.72;
 const W_READING_PREFIX: f64 = 0.55; // as-you-type prefix (たべ→たべる); below an exact reading
@@ -521,10 +525,13 @@ pub fn search(
     {
         // rare=0: a rare/irregular/search-only JMdict form must not exact-match (it would shadow the
         // synthetic character page for a kokuji like 込 that's only a rare alt-form of some word).
-        let mut stmt = conn.prepare("SELECT lexeme_id FROM surface_form WHERE form = ?1 AND rare = 0")?;
-        let ids: Vec<i64> = stmt.query_map([q], |r| r.get(0))?.collect::<Result<_, _>>()?;
-        for id in ids {
-            bump(&mut cand, id, "exact", W_EXACT);
+        let mut stmt =
+            conn.prepare("SELECT lexeme_id, is_primary FROM surface_form WHERE form = ?1 AND rare = 0")?;
+        let ids: Vec<(i64, bool)> = stmt
+            .query_map([q], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? != 0)))?
+            .collect::<Result<_, _>>()?;
+        for (id, primary) in ids {
+            bump(&mut cand, id, "exact", if primary { W_EXACT_PRIMARY } else { W_EXACT });
         }
     }
     // backbone-key expansion whenever the query contains Han (cross-script / 同字)
