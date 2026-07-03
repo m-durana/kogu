@@ -155,7 +155,13 @@ async fn english_ranked_by_relevance() {
 async fn english_exact_sense_beats_frequent_fringe() {
     let v = search("ear").await;
     let hw = headwords(&v);
-    assert_eq!(hw.first().map(String::as_str), Some("耳"), "ear should lead with 耳, got {hw:?}");
+    // 耳 or 耳朵 may lead (both ARE "ear"; frequency data decides between them) — the guarded
+    // failure is a fringe entry like 稲穂 "ear of rice" riding its corpus frequency to the top.
+    let first = hw.first().map(String::as_str);
+    assert!(
+        matches!(first, Some("耳") | Some("耳朵")),
+        "ear should lead with an exact ear-word, got {hw:?}"
+    );
     let pos = |w: &str| hw.iter().position(|h| h == w);
     if let (Some(e), Some(r)) = (pos("耳"), pos("稲穂")) {
         assert!(e < r, "耳 (#{e}) must outrank 稲穂 ear-of-rice (#{r})");
@@ -1989,4 +1995,29 @@ async fn typed_spelling_outranks_variant_spelling() {
     let v = search("ボーリング").await;
     let first = v["results"][0]["headword"].as_str().unwrap_or("");
     assert_eq!(first, "ボーリング", "typed primary spelling first: got {first}");
+}
+
+// ── deep run: Japanese lookup regressions (wapuro romaji, kana exact tier, freq sanity) ────────
+#[tokio::test]
+async fn wapuro_romaji_finds_the_word() {
+    // jyuu is the wapuro spelling of じゅう; it used to fold to "jyu" and dead-end.
+    let v = search("jyuu").await;
+    let hw = headwords(&v);
+    assert!(hw.iter().any(|h| h == "十"), "jyuu should reach 十: {hw:?}");
+}
+
+#[tokio::test]
+async fn kana_query_is_an_exact_lookup() {
+    // typing びーる IS typing ビール: the loanword must lead over 麦酒 (which merely lists
+    // ビール as an alternate written form).
+    let v = search("びーる").await;
+    assert_eq!(v["results"][0]["headword"], "ビール", "びーる leads with ビール");
+}
+
+#[tokio::test]
+async fn common_word_outranks_homophone_museum_piece() {
+    // 鞄 (bag) vs 加番 (Edo-period castle guards): both read かばん; the JMdict-derived
+    // frequencies ranked the museum piece first until the wordfreq rescore.
+    let v = search("かばん").await;
+    assert_eq!(v["results"][0]["headword"], "鞄", "かばん leads with 鞄");
 }

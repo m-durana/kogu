@@ -120,6 +120,11 @@ pub fn romaji_plain(q: &str) -> String {
             }
         }
     }
+    // wapuro/kunrei digraphs -> the Hepburn the stored side uses (jyuu -> juu -> ju). BEFORE the
+    // long-vowel collapse so the vowel run survives to be folded.
+    for (a, b) in [("jy", "j"), ("zy", "j"), ("sy", "sh"), ("ty", "ch")] {
+        s = s.replace(a, b);
+    }
     for lab in ["mb", "mp", "mm"] {
         s = s.replace(lab, &format!("n{}", &lab[1..]));
     }
@@ -547,6 +552,21 @@ pub fn search(
             // loanwords (てれび→テレビ) and vice-versa, regardless of how the reading was stored.
             let hira = to_hiragana(q);
             let kata = to_katakana(q);
+            // a folded kana string that IS a written form is an EXACT lookup, not a mere reading
+            // match: typing びーる is typing ビール. Without this both ビール and 麦酒 (which lists
+            // ビール as an alt form) sat in the reading tier and the obscure word could tie-break
+            // ahead of the everyday one.
+            {
+                let mut stmt = conn.prepare(
+                    "SELECT lexeme_id, is_primary FROM surface_form WHERE form IN (?1, ?2) AND rare = 0",
+                )?;
+                let ids: Vec<(i64, bool)> = stmt
+                    .query_map([&hira, &kata], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? != 0)))?
+                    .collect::<Result<_, _>>()?;
+                for (id, primary) in ids {
+                    bump(&mut cand, id, "exact", if primary { W_EXACT_PRIMARY } else { W_EXACT });
+                }
+            }
             {
                 let mut stmt = conn.prepare(
                     "SELECT lexeme_id FROM lexeme_reading WHERE kind='kana' AND value IN (?1, ?2)",
