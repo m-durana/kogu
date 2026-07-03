@@ -1957,3 +1957,26 @@ async fn orthodox_parent_still_lists_children() {
     let forms = branch_forms(&e);
     assert!(forms.contains(&"買".to_string()) && forms.contains(&"买".to_string()), "{forms:?}");
 }
+
+#[tokio::test]
+async fn region_standard_variants_cross_match() {
+    // 汙 (TW print form) and 污 must find the same words; the graph used to skip
+    // region-standard edges, so the rarer spelling missed most of the family.
+    let a = search("汙").await;
+    let b = search("污").await;
+    let ids = |v: &Value| -> std::collections::BTreeSet<i64> {
+        v["results"].as_array().unwrap().iter()
+            .filter_map(|h| h["lexeme_id"].as_i64()).filter(|i| *i > 0).collect()
+    };
+    assert_eq!(ids(&a), ids(&b), "汙 and 污 must resolve to the same lexemes");
+}
+
+#[tokio::test]
+async fn ayu_namazu_stay_distinct() {
+    // the ONE region-standard pair kept apart: 鮎 (ayu) must not surface 鯰 (namazu) words.
+    let v = search("鮎").await;
+    for h in v["results"].as_array().unwrap() {
+        let hw = h["headword"].as_str().unwrap_or("");
+        assert!(!hw.contains('鯰'), "鮎 search must not pull 鯰 words: {hw}");
+    }
+}

@@ -1,8 +1,9 @@
 //! In-memory character/variant graph (DESIGN.md §7: "hold the character/variant graph in memory
 //! as adjacency maps at startup").
 //!
-//! Identity-class edges (simplification / shinjitai / z-variant) are unioned into equivalence
-//! classes via union-find. A word's **backbone key** is the sequence of its characters' class ids
+//! Identity-class edges (simplification / shinjitai / z-variant / region-standard) are unioned
+//! into equivalence classes via union-find. A word's **backbone key** is the sequence of its
+//! characters' class ids
 //! - so 学校 (simp/ja) and 學校 (trad) share one key, and looking words up by key gives both the
 //! cross-script match and the 同字 (orthographic) link in a single index hit.
 //!
@@ -68,11 +69,17 @@ impl VariantGraph {
 
         let mut stmt = conn.prepare(
             "SELECT child_cp, parent_cp FROM glyph_edge \
-             WHERE type IN ('simplification','shinjitai','z-variant')",
+             WHERE type IN ('simplification','shinjitai','z-variant','region-standard')",
         )?;
         let rows = stmt.query_map([], |r| Ok((r.get::<_, i64>(0)? as u32, r.get::<_, i64>(1)? as u32)))?;
         for row in rows {
             let (c, p) = row?;
+            // region-standard pairs are same-character print variants (汙/污, 説/說) EXCEPT 鯰/鮎,
+            // which Chinese treats as one catfish but Japanese splits into namazu vs ayu — unioning
+            // them would list sweetfish words when someone looks up the catfish kanji.
+            if (c, p) == (0x9BF0, 0x9B8E) || (c, p) == (0x9B8E, 0x9BF0) {
+                continue;
+            }
             let ci = intern(&mut uf, &mut idx, c);
             let pi = intern(&mut uf, &mut idx, p);
             uf.union(ci, pi);

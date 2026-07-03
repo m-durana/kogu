@@ -1306,17 +1306,19 @@ fn build_script_forms(
     } else {
         parents.iter().map(|(pcp, _)| pcp.to_string()).collect()
     };
+    // the viewed char's own edge is exempt from the unihan-variant dedup: on 𧿛's page the band
+    // must include 𧿛 itself (highlighted as current), even though 蹤's mainstream child is 踪
     let mut s = conn.prepare(&format!(
         "SELECT c.char, c.is_orthodox, e.type, e.reform_id FROM glyph_edge e \
          JOIN character c ON c.cp = e.child_cp \
          WHERE e.parent_cp IN ({parent_list}) AND e.type IN {IDENTITY_TYPES} \
-         AND NOT (e.type='simplification' AND e.reform_id='unihan-variant' \
+         AND NOT (e.type='simplification' AND e.reform_id='unihan-variant' AND e.child_cp != ?1 \
                   AND EXISTS(SELECT 1 FROM glyph_edge o WHERE o.parent_cp=e.parent_cp \
                              AND o.type='simplification' AND o.reform_id='opencc'))",
         parent_list = family.join(",")
     ))?;
     let rows: Vec<(String, bool, String, Option<String>)> = s
-        .query_map([], |r| {
+        .query_map([cp], |r| {
             Ok((r.get(0)?, r.get::<_, i64>(1)? != 0, r.get(2)?, r.get(3)?))
         })?
         .collect::<Result<_, _>>()?;
