@@ -76,7 +76,11 @@ pub async fn clip_handler(
             }
             match resp.bytes().await {
                 Ok(b) => {
-                    let bytes = b.to_vec();
+                    // normalize to the same EBU R128 target as the ja synth (tts/synth_service.py):
+                    // the raw sources differ wildly (zh clips ~-35 dBFS RMS vs synth ~-19), which
+                    // made tapping speakers across languages jump in volume. ffmpeg failure falls
+                    // back to the original clip: worse loudness beats no audio.
+                    let bytes = normalize_clip(b.to_vec()).await;
                     let mut c = st.clip_cache.lock().unwrap();
                     if c.len() < 6000 {
                         c.insert(key, bytes.clone());
@@ -88,6 +92,39 @@ pub async fn clip_handler(
         }
         Ok(_) => (StatusCode::NOT_FOUND, "no clip").into_response(),
         Err(_) => (StatusCode::BAD_GATEWAY, "clip upstream failed").into_response(),
+    }
+}
+
+/// Loudness-normalize an mp3 clip via ffmpeg (loudnorm, same target as the ja TTS sidecar).
+/// Any failure returns the ORIGINAL bytes.
+async fn normalize_clip(bytes: Vec<u8>) -> Vec<u8> {
+    use tokio::io::AsyncWriteExt;
+    let spawned = tokio::process::Command::new("ffmpeg")
+        .args([
+            "-loglevel", "error", "-f", "mp3", "-i", "pipe:0",
+            "-af", "loudnorm=I=-23:TP=-2:LRA=11",
+            "-codec:a", "libmp3lame", "-b:a", "64k", "-ac", "1", "-f", "mp3", "pipe:1",
+        ])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+    let Ok(mut child) = spawned else { return bytes };
+    let Some(mut stdin) = child.stdin.take() else { return bytes };
+    let input = bytes.clone();
+    let writer = tokio::spawn(async move {
+        let _ = stdin.write_all(&input).await;
+        // drop closes the pipe so ffmpeg sees EOF
+    });
+    match child.wait_with_output().await {
+        Ok(out) if out.status.success() && !out.stdout.is_empty() => {
+            let _ = writer.await;
+            out.stdout
+        }
+        _ => {
+            let _ = writer.await;
+            bytes
+        }
     }
 }
 

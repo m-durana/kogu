@@ -26,10 +26,16 @@ async function fetchRetry(input: URL | string, init: RequestInit, label: string)
     try {
       const r = await fetch(input, { ...init, signal: withDeadline(callerSignal as AbortSignal | undefined) })
       if (r.ok) return r
-      const err = new Error(`${label} failed: ${r.status}`)
-      if (!TRANSIENT.has(r.status)) throw err // fail fast on 4xx etc.
+      const err = new Error(`${label} failed: ${r.status}`) as Error & { fatal?: boolean }
+      // fail fast on 4xx etc. — TAGGED, because this throw lands in the catch below, which must
+      // not swallow it into the retry loop (it used to: every 400/404/500 got 3 attempts)
+      if (!TRANSIENT.has(r.status)) {
+        err.fatal = true
+        throw err
+      }
       lastErr = err
     } catch (e) {
+      if ((e as { fatal?: boolean }).fatal) throw e
       // the CALLER's abort (superseded search) rethrows; a deadline abort just tries again
       if ((e as Error).name === 'AbortError' && callerSignal?.aborted) throw e
       if ((e as Error).name === 'TimeoutError' && callerSignal?.aborted) throw e

@@ -21,6 +21,7 @@
   import { primaryForm, varietyLabel, varietyName, headwordGlyphSize, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, isAlwaysBound, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle, scriptShort, scSwitchTarget, scriptChangeNote, scriptChangeFromForms, jyutpingToYale, mcSoundLink, regionTags, expandSenses, formatReading, pitchPattern, moraSplit } from './display'
   import { speakReading, canSpeak } from './speech'
   import { settings } from './settings.svelte'
+  import { dialogFocus } from './modal'
   import ScriptForms from './ScriptForms.svelte'
   import IdcBox from './IdcBox.svelte'
   import Glyph from './Glyph.svelte'
@@ -1312,7 +1313,7 @@
          it opens from any tab, not only the Origin section. -->
     <!-- svelte-ignore a11y_click_events_have_key_events -- backdrop dismiss; Escape (svelte:window) is the keyboard path -->
     <div class="termpop" role="presentation" onclick={() => (openTerm = null)}>
-      <div class="termcard" role="dialog" aria-modal="true" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+      <div class="termcard" role="dialog" aria-modal="true" tabindex="-1" use:dialogFocus onclick={(e) => e.stopPropagation()}>
         <p>{openTerm}</p>
         <button class="mclose" onclick={() => (openTerm = null)}>close</button>
       </div>
@@ -1324,7 +1325,7 @@
     {@const often = boundKind(boundOpen) === 'often'}
     <!-- svelte-ignore a11y_click_events_have_key_events -- backdrop dismiss; Escape (svelte:window) is the keyboard path -->
     <div class="mbg" role="presentation" onclick={closeBound}>
-      <div class="modal" role="dialog" aria-modal="true" aria-label="bound form" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+      <div class="modal" role="dialog" aria-modal="true" aria-label="bound form" tabindex="-1" use:dialogFocus onclick={(e) => e.stopPropagation()}>
         <div class="mh"><span class="mglyph">{boundOpen.form}</span><span class="mtag">{often ? 'often in compounds' : 'bound form'}</span></div>
         <p class="mexp">{often ? 'Used as a word on its own in some senses, but often appears only inside compounds.' : 'Not used as a word on its own; it carries meaning only inside compounds.'}</p>
         {#if bc.length}

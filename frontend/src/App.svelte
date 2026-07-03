@@ -1,5 +1,6 @@
 <script lang="ts">
   import { search, entry as fetchEntry, segment as fetchSegment, suggest as fetchSuggest, type SegmentPart, type Suggestion } from './lib/api'
+  import { dialogFocus } from './lib/modal'
   import type { Entry, Hit, CharInfo } from './lib/types'
   import { primaryForm, varietyLabel, regionsOf, shortGloss, cleanGloss, langTag, hanFont, placeholderAt, formatReading } from './lib/display'
   import { typoCandidates } from './lib/typo'
@@ -527,7 +528,11 @@
     const m = location.hash.match(/^#\/entry\/(-?\d+)$/)
     const term = new URLSearchParams(location.search).get('q')
     if (m) openEntry(Number(m[1]), 'replace')
-    else if (location.hash === '#/saved') openSaved()
+    else if (location.hash.startsWith('#/entry/')) {
+      // malformed deep link (#/entry/abc): say so instead of silently showing the landing page
+      err = 'could not load entry'
+      history.replaceState({ view: 'results', q: '' }, '', location.pathname)
+    } else if (location.hash === '#/saved') openSaved()
     else if (location.hash === '#/history') openHistory()
     else if (term) doSearch(term, 'replace')
     else history.replaceState({ view: 'results', q: '' }, '', location.pathname)
@@ -923,7 +928,7 @@
     <!-- guided add-to-home-screen (iOS has no install API; Android uses the native prompt instead) -->
     <!-- svelte-ignore a11y_click_events_have_key_events -- backdrop dismiss; Escape (svelte:window) is the keyboard path -->
     <div class="instbg" role="presentation" onclick={() => (showInstallHelp = false)}>
-      <div class="instcard" role="dialog" aria-modal="true" aria-label="install instructions" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+      <div class="instcard" role="dialog" aria-modal="true" aria-label="install instructions" tabindex="-1" use:dialogFocus onclick={(e) => e.stopPropagation()}>
         <p class="insth">Add Kogu to your Home Screen</p>
         <ol class="inststeps">
           <!-- the li is a flex row: keep the whole sentence ONE flex item (bare text nodes become
@@ -944,7 +949,7 @@
   {#if showSettings}
     <!-- svelte-ignore a11y_click_events_have_key_events -- backdrop dismiss; Escape (svelte:window) is the keyboard path -->
     <div class="setbg" role="presentation" onclick={() => (showSettings = false)}>
-      <div class="setcard" role="dialog" aria-modal="true" aria-label="settings" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+      <div class="setcard" role="dialog" aria-modal="true" aria-label="settings" tabindex="-1" use:dialogFocus onclick={(e) => e.stopPropagation()}>
         <div class="sethrow">
           <h2 class="seth">Settings</h2>
           <button class="setx" onclick={() => (showSettings = false)} aria-label="close"><X size={20} /></button>
@@ -1080,7 +1085,9 @@
      padding/border: with box-sizing:border-box a width:0 button still can't shrink below its 24px
      horizontal padding, which left the field ~48px short of full width (item: search bar only went
      halfway). Collapsing padding+border too lets it reach 0 and the field fills the row. */
-  .searchrow.focused .rowbtn { width: 0; padding: 0; border: 0; margin-left: 0; opacity: 0; pointer-events: none; }
+  /* visibility (not just opacity) also removes the collapsed buttons from the Tab order:
+     focus used to land on a fully invisible 0-width button two Tabs after the input */
+  .searchrow.focused .rowbtn { width: 0; padding: 0; border: 0; margin-left: 0; opacity: 0; pointer-events: none; visibility: hidden; }
   @media (prefers-reduced-motion: reduce) { .rowbtn { transition: none; } }
   /* draw pad: a FLOATING panel just under the search row. position:absolute with no offset keeps it at
      its natural place in flow but lifts it OUT of flow, so the results list / about text render full

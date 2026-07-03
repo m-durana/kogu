@@ -28,12 +28,26 @@ import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
+import threading
+
 import numpy as np
 import pyopenjtalk
 
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("KOGU_TTS_PORT", "4120"))
 CACHE_DIR = os.environ.get("KOGU_TTS_CACHE", "/mnt/HC_Volume_102319212/kogu-tts/cache")
+# Optional .htsvoice override (KOGU_TTS_VOICE=/path/to/voice.htsvoice). Empty = pyopenjtalk's
+# bundled mei_normal. The cache key carries the voice tag, so switching voices never serves
+# stale audio from the other voice.
+VOICE = os.environ.get("KOGU_TTS_VOICE", "").strip()
+VOICE_TAG = os.path.splitext(os.path.basename(VOICE))[0] if VOICE else "mei"
+# One shared engine guarded by a lock: HTS synthesis isn't thread-safe, and loading the voice
+# per request would cost ~50ms each time.
+_ENGINE = None
+_ENGINE_LOCK = threading.Lock()
+# EBU R128 target shared with the zh/yue clip proxy (backend/src/tts.rs): every pronunciation
+# source lands at the same loudness, so tapping 中->日 speakers doesn't jump 15 dB.
+LOUDNORM = "loudnorm=I=-23:TP=-2:LRA=11"
 CACHE_MAX_FILES = 45000  # ~10-15 KB each -> ~500 MB ceiling; oldest evicted past this. Sized to hold
 # the prerendered common-word warm set (tts/prerender.py) plus the on-demand long tail without evicting
 # the warm set. Keep comfortably under the data volume's free space.
@@ -44,7 +58,7 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 
 
 def _cache_path(kana: str, accent: str | None) -> str:
-    key = hashlib.sha1(f"{kana}|{accent or ''}".encode("utf-8")).hexdigest()
+    key = hashlib.sha1(f"{kana}|{accent or ''}|{VOICE_TAG}|ln".encode("utf-8")).hexdigest()
     return os.path.join(CACHE_DIR, key + ".mp3")
 
 
@@ -81,7 +95,17 @@ def _synth_wav(kana: str, accent: str | None) -> bytes:
                     e["acc"] = 0
                     e["chain_flag"] = 1
         labels = pyopenjtalk.make_label(njd)
-        x, sr = pyopenjtalk.synthesize(labels)
+        if VOICE:
+            global _ENGINE
+            from pyopenjtalk.htsengine import HTSEngine
+            with _ENGINE_LOCK:
+                if _ENGINE is None:
+                    _ENGINE = HTSEngine(VOICE.encode())
+                _ENGINE.synthesize_from_strings(labels)
+                x = np.asarray(_ENGINE.get_generated_speech(), dtype=float)
+                sr = _ENGINE.get_sampling_frequency()
+        else:
+            x, sr = pyopenjtalk.synthesize(labels)
     pcm = np.clip(x, -32768, 32767).astype("<i2")
     buf = io.BytesIO()
     with wave.open(buf, "wb") as w:
@@ -94,7 +118,7 @@ def _synth_wav(kana: str, accent: str | None) -> bytes:
 
 def _wav_to_mp3(wav: bytes) -> bytes:
     p = subprocess.run(
-        ["ffmpeg", "-loglevel", "error", "-f", "wav", "-i", "pipe:0",
+        ["ffmpeg", "-loglevel", "error", "-f", "wav", "-i", "pipe:0", "-af", LOUDNORM,
          "-codec:a", "libmp3lame", "-b:a", MP3_BITRATE, "-ac", "1", "-f", "mp3", "pipe:1"],
         input=wav, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
     )
