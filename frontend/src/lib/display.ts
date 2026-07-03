@@ -253,6 +253,10 @@ export function glyphWikiUrl(ch: string): string | null {
 // there is no genuine TC/SC pair (identical forms, kokuji, shinjitai-only, z-variants).
 export function scSwitchTarget(sf: ScriptForms | null, head: string): { to: string; label: string } | null {
   if (!sf || sf.is_kokuji) return null
+  // a merger target (干, 周, 面) is its own traditional form — jumping to one of the characters
+  // that merged INTO it (乾, 賙, 麪) would claim a false equivalence, so no switch button
+  const cur = sf.branches.find((b) => b.form === head)
+  if (cur?.is_orthodox && cur.script.split('+').includes('simplified')) return null
   const trad = sf.branches.find((b) => b.script.split('+').includes('traditional'))?.form ?? sf.orthodox
   const simp = sf.branches.find((b) => b.script.split('+').includes('simplified'))?.form
   if (!simp || !trad || trad === simp) return null
@@ -303,15 +307,16 @@ const EDGE_KIND: Record<string, string> = {
 // A full-sentence explanation of a script change for the structure section (item 14): the two forms
 // carry the same meaning, and the reason for the divergence (reform + year). A glyph can be BOTH a
 // Japanese shinjitai AND a PRC simplification of the same parent (萬 → 万) — say it's both, so it never
-// reads as if Chinese took the form from Japanese. Returns null when there's no orthodox parent.
-export function scriptChangeNote(head: string, variants: VariantEdge[]): string | null {
+// reads as if Chinese took the form from Japanese. A reform can also merge SEVERAL characters into one
+// glyph (沖+衝 → 冲, 乾+幹+榦 → 干); and the merged glyph can be a traditional character in its own
+// right (selfOrthodox: 干, 后, 面) — the old single-parent sentence wrongly presented those as nothing
+// but derived forms. Returns null when there's no orthodox parent.
+export function scriptChangeNote(head: string, variants: VariantEdge[], selfOrthodox = false): string | null {
   if (!variants.length) return null
-  const parent = variants[0].parent
-  const same = variants.filter((v) => v.parent === parent)
-  const kinds = [...new Set(same.map((v) => EDGE_KIND[v.edge_type] ?? 'variant form'))]
+  const parents = [...new Set(variants.map((v) => v.parent))]
   const reforms = [
     ...new Set(
-      same
+      variants
         .map((v) => {
           const l = reformLabel(v.reform)
           return l ? `${l}${v.reform_year ? ` (${v.reform_year})` : ''}` : null
@@ -319,6 +324,18 @@ export function scriptChangeNote(head: string, variants: VariantEdge[]): string 
         .filter((x): x is string => !!x),
     ),
   ]
+  const listOf = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}` : xs[0])
+  if (selfOrthodox) {
+    const reason = reforms.length ? ` under the ${reforms.join(' and the ')}` : ''
+    return `${head} is a traditional character in its own right; ${listOf(parents)} ${parents.length > 1 ? 'are' : 'is'} also written ${head}${reason}.`
+  }
+  if (parents.length > 1) {
+    const reason = reforms.length ? ` in the ${reforms.join(' and the ')}` : ''
+    return `${head} stands for ${listOf(parents)}, which merged into one glyph${reason}; context decides which is meant.`
+  }
+  const parent = parents[0]
+  const same = variants.filter((v) => v.parent === parent)
+  const kinds = [...new Set(same.map((v) => EDGE_KIND[v.edge_type] ?? 'variant form'))]
   const which = kinds.length > 1 ? `both the ${kinds.join(' and the ')}` : `the ${kinds[0]}`
   const reason = reforms.length ? `, from the ${reforms.join(' and the ')}` : ''
   return `${parent} and ${head} carry the same meaning; ${head} is ${which} of ${parent}${reason}.`
@@ -334,7 +351,9 @@ const BRANCH_KIND: Record<string, string> = {
 // variant-edges are empty; its simplified/shinjitai children live on the strip instead).
 export function scriptChangeFromForms(sf: ScriptForms | null): string | null {
   if (!sf || sf.is_kokuji) return null
-  const others = sf.branches.filter((b: FormBranch) => !b.is_orthodox)
+  // non-traditional branches, NOT !is_orthodox: a merger target like 干 is itself orthodox but still
+  // needs explaining as the simplified writing on its parents' pages (乾 → 干)
+  const others = sf.branches.filter((b: FormBranch) => !b.script.split('+').includes('traditional'))
   if (!others.length) return null
   const clauses = others.map((b) => {
     // a glyph can be BOTH a shinjitai AND a PRC simplification of the same parent (萬 → 万). Say it's

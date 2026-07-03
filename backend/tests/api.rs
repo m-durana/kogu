@@ -1412,7 +1412,10 @@ async fn merge_glyph_origin_has_note_and_simplified_script() {
         .iter()
         .find(|o| o["variety"] == "zh")
         .expect("a zh origin for 丑");
-    assert_eq!(acc["script"], "simplified", "丑 doubles as simplified 醜");
+    // 丑 is the traditional ox-branch character AND the simplified of 醜: it belongs to both
+    // scripts, so it carries NO script tag (the old "SC" tag was the misleading half of the story);
+    // the merge note alone explains the 醜 merger.
+    assert!(acc["script"].is_null(), "丑 belongs to both scripts, no tag: {}", acc["script"]);
     let note = acc["note"].as_str().expect("a merge note");
     assert!(note.contains("醜"), "note names merged-in 醜, got {note:?}");
 }
@@ -1888,4 +1891,69 @@ async fn yue_lexeme_hit_has_no_redundant_jyut() {
         .find(|r| r["variety"] == "yue")
         .expect("yue 唔該 present");
     assert!(hit.get("jyut").is_none() || hit["jyut"].is_null(), "yue hit must not carry jyut: {hit}");
+}
+
+// ── deep run: merged simplifications (one glyph absorbed several characters) ──────────────────
+// helper: branch forms of a char entry's script_forms
+fn branch_forms(e: &Value) -> Vec<String> {
+    e["characters"][0]["script_forms"]["branches"]
+        .as_array()
+        .map(|a| a.iter().map(|b| b["form"].as_str().unwrap_or("").to_string()).collect())
+        .unwrap_or_default()
+}
+
+#[tokio::test]
+async fn merged_simplification_lists_all_parents() {
+    // 冲 stands for BOTH 沖 and 衝; the old LIMIT-1 anchor showed only one of them.
+    let (_, e) = get(&format!("/entry/{}", -(0x51B2_i64))).await; // 冲
+    let forms = branch_forms(&e);
+    for f in ["沖", "衝", "冲"] {
+        assert!(forms.contains(&f.to_string()), "冲 family must contain {f}: {forms:?}");
+    }
+}
+
+#[tokio::test]
+async fn three_way_merger_gan() {
+    // 干 absorbed 乾, 幹 and 榦 — all three must be offered.
+    let (_, e) = get(&format!("/entry/{}", -(0x5E72_i64))).await; // 干
+    let forms = branch_forms(&e);
+    for f in ["乾", "幹", "干"] {
+        assert!(forms.contains(&f.to_string()), "干 family must contain {f}: {forms:?}");
+    }
+}
+
+#[tokio::test]
+async fn merger_target_keeps_own_identity() {
+    // 周 is an ordinary traditional character that 週/賙 merged INTO. Its page used to claim
+    // "traditional 賙 → simplified 周". It must stay orthodox and list the merger sources.
+    let (_, e) = get(&format!("/entry/{}", -(0x5468_i64))).await; // 周
+    assert_eq!(e["characters"][0]["is_orthodox"], true, "周 is a traditional char in its own right");
+    let forms = branch_forms(&e);
+    for f in ["週", "賙", "周"] {
+        assert!(forms.contains(&f.to_string()), "周 family must contain {f}: {forms:?}");
+    }
+    let zhou = e["characters"][0]["script_forms"]["branches"]
+        .as_array().unwrap().iter().find(|b| b["form"] == "周").unwrap();
+    assert_eq!(zhou["is_orthodox"], true, "the 周 branch itself stays orthodox: {zhou}");
+}
+
+#[tokio::test]
+async fn plain_pair_band_unchanged() {
+    // regression guard: an ordinary one-parent pair keeps its simple band, from both skins.
+    for cp in [0x6A4B_i64, 0x6865_i64] {
+        // 橋 / 桥
+        let (_, e) = get(&format!("/entry/{}", -cp)).await;
+        let sf = &e["characters"][0]["script_forms"];
+        assert_eq!(sf["orthodox"], "橋", "both skins anchor on 橋");
+        let forms = branch_forms(&e);
+        assert!(forms.contains(&"橋".to_string()) && forms.contains(&"桥".to_string()), "{forms:?}");
+    }
+}
+
+#[tokio::test]
+async fn orthodox_parent_still_lists_children() {
+    // 買's own page keeps its simplified child 买 on the strip.
+    let (_, e) = get(&format!("/entry/{}", -(0x8CB7_i64))).await; // 買
+    let forms = branch_forms(&e);
+    assert!(forms.contains(&"買".to_string()) && forms.contains(&"买".to_string()), "{forms:?}");
 }

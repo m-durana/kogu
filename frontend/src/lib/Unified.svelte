@@ -334,8 +334,10 @@
     const jaForm =
       sf?.branches.find((b) => b.script.includes('shinjitai'))?.form ??
       // no shinjitai reform: Japan kept the orthodox glyph, so a typed PRC simplification (桥, 电)
-      // must still map to it (headChar IS the orthodox char here, so its readings gated us in)
-      (sf && sf.branches.some((b) => b.form === head && b.script === 'simplified')
+      // must still map to it — but ONLY when the typed glyph is simplified-ONLY. A merger target
+      // that is a traditional character in its own right (干 ← 乾/幹, 周 ← 週/賙) IS what Japan
+      // writes; mapping it to sf.orthodox would invent a form (干す is never written 乾す).
+      (sf && sf.branches.some((b) => b.form === head && b.script === 'simplified' && !b.is_orthodox)
         ? sf.orthodox
         : head)
     return {
@@ -655,7 +657,7 @@
   // "PRC simplification" caption. Built from the head character's own variant edges.
   const scriptNote = $derived(
     headChar
-      ? scriptChangeNote(head, headChar.variants ?? []) ?? scriptChangeFromForms(headChar.script_forms)
+      ? scriptChangeNote(head, headChar.variants ?? [], headChar.is_orthodox) ?? scriptChangeFromForms(headChar.script_forms)
       : null,
   )
   // item 161: the traditional/simplified counterpart of the viewed glyph, if one exists — drives the

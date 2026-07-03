@@ -18,6 +18,9 @@
   } = $props()
 
   const ordered = $derived(forms ? orderBranches(forms.branches) : [])
+  // the reform arrow sits between the traditional form(s) and what they became — with merged
+  // simplifications there can be SEVERAL traditional parents before it (乾 幹 榦 → 干)
+  const arrowAt = $derived(ordered.findIndex((b) => !b.script.split('+').includes('traditional')))
 </script>
 
 {#if forms}
@@ -29,7 +32,7 @@
   {:else}
     <div class="sf" class:compact>
       {#each ordered as b, i}
-        {#if i === 1}<span class="arrow" aria-hidden="true">→</span>{/if}
+        {#if i === arrowAt && i > 0}<span class="arrow" aria-hidden="true">→</span>{/if}
         <span class="branch">
           <!-- the reform behind each change is explained as a full sentence below the strip (item 14),
                so no bare "PRC simplification" caption hangs under the glyph here. -->

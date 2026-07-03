@@ -1276,35 +1276,47 @@ fn build_script_forms(
     ch: char,
     is_orthodox: bool,
 ) -> rusqlite::Result<Option<ScriptForms>> {
-    use rusqlite::OptionalExtension;
-    // resolve the orthodox anchor of this character's family
-    let (anchor_cp, anchor_char): (i64, String) = if is_orthodox {
-        (cp, ch.to_string())
-    } else {
-        conn.query_row(
-            &format!(
-                "SELECT p.cp, p.char FROM glyph_edge e JOIN character p ON p.cp = e.parent_cp \
-                 WHERE e.child_cp = ?1 AND e.type IN {IDENTITY_TYPES} AND p.is_orthodox = 1 LIMIT 1"
-            ),
-            [cp],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        )
-        .optional()?
-        .unwrap_or((cp, ch.to_string()))
+    // ALL orthodox parents. Plural matters twice over: a simplified char can merge several
+    // traditional ones (冲 ← 沖+衝, 干 ← 乾+幹+榦), and a char that is itself orthodox can still
+    // be a merger target (週/賙 → 周). The old LIMIT-1 pick hid every parent but an arbitrary one.
+    // Order: simplification edges first, PRC reforms first, then codepoint — so `orthodox` (the
+    // primary anchor, also what the ja-form fallback on the frontend uses) is deterministic.
+    let mut ps = conn.prepare(&format!(
+        "SELECT p.cp, p.char, \
+                MIN(e.type != 'simplification') AS not_simp, \
+                MIN(CASE WHEN e.reform_id IN ('opencc','prc-1956','prc-1964') THEN 0 ELSE 1 END) AS not_prc \
+         FROM glyph_edge e JOIN character p ON p.cp = e.parent_cp \
+         WHERE e.child_cp = ?1 AND e.type IN {IDENTITY_TYPES} AND p.is_orthodox = 1 \
+         GROUP BY p.cp, p.char ORDER BY not_simp, not_prc, p.cp"
+    ))?;
+    let parents: Vec<(i64, String)> = ps
+        .query_map([cp], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<Result<_, _>>()?;
+
+    let (anchor_cp, anchor_char): (i64, String) = match parents.first() {
+        Some((pcp, pch)) => (*pcp, pch.clone()),
+        None => (cp, ch.to_string()),
     };
 
-    // children of the anchor, merged per glyph (一字 can be BOTH a PRC-simp and a JP-shinjitai of the
+    // children of the whole family (every parent's children when this char is derived, else this
+    // char's own children), merged per glyph (一字 can be BOTH a PRC-simp and a JP-shinjitai of the
     // same orthodox char, e.g. 学←學: show one 学 branch carrying both reform labels)
+    let family: Vec<String> = if parents.is_empty() {
+        vec![cp.to_string()]
+    } else {
+        parents.iter().map(|(pcp, _)| pcp.to_string()).collect()
+    };
     let mut s = conn.prepare(&format!(
         "SELECT c.char, c.is_orthodox, e.type, e.reform_id FROM glyph_edge e \
          JOIN character c ON c.cp = e.child_cp \
-         WHERE e.parent_cp = ?1 AND e.type IN {IDENTITY_TYPES} \
+         WHERE e.parent_cp IN ({parent_list}) AND e.type IN {IDENTITY_TYPES} \
          AND NOT (e.type='simplification' AND e.reform_id='unihan-variant' \
                   AND EXISTS(SELECT 1 FROM glyph_edge o WHERE o.parent_cp=e.parent_cp \
-                             AND o.type='simplification' AND o.reform_id='opencc'))"
+                             AND o.type='simplification' AND o.reform_id='opencc'))",
+        parent_list = family.join(",")
     ))?;
     let rows: Vec<(String, bool, String, Option<String>)> = s
-        .query_map([anchor_cp], |r| {
+        .query_map([], |r| {
             Ok((r.get(0)?, r.get::<_, i64>(1)? != 0, r.get(2)?, r.get(3)?))
         })?
         .collect::<Result<_, _>>()?;
@@ -1328,14 +1340,25 @@ fn build_script_forms(
         }
     }
 
-    let mut branches = vec![FormBranch {
-        form: anchor_char.clone(),
-        script: "traditional".into(),
-        reform_id: None,
-        reform_label: None,
-        is_orthodox: true,
-    }];
+    let trad_forms: Vec<String> = if parents.is_empty() {
+        vec![anchor_char.clone()]
+    } else {
+        parents.iter().map(|(_, pch)| pch.clone()).collect()
+    };
+    let mut branches: Vec<FormBranch> = trad_forms
+        .iter()
+        .map(|form| FormBranch {
+            form: form.clone(),
+            script: "traditional".into(),
+            reform_id: None,
+            reform_label: None,
+            is_orthodox: true,
+        })
+        .collect();
     for form in order {
+        if trad_forms.contains(&form) {
+            continue; // a parent that is also recorded as another parent's child (graph noise)
+        }
         let (scripts, labels, child_orth) = merged.remove(&form).unwrap();
         branches.push(FormBranch {
             form,

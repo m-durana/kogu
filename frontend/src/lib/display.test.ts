@@ -1196,3 +1196,39 @@ describe('etymologyTokens - deep comparative-cognate flagging', () => {
     expect(etymologyTokens('Cognate with X.').every((s) => !s.deep)).toBe(true)
   })
 })
+
+// deep run: merged simplifications (several characters → one glyph)
+describe('merged-simplification presentation', () => {
+  const edge = (parent: string) => ({ parent, edge_type: 'simplification', reform: 'opencc', reform_year: null }) as any
+  it('scriptChangeNote names ALL merged parents, not just the first', () => {
+    const note = scriptChangeNote('冲', [edge('沖'), edge('衝')])!
+    expect(note).toContain('沖')
+    expect(note).toContain('衝')
+    expect(note).toContain('merged')
+  })
+  it('a merger target that is its own traditional character says so', () => {
+    const note = scriptChangeNote('干', [edge('乾'), edge('幹'), edge('榦')], true)!
+    expect(note).toContain('traditional character in its own right')
+    expect(note).toContain('乾')
+    expect(note).toContain('榦')
+  })
+  it('single-parent sentence is unchanged', () => {
+    const note = scriptChangeNote('桥', [edge('橋')])!
+    expect(note).toContain('橋 and 桥 carry the same meaning')
+  })
+  const b = (form: string, script: string, orth = false) =>
+    ({ form, script, reform_id: null, reform_label: null, is_orthodox: orth }) as any
+  it('scSwitchTarget offers no jump on a merger-target page (周 is not "the SC of 賙")', () => {
+    const sf = { orthodox: '賙', is_kokuji: false, branches: [b('賙', 'traditional', true), b('週', 'traditional', true), b('周', 'simplified', true)] }
+    expect(scSwitchTarget(sf as any, '周')).toBeNull()
+  })
+  it('scSwitchTarget still offers the jump for a plain pair', () => {
+    const sf = { orthodox: '橋', is_kokuji: false, branches: [b('橋', 'traditional', true), b('桥', 'simplified')] }
+    expect(scSwitchTarget(sf as any, '桥')).toEqual({ to: '橋', label: 'traditional' })
+    expect(scSwitchTarget(sf as any, '橋')).toEqual({ to: '桥', label: 'simplified' })
+  })
+  it('scriptChangeFromForms explains an orthodox merger child on the parent page', () => {
+    const sf = { orthodox: '乾', is_kokuji: false, branches: [b('乾', 'traditional', true), b('干', 'simplified', true)] }
+    expect(scriptChangeFromForms(sf as any)).toContain('干 is the simplified Chinese form')
+  })
+})
