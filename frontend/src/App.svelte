@@ -19,6 +19,10 @@
   let entry = $state<Entry | null>(null)
   let enrichEntry = $state<Entry | null>(null)
   let enriching = $state(false)
+  // the /entry enrich failed after the search succeeded: the card renders from hits alone (no
+  // structure/origin/words tabs) — say so and offer a retry instead of silently showing less
+  let enrichFailed = $state(false)
+  let enrichFailedId = 0
   let unified = $state(false)
   let view = $state<'results' | 'entry' | 'saved' | 'history'>('results')
   // saved (bookmarks) + history lists, loaded from localStorage when their view opens
@@ -223,6 +227,7 @@
     entry = null
     enrichEntry = null
     enriching = false
+    enrichFailed = false
     unified = false
     breakdown = []
     breaking = false
@@ -273,7 +278,12 @@
           .then((e) => {
             if (q.trim() === term && unified) enrichEntry = e
           })
-          .catch(() => {})
+          .catch((e) => {
+            if ((e as Error).name !== 'AbortError' && q.trim() === term && unified) {
+              enrichFailed = true
+              enrichFailedId = topId
+            }
+          })
           .finally(() => {
             if (q.trim() === term) enriching = false
           })
@@ -378,6 +388,26 @@
   }
   function onBlur() {
     setTimeout(() => (focused = false), 150)
+  }
+
+  // re-fetch a failed enrich for the word still on screen (its own controller: the search's
+  // controller may already be aborted)
+  function retryEnrich() {
+    if (!enrichFailedId) return
+    const id = enrichFailedId
+    const term = q.trim()
+    enrichFailed = false
+    enriching = true
+    fetchEntry(id, new AbortController().signal)
+      .then((e) => {
+        if (q.trim() === term && unified) enrichEntry = e
+      })
+      .catch(() => {
+        if (q.trim() === term && unified) enrichFailed = true
+      })
+      .finally(() => {
+        if (q.trim() === term) enriching = false
+      })
   }
 
   async function openEntry(id: number, mode: NavMode = 'push', anchor = '') {
@@ -671,7 +701,12 @@
     </div>
   {/if}
 
-  {#if err}<div class="err">{err}</div>{/if}
+  {#if err}
+    <div class="err">
+      {err}
+      {#if view === 'results' && q.trim()}<button class="retry" onclick={() => doSearch(q, 'replace')}>retry</button>{/if}
+    </div>
+  {/if}
 
   {#if canSaveShare}
     <!-- per-page actions: icon-only save + share, on the right edge level with the big character -->
@@ -741,8 +776,15 @@
          arrives in the background. The user gets the main page at once instead of a blank skeleton. -->
     <Unified hits={results} entry={null} enriching={true} anchor={q} onsearch={doSearch} />
   {:else if unified && results.length}
-    <!-- enrich finished but no entry came back (fetch failed): still show the card from search hits -->
+    <!-- enrich finished but no entry came back (fetch failed): still show the card from search hits,
+         and SAY the rest is missing: a silently reduced page reads as "that's all there is" -->
     <Unified hits={results} entry={null} anchor={q} onsearch={doSearch} />
+    {#if enrichFailed}
+      <div class="err">
+        couldn't load the full entry
+        <button class="retry" onclick={retryEnrich}>retry</button>
+      </div>
+    {/if}
   {:else if loading}
     {@render pageSkel()}
   {:else}
@@ -1050,6 +1092,11 @@
 
   .meta { color: var(--faint); font-size: 0.76rem; margin-bottom: 0.6rem; font-family: var(--mono); letter-spacing: 0.02em; }
   .err { color: var(--text); margin: 0.5rem 0; }
+  .err .retry {
+    background: none; border: none; color: var(--muted); text-decoration: underline;
+    text-underline-offset: 0.2em; padding: 0 0 0 0.35rem; font-size: inherit; cursor: pointer;
+  }
+  .err .retry:hover { color: var(--text); }
 
   /* results - an editorial list of EntryRow rows (the one shared row style); the <ul> just resets. */
   .results { list-style: none; margin: 0; padding: 0; }

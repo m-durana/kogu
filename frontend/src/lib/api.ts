@@ -9,18 +9,30 @@ const BASE = '/api'
 // so the caller ignores it rather than showing an error.
 const TRANSIENT = new Set([429, 502, 503, 504])
 const RETRY_BACKOFF = [250, 700] // ms before retry 1, retry 2 (3 attempts total)
+// Per-attempt deadline: without one, a black-holed connection (mobile radio dropping mid-request)
+// hangs the fetch for the OS's 30-60s — the load bar animates forever and the user can't tell
+// "slow" from "stuck". 10s is generous for a <50ms API; after it, the attempt aborts and the retry
+// (or the final error strip, which offers a way forward) takes over.
+const ATTEMPT_TIMEOUT_MS = 10_000
+function withDeadline(signal: AbortSignal | undefined): AbortSignal {
+  const t = AbortSignal.timeout(ATTEMPT_TIMEOUT_MS)
+  return signal ? AbortSignal.any([signal, t]) : t
+}
 async function fetchRetry(input: URL | string, init: RequestInit, label: string): Promise<Response> {
   let lastErr: unknown
+  const callerSignal = init.signal ?? undefined
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt) await new Promise((r) => setTimeout(r, RETRY_BACKOFF[attempt - 1]))
     try {
-      const r = await fetch(input, init)
+      const r = await fetch(input, { ...init, signal: withDeadline(callerSignal as AbortSignal | undefined) })
       if (r.ok) return r
       const err = new Error(`${label} failed: ${r.status}`)
       if (!TRANSIENT.has(r.status)) throw err // fail fast on 4xx etc.
       lastErr = err
     } catch (e) {
-      if ((e as Error).name === 'AbortError') throw e
+      // the CALLER's abort (superseded search) rethrows; a deadline abort just tries again
+      if ((e as Error).name === 'AbortError' && callerSignal?.aborted) throw e
+      if ((e as Error).name === 'TimeoutError' && callerSignal?.aborted) throw e
       lastErr = e
     }
   }
