@@ -308,6 +308,13 @@
   // ja lexeme and it would wrongly show as Chinese-only. Kanjidic kana on/kun is a reliable "used in
   // Japanese" signal, so we synthesize a co-equal 日本語 definition row from the character's own data.
   // (冇 has no on/kun → no synthetic row; its nominal Mandarin pinyin stays suppressed.)
+  // every glyph the REAL Japanese words among the hits actually use — any listed (non-rare) form,
+  // not just each row's displayed primary. Evidence for the synthetic row's glyph choice and for
+  // the standalone-word check: 壹's hits carry 壱 inside the いち lexeme even though that row
+  // displays 一; the うら lexeme lists 裏 but not the rare 裡.
+  const jaHitForms = $derived(
+    new Set(hits.filter((h) => h.variety === 'ja').flatMap((h) => h.forms.map((f) => f.form))),
+  )
   const synthJaRow = $derived.by<Row | null>(() => {
     // a bound Kangxi radical (彳, 氵) is a component, not a Japanese word — don't synthesize a co-equal
     // 日本語 definition row for it (its okurigana kun reading would otherwise trip the gate below).
@@ -331,7 +338,7 @@
     // mis-rendered 合 as its spurious Unihan "traditional" 閤 (a kSimplifiedVariant artifact, not a real
     // reform). The PRC-only-simplified case (电→電) never reaches here: 电 has no Kanjidic readings.
     const sf = headChar.script_forms
-    const jaForm =
+    const derivedJa =
       sf?.branches.find((b) => b.script.includes('shinjitai'))?.form ??
       // no shinjitai reform: Japan kept the orthodox glyph, so a typed PRC simplification (桥, 电)
       // must still map to it — but ONLY when the typed glyph is simplified-ONLY. A merger target
@@ -340,6 +347,13 @@
       (sf && sf.branches.some((b) => b.form === head && b.script === 'simplified' && !b.is_orthodox)
         ? sf.orthodox
         : head)
+    // evidence beats derivation: reform branches don't cover same-script variant splits (裡/裏,
+    // 鈎/鉤), so when the derived glyph appears in NO real Japanese word but the hits contain a
+    // single-char glyph that does, use the evidenced one.
+    const jaForm =
+      jaHitForms.has(derivedJa) || !jaHitForms.size
+        ? derivedJa
+        : ([...jaHitForms].find((f) => [...f].length === 1) ?? derivedJa)
     return {
       id: -(head.codePointAt(0) ?? 1) - 1,
       variety: 'ja',
@@ -713,17 +727,17 @@
     (headChar?.readings ?? []).some((r) => r.kind === 'kunyomi' && r.value.includes('.')),
   )
   // a kanji that is itself a standalone Japanese WORD (本=ほん, 水=みず, 木=き) is NOT a bound morpheme,
-  // even with no okurigana — detected by a real same-glyph ja word-lexeme among the rows. Without this,
-  // the synthetic Kanjidic row for such a noun-kanji was mislabelled "only in compounds".
-  const hasStandaloneJaWord = $derived(
-    rows.some(
-      (r) =>
-        r.variety === 'ja' &&
-        r.kind === 'form' &&
-        !r.synthetic &&
-        (r.form === head || r.form === (synthJaRow?.form ?? head)),
-    ),
-  )
+  // even with no okurigana — detected by a real same-glyph ja word-lexeme among the HITS. Checked
+  // against every listed form, not each row's displayed primary: the いち lexeme proves 壱 is a
+  // standalone word even though its row displays 一. Falls back to the rendered rows for entries
+  // reached without a search (deep links enrich without hits).
+  const hasStandaloneJaWord = $derived.by(() => {
+    const jaForm = synthJaRow?.form ?? head
+    if (hits.length) return jaHitForms.has(head) || jaHitForms.has(jaForm)
+    return rows.some(
+      (r) => r.variety === 'ja' && r.kind === 'form' && !r.synthetic && (r.form === head || r.form === jaForm),
+    )
+  })
   // bound classification for a row: 'always' (only ever in compounds), 'often' (bound in some senses
   // but free in others, e.g. 日), or null (not bound / a word stem).
   function boundKind(r: Row): 'always' | 'often' | null {
