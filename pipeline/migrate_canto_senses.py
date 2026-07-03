@@ -5,7 +5,7 @@ Cantonese definitions showed as one line instead of enumerating. The ingest is n
 "/"-sense); this migration repairs the EXISTING live DB without a full rebuild.
 
 It only touches a yue lexeme when it currently has exactly ONE sense row whose gloss equals the
-"; "-join of that headword's CC-Canto source senses AND the source has >1 sense — so CC-CEDICT-derived
+"; "-join of that headword's CC-Canto source senses AND the source has >1 sense: so CC-CEDICT-derived
 (retag) yue lexemes and genuine single-sense entries are left untouched.
 
 Usage: KOGU_DB=/path/to.sqlite pipeline/.venv/bin/python pipeline/migrate_canto_senses.py

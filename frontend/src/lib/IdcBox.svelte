@@ -1,5 +1,5 @@
 <script lang="ts">
-  // A tiny monochrome schematic of a character's top-level composition — the "box thing" that
+  // A tiny monochrome schematic of a character's top-level composition: the "box thing" that
   // replaces spelling out "side by side" / "stacked top to bottom". Driven purely by the Ideographic
   // Description Character (⿰⿱⿴…). Component slots are filled boxes; an enclosure draws its frame.
   let { idc, size = 18 }: { idc: string | null; size?: number } = $props()

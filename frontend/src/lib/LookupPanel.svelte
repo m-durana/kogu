@@ -75,7 +75,7 @@
   }
 
   // Run the active tab's loader when the tab changes. untrack the call so the loaders' internal reads
-  // (wkLoading/wkDone/trDone guards) don't become effect dependencies — otherwise toggling wkLoading
+  // (wkLoading/wkDone/trDone guards) don't become effect dependencies: otherwise toggling wkLoading
   // re-fires this effect, and a no-result Dictionary lookup (which never sets wkDone) loops forever.
   $effect(() => {
     const t = tab

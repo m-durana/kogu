@@ -498,7 +498,7 @@ describe('placeholderAt - rotating search placeholder (item 1)', () => {
     expect(SEARCH_PLACEHOLDERS.length).toBeGreaterThanOrEqual(4)
     for (const p of SEARCH_PLACEHOLDERS) {
       expect(p.length).toBeGreaterThan(0)
-      expect(p).not.toContain('—')
+      expect(p).not.toContain(':')
     }
   })
 })
@@ -545,7 +545,7 @@ describe('reformLabel / scriptChangeNote - item 14 script-change explanation', (
     expect(s).toContain('carry the same meaning')
     expect(s).toContain('simplified Chinese form of 漢')
     expect(s).toContain('PRC simplification')
-    expect(s).not.toContain('—') // no em dashes
+    expect(s).not.toContain(':') // no em dashes
   })
   it('builds the change note from the forms strip for the orthodox glyph (no own variants)', () => {
     const sf = {
@@ -693,7 +693,7 @@ describe('linkifyHan - Ext-B (SIP) glyphs link instead of falling through as tof
   })
 })
 
-// ── #14 / #86: origin sectioning — bullet depth, no fake numbering, marker cleanup ──
+// ── #14 / #86: origin sectioning: bullet depth, no fake numbering, marker cleanup ──
 describe('etymologyTokens - Wiktionary bullet sub-points + leaked-marker cleanup', () => {
   it('a line led by "*" becomes depth 1 with the marker stripped', () => {
     const segs = etymologyTokens('Two theories:\n* Same source as 仁')
@@ -1168,7 +1168,7 @@ describe('headwordGlyphSize - full to length 4, one step down beyond (never shru
 // but never the core account, and keep the everyday origin visible)
 describe('etymologyTokens - deep comparative-cognate flagging', () => {
   const FA = [
-    'Pictogram (象形) — a bow firing an arrow, later a phono-semantic compound.',
+    'Pictogram (象形): a bow firing an arrow, later a phono-semantic compound.',
     'STEDT compares 發 to Proto-Sino-Tibetan *m-p(r)ats ("to vomit").',
     'According to Schuessler (2007), this is an area word; compare Proto-Vietic *ɓah.',
     'A derivation is probably 廢.',

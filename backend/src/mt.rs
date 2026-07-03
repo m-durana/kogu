@@ -1,5 +1,5 @@
 //! Machine-translation proxy for the in-app "Translate" panel. Calls the keyless Google endpoint
-//! (translate_a/single, client=gtx — no token needed) server-side so the browser dodges CORS, with an
+//! (translate_a/single, client=gtx: no token needed) server-side so the browser dodges CORS, with an
 //! in-memory cache (the DB pool is read-only) and a MyMemory fallback on failure/rate-limit.
 
 use axum::{

@@ -21,7 +21,7 @@ use crate::state::AppState;
 const ZH_BASE: &str = "https://cdn.jsdelivr.net/gh/davinfifield/mp3-chinese-pinyin-sound@master/mp3/";
 const YUE_BASE: &str = "https://jyutping.org/audio/";
 
-/// `GET /clip/:variety/:file` — proxy a single zh/yue pronunciation clip, cached in memory and served
+/// `GET /clip/:variety/:file`: proxy a single zh/yue pronunciation clip, cached in memory and served
 /// same-origin. `file` is a strict syllable (lowercase letters + a tone digit) + ".mp3" so this can't
 /// be turned into an open proxy / SSRF.
 #[utoipa::path(
@@ -46,7 +46,7 @@ pub async fn clip_handler(
         "yue" => YUE_BASE,
         _ => return (StatusCode::NOT_FOUND, "unknown variety").into_response(),
     };
-    // strict whitelist: "<letters><tone-digit>.mp3" (zh tones 1-5, yue 1-6) — nothing else.
+    // strict whitelist: "<letters><tone-digit>.mp3" (zh tones 1-5, yue 1-6): nothing else.
     let syl = match file.strip_suffix(".mp3") {
         Some(s) => s,
         None => return (StatusCode::BAD_REQUEST, "bad clip").into_response(),
@@ -70,7 +70,7 @@ pub async fn clip_handler(
     match st.http.get(&url).send().await {
         Ok(resp) if resp.status().is_success() => {
             let ctype = resp.headers().get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
-            // jyutping.org answers a missing syllable with a 200 text/html SPA page — accept only audio.
+            // jyutping.org answers a missing syllable with a 200 text/html SPA page: accept only audio.
             if !ctype.starts_with("audio") {
                 return (StatusCode::NOT_FOUND, "no clip").into_response();
             }
@@ -108,7 +108,7 @@ fn clip_ok(bytes: Vec<u8>) -> axum::response::Response {
 pub struct TtsParams {
     /// the kana reading to speak (max 32 characters)
     kana: String,
-    /// Kanjium downstep index ("0" = heiban .. n); optional — without it OpenJTalk picks its default.
+    /// Kanjium downstep index ("0" = heiban .. n); optional: without it OpenJTalk picks its default.
     accent: Option<String>,
 }
 

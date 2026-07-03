@@ -175,7 +175,7 @@ fn build_entry(
     let mut characters = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for ch in primary.chars() {
-        // only Han ideographs are real "component characters" — skip kana/okurigana so a word like
+        // only Han ideographs are real "component characters": skip kana/okurigana so a word like
         // あずかり知る breaks down to 知, not to り as if it were a character.
         if !search::is_han(ch) {
             continue;
@@ -231,7 +231,7 @@ fn build_entry(
     // speaker would actually write for this character's primary meaning (耳 → 耳朵, 朵 → 花朵). A
     // Japanese learner sees 耳's bare Chinese gloss but wouldn't know 耳朵 is how it's really said.
     // Derived, not curated: the candidate must (a) share the character's primary-sense concept, (b)
-    // CONTAIN the character (form_char) — which kills loose synonyms — and (c) be MORE frequent than
+    // CONTAIN the character (form_char): which kills loose synonyms: and (c) be MORE frequent than
     // the bare character in that same language, so we never suggest a compound when the character is
     // itself the everyday word (山, 人) and never surface a mere near-synonym (mountain→小山 "hill").
     if headword.chars().count() == 1 {
@@ -274,7 +274,7 @@ fn build_entry(
     // prefer tight (specific) concepts; skip hopelessly generic ones to cut polysemy noise
     let mut s = conn.prepare(
         // rank exact-gloss / OMW links (confidence 1.0 / 0.7) above content-word token links (0.5) so
-        // the looser token relations trail rather than lead — keeps the wider coverage without the noise
+        // the looser token relations trail rather than lead: keeps the wider coverage without the noise
         // leading the list.
         "SELECT s2.lexeme_id, co.label_en, MIN(co.member_count) AS spec, MAX(sc2.confidence) AS conf \
          FROM sense_concept sc1 \
@@ -750,7 +750,7 @@ fn ids_of(conn: &rusqlite::Connection, ch: char) -> Option<String> {
     .ok()
     .flatten()
 }
-/// Han leaf components of an IDS string — drop bracketed source tags ([GTV]), IDC operators and
+/// Han leaf components of an IDS string: drop bracketed source tags ([GTV]), IDC operators and
 /// strokes, and the character itself (guards self-referential ids like "木").
 fn han_leaves(ids: &str, self_ch: char) -> Vec<char> {
     let mut out = Vec::new();
@@ -833,7 +833,7 @@ fn radical_gloss_number(gloss: Option<&str>) -> Option<i64> {
     None
 }
 
-/// Characters that CONTAIN this glyph as a component (氵 → 河, 海, 湖…), via the IDS decomposition —
+/// Characters that CONTAIN this glyph as a component (氵 → 河, 海, 湖…), via the IDS decomposition :
 /// the "appears in characters" list that replaces a radical's word "used in". Lightest (fewest
 /// strokes) first; capped so a high-frequency radical doesn't dump thousands.
 fn appears_in_chars(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Vec<CharLite>> {
@@ -855,7 +855,7 @@ fn appears_in_chars(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<V
 
 /// Which script a glyph belongs to, ONLY when it diverges across reforms: a non-orthodox glyph with
 /// an identity parent is "simplified"; an orthodox glyph that has a simplified child is "traditional".
-/// Returns None for glyphs identical in every script (山, 古) — there is nothing to disambiguate.
+/// Returns None for glyphs identical in every script (山, 古): there is nothing to disambiguate.
 fn glyph_script(conn: &rusqlite::Connection, ch: char) -> Option<String> {
     let cp = ch as i64;
     let is_orthodox: bool = conn
@@ -908,7 +908,7 @@ fn char_gloss_words(conn: &rusqlite::Connection, ch: char) -> std::collections::
 /// When a glyph doubles as the simplified form of one or more DISTINCT characters (丑 = earthly branch
 /// AND simplified 醜 "ugly"; 干 ← 乾/幹), a note naming them so the origin paragraph isn't misread as
 /// describing the merged-in character. Parents whose meaning overlaps the glyph's own (这↔這, plain
-/// spelling variants) are excluded — those aren't merges of distinct characters.
+/// spelling variants) are excluded: those aren't merges of distinct characters.
 fn merge_note(conn: &rusqlite::Connection, ch: char) -> Option<String> {
     let own = char_gloss_words(conn, ch);
     let mut s = conn
@@ -1016,7 +1016,7 @@ fn mc_readings(conn: &rusqlite::Connection, ch: char) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Distinct Han components of a character with their meanings — the "what the parts are" layer of the
+/// Distinct Han components of a character with their meanings: the "what the parts are" layer of the
 /// structure section. Prefers the structured phono-semantic roles (char_component: 媽 = 女 semantic +
 /// 馬 phonetic) when present; otherwise falls back to the flat one-level IDS leaves (no role).
 /// Order-preserving, deduplicated.
@@ -1163,7 +1163,7 @@ fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<C
     let decomp = uniform_decomp(conn, ch);
     let components = char_components(conn, ch, ids.as_deref());
 
-    // usage signal + radical detection — both keyed on how many lexemes contain this glyph.
+    // usage signal + radical detection: both keyed on how many lexemes contain this glyph.
     let used_count: i64 =
         conn.query_row("SELECT count(*) FROM form_char WHERE cp=?1", [cp], |r| r.get(0)).unwrap_or(0);
     // per-language counts (for a language-specific "rarely used" tag): 巴 = zh many, ja few.
@@ -1178,7 +1178,7 @@ fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<C
             }
         }
     }
-    // per-language MAX word-frequency among words containing this glyph — the real rarity signal
+    // per-language MAX word-frequency among words containing this glyph: the real rarity signal
     // (a type count mislabels common particles like 嗎/也). Drives the "rarely used" tag.
     let mut freq_by_variety: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
     if let Ok(mut s) = conn.prepare(
@@ -1279,7 +1279,7 @@ fn build_script_forms(
     // ALL orthodox parents. Plural matters twice over: a simplified char can merge several
     // traditional ones (冲 ← 沖+衝, 干 ← 乾+幹+榦), and a char that is itself orthodox can still
     // be a merger target (週/賙 → 周). The old LIMIT-1 pick hid every parent but an arbitrary one.
-    // Order: simplification edges first, PRC reforms first, then codepoint — so `orthodox` (the
+    // Order: simplification edges first, PRC reforms first, then codepoint: so `orthodox` (the
     // primary anchor, also what the ja-form fallback on the frontend uses) is deterministic.
     let mut ps = conn.prepare(&format!(
         "SELECT p.cp, p.char, \
@@ -1373,7 +1373,7 @@ fn build_script_forms(
 
     // kokuji ("Japanese-coined, no Chinese form"): orthodox, no identity edges, has Japanese
     // readings, and NO Chinese (zh/yue) word uses the glyph. The "no zh/yue lexeme" test is what
-    // separates pure kokuji (峠 辻 凪 榊) from kokuji reborrowed into Chinese (働 腺 畑) — Unihan's
+    // separates pure kokuji (峠 辻 凪 榊) from kokuji reborrowed into Chinese (働 腺 畑): Unihan's
     // nominal pinyin can't distinguish them.
     let has_edge: i64 = conn.query_row(
         &format!("SELECT EXISTS(SELECT 1 FROM glyph_edge WHERE (child_cp=?1 OR parent_cp=?1) AND type IN {IDENTITY_TYPES})"),
@@ -1589,7 +1589,7 @@ fn best_word_gloss(
         .optional()?;
     let Some(id) = id else { return Ok(None) };
     // try several senses: some words' sense 0 is wholly parenthetical / function-word (大廈, 下挫) and
-    // cleans to empty — fall through to the next sense so the word still segments as a known word.
+    // cleans to empty: fall through to the next sense so the word still segments as a known word.
     let mut s = conn.prepare("SELECT gloss_en FROM sense WHERE lexeme_id=?1 ORDER BY sense_order LIMIT 8")?;
     let g = s
         .query_map([id], |r| r.get::<_, Option<String>>(0))?
@@ -1608,7 +1608,7 @@ fn best_word_gloss(
 fn char_short_gloss(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<String>> {
     use rusqlite::OptionalExtension;
     // the row may EXIST with a NULL gloss_en (≈80k characters), so bind the column as Option<String>
-    // — `.optional()` only catches missing rows, not a NULL in a present row (that would 500).
+    //: `.optional()` only catches missing rows, not a NULL in a present row (that would 500).
     let g: Option<Option<String>> = conn
         .query_row("SELECT gloss_en FROM character WHERE cp=?1", [ch as i64], |r| {
             r.get::<_, Option<String>>(0)

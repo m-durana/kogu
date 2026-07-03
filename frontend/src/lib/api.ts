@@ -10,7 +10,7 @@ const BASE = '/api'
 const TRANSIENT = new Set([429, 502, 503, 504])
 const RETRY_BACKOFF = [250, 700] // ms before retry 1, retry 2 (3 attempts total)
 // Per-attempt deadline: without one, a black-holed connection (mobile radio dropping mid-request)
-// hangs the fetch for the OS's 30-60s — the load bar animates forever and the user can't tell
+// hangs the fetch for the OS's 30-60s: the load bar animates forever and the user can't tell
 // "slow" from "stuck". 10s is generous for a <50ms API; after it, the attempt aborts and the retry
 // (or the final error strip, which offers a way forward) takes over.
 const ATTEMPT_TIMEOUT_MS = 10_000

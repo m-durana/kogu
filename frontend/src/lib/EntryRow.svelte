@@ -1,7 +1,7 @@
 <script lang="ts">
   import Glyph from './Glyph.svelte'
 
-  // The ONE row style used for every entry list in the app — the results list, saved/history, the
+  // The ONE row style used for every entry list in the app: the results list, saved/history, the
   // cross-language bridges (usually written / written differently / related), the "used in" words,
   // and a jukugo's component characters. Big serif headword on the left, a quiet meta column on the
   // right (reading + language tag(s) + region, then the gloss). Keeping it in one component is what

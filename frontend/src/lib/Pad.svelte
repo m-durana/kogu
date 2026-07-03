@@ -3,7 +3,7 @@
   import { X, ChevronDown, ChevronUp } from '@lucide/svelte'
 
   // onpick(ch, replace): replace=true swaps the provisional character already in the field for `ch`
-  // (Google-Translate style — the top guess auto-enters, picking another replaces it).
+  // (Google-Translate style: the top guess auto-enters, picking another replaces it).
   let { onpick, onclose }: { onpick: (ch: string, replace: boolean) => void; onclose?: () => void } = $props()
 
   // The candidate strip is normally a single side-scrolling row. The expand button grows it into a
@@ -92,7 +92,7 @@
   }
   function pos(e: PointerEvent): [number, number] {
     const r = canvas.getBoundingClientRect()
-    // CSS pixels, same units for x and y — no aspect distortion.
+    // CSS pixels, same units for x and y: no aspect distortion.
     return [e.clientX - r.left, e.clientY - r.top]
   }
   function start(e: PointerEvent) {
@@ -257,7 +257,7 @@
   canvas {
     display: block;
     /* the whole dock IS the drawing surface: full-bleed, no box/border. Sits directly on the dock
-       background so there is no inner frame — you write across the entire area. */
+       background so there is no inner frame: you write across the entire area. */
     width: 100%;
     height: 100%;
     min-height: 160px;

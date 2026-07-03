@@ -40,7 +40,7 @@
     const p = pitchPattern(reading, accent)
     if (!p) return null
     const morae = moraSplit(reading)
-    // odaka: the drop lands on a FOLLOWING particle (downstep === length) — there is no in-word tick,
+    // odaka: the drop lands on a FOLLOWING particle (downstep === length): there is no in-word tick,
     // but the whole word is high; render the tick at the trailing edge of the last mora.
     return morae.map((mora, i) => ({
       mora,
@@ -51,7 +51,7 @@
   // show the speaker affordance only when the browser can play audio AND the user hasn't turned
   // pronunciation audio off in Settings.
   const speakOn = $derived(canSpeak() && settings.audio)
-  // which speaker is currently sounding — lights that one button up until playback finishes (or another
+  // which speaker is currently sounding: lights that one button up until playback finishes (or another
   // tap supersedes it). Keyed by variety+reading so each row's speaker tracks independently.
   let playingKey = $state<string | null>(null)
   function speak(key: string, reading: string | null | undefined, variety: string, form?: string, accent?: string | null) {
@@ -79,7 +79,7 @@
   } = $props()
 
   const VORDER = ['zh', 'yue', 'ja']
-  // English language names — used only by the false-friend band ("written the same in Chinese and
+  // English language names: used only by the false-friend band ("written the same in Chinese and
   // Japanese…"), where CJK glyphs would read as the words themselves rather than as labels. The
   // per-language meaning rows use the short 中/粵/日 tags (varietyLabel) instead.
   const langName: Record<string, string> = { zh: 'Chinese', yue: 'Cantonese', ja: 'Japanese' }
@@ -93,7 +93,7 @@
     }
     return ''
   }
-  // Japanese pitch accent (Kanjium) for the FIRST kana reading — the one readingFor() displays on the
+  // Japanese pitch accent (Kanjium) for the FIRST kana reading: the one readingFor() displays on the
   // ja row. Only ja kana readings carry an accent; everything else returns null (no contour shown).
   function accentFor(variety: string, readings: ReadingKV[]): string | null {
     if (variety !== 'ja') return null
@@ -224,7 +224,7 @@
       // a false friend only if NO member shares meaning with the other language (every one is one);
       // 京都 has a cognate sense (Kyoto) so it isn't flagged, 手紙 (all false-friend) still is.
       const relation = members.find((m) => m.relation !== 'false-friend')?.relation ?? 'false-friend'
-      // any member may carry the Cantonese reading (a hit does, a bare link may not) — keep it
+      // any member may carry the Cantonese reading (a hit does, a bare link may not): keep it
       const jyut = best.jyut ?? members.find((m) => m.jyut)?.jyut ?? null
       deduped.push({ ...best, glosses, relation, jyut })
     }
@@ -267,10 +267,10 @@
 
   // the headword glyph: what the user looked up
   const head = $derived(anchor || rows[0]?.form || '')
-  // the variety the looked-up glyph resolved to — drives the headword's regional font so a Japanese
+  // the variety the looked-up glyph resolved to: drives the headword's regional font so a Japanese
   // word's 誤 renders with the Japanese glyph, not the Simplified-Chinese one.
   const headVariety = $derived<Variety>((hits[0]?.variety ?? entry?.variety ?? 'zh') as Variety)
-  // the searched word split into its glyphs — used to echo the form AS TYPED in the characters
+  // the searched word split into its glyphs: used to echo the form AS TYPED in the characters
   // breakdown (search the simplified/JP 食虫植物 and 虫 stays 虫, not the trad 蟲 the lexeme is keyed on).
   const headChars = $derived([...head])
 
@@ -298,7 +298,7 @@
   // gates the structure readings so a 粵-only word shows jyutping, not a nominal Mandarin pinyin.
   const wordVarieties = $derived(new Set(rows.filter((r) => r.kind === 'form').map((r) => r.variety)))
 
-  // Kanjidic kun readings carry okurigana markers — a dot for the okurigana boundary (あ.う = 合 covers
+  // Kanjidic kun readings carry okurigana markers: a dot for the okurigana boundary (あ.う = 合 covers
   // あ, う is the trailing kana) and affix hyphens (-あ.う prefix use, あい- suffix use). For a compact
   // reading list we strip both to a plain kana so it reads cleanly instead of "あ.う -あ.う あい-".
   const cleanKanaReading = (v: string): string => v.replace(/[.\-]/g, '')
@@ -308,7 +308,7 @@
   // ja lexeme and it would wrongly show as Chinese-only. Kanjidic kana on/kun is a reliable "used in
   // Japanese" signal, so we synthesize a co-equal 日本語 definition row from the character's own data.
   // (冇 has no on/kun → no synthetic row; its nominal Mandarin pinyin stays suppressed.)
-  // every glyph the REAL Japanese words among the hits actually use — any listed (non-rare) form,
+  // every glyph the REAL Japanese words among the hits actually use: any listed (non-rare) form,
   // not just each row's displayed primary. Evidence for the synthetic row's glyph choice and for
   // the standalone-word check: 壹's hits carry 壱 inside the いち lexeme even though that row
   // displays 一; the うら lexeme lists 裏 but not the rare 裡.
@@ -316,7 +316,7 @@
     new Set(hits.filter((h) => h.variety === 'ja').flatMap((h) => h.forms.map((f) => f.form))),
   )
   const synthJaRow = $derived.by<Row | null>(() => {
-    // a bound Kangxi radical (彳, 氵) is a component, not a Japanese word — don't synthesize a co-equal
+    // a bound Kangxi radical (彳, 氵) is a component, not a Japanese word: don't synthesize a co-equal
     // 日本語 definition row for it (its okurigana kun reading would otherwise trip the gate below).
     if (!single || !headChar || headChar.is_radical) return null
     const on = headChar.readings.filter((r) => r.kind === 'onyomi' && isKana(r.value)).map((r) => r.value)
@@ -324,7 +324,7 @@
     if (!on.length && !kun.length) return null
     // Kanjidic lists readings for MANY Chinese-only kanji (媽 → はは) that aren't actually used in
     // Japanese. Two reliable "really used in Japanese" signals: (a) the kanji appears in a Japanese
-    // word, or (b) it has an okurigana kun reading (よ.じる) — a native verb/adjective stem, so the
+    // word, or (b) it has an okurigana kun reading (よ.じる): a native verb/adjective stem, so the
     // kanji forms a real Japanese word like 攀じる even when JMdict lacks that rare entry. 媽 has
     // neither (はは is a bare nominal reading, 0 ja words) → still suppressed.
     const usedInJa = (entry?.compounds ?? []).some((l) => l.variety === 'ja')
@@ -334,14 +334,14 @@
     if (!gloss) return null
     // the Japanese form is the shinjitai if one exists, else the typed glyph itself. We do NOT fall back
     // to the backbone "orthodox" form: this row only fires when the typed glyph HAS Kanjidic on/kun, i.e.
-    // it IS a Japanese kanji that Japan writes as-is (合, 電) — so `head` is correct. Using `orthodox`
+    // it IS a Japanese kanji that Japan writes as-is (合, 電): so `head` is correct. Using `orthodox`
     // mis-rendered 合 as its spurious Unihan "traditional" 閤 (a kSimplifiedVariant artifact, not a real
     // reform). The PRC-only-simplified case (电→電) never reaches here: 电 has no Kanjidic readings.
     const sf = headChar.script_forms
     const jaForm =
       sf?.branches.find((b) => b.script.includes('shinjitai'))?.form ??
       // no shinjitai reform: Japan kept the orthodox glyph, so a typed PRC simplification (桥, 电)
-      // must still map to it — but ONLY when the typed glyph is simplified-ONLY. A merger target
+      // must still map to it: but ONLY when the typed glyph is simplified-ONLY. A merger target
       // that is a traditional character in its own right (干 ← 乾/幹, 周 ← 週/賙) IS what Japan
       // writes; mapping it to sf.orthodox would invent a form (干す is never written 乾す).
       // Same-script variant splits (裡/裏, 鈎/鉤) deliberately keep the typed glyph: it is a real
@@ -405,7 +405,7 @@
   )
   // "written for sound" marker: a MULTI-character transliteration / phonetic loan (沙發, 幽默, 俱樂部)
   // whose characters were picked for their sound, not meaning. Driven by the entry's origin badges
-  // (phono-semantic-matching). Single characters are excluded — they use the component role display.
+  // (phono-semantic-matching). Single characters are excluded: they use the component role display.
   const soundLoan = $derived(!single && !!entry && isSoundLoan(entry.origin_badges))
   // shown when the user taps the "written for sound" chip (reuses the term-explainer popup). Prefer the
   // badge's specific note ("Loanword from English: …"); fall back to a generic explanation.
@@ -417,7 +417,7 @@
   // Cantonese shares the Han script: a single character written 中 is almost always written and
   // understood the same in 粵, differing only in pronunciation. So when there's no SEPARATE Cantonese
   // row (which would signal a Cantonese-specific word/meaning, e.g. 係 hai6 / 乜), we surface the
-  // character's jyutping right on the Chinese row — 中 ěr · 粵 ji5 — instead of burying it below.
+  // character's jyutping right on the Chinese row: 中 ěr · 粵 ji5: instead of burying it below.
   // ALL the character's Cantonese readings (a polyphonic char has several: 行 hang4/hang6/hong4),
   // customary first (backend orders by `ord`). Each renders with its own speaker, like the JA on/kun.
   const headJyutList = $derived.by<string[]>(() =>
@@ -427,7 +427,7 @@
   )
   // Cantonese readings for a zh row: a single character uses ALL the char's jyutping readings
   // (polyphones keep several); a multi-character word uses the word lexeme's own jyutping carried
-  // on the row (hit / entry / link) — one customary reading.
+  // on the row (hit / entry / link): one customary reading.
   function rowJyutList(r: Row): string[] {
     if (single && headChar) return headJyutList
     return r.jyut ? [r.jyut] : []
@@ -504,7 +504,7 @@
       .sort((a, b) => VORDER.indexOf(a.variety) - VORDER.indexOf(b.variety)),
   )
 
-  // significant words in the looked-up entry's OWN meaning — to rank "related" by meaning closeness
+  // significant words in the looked-up entry's OWN meaning: to rank "related" by meaning closeness
   const headGlossWords = $derived.by(() => {
     const s = new Set<string>()
     for (const sn of entry?.senses ?? [])
@@ -555,7 +555,7 @@
   let expanded = $state(new Set<number>())
   let overflow = $state(new Set<number>())
   // major meanings shown by default. Bare cross-references ("abbr. for 入聲", "variant of X", "used
-  // in …") are demoted and hidden behind "show more" — UNLESS a row has no major sense at all (中共 =
+  // in …") are demoted and hidden behind "show more": UNLESS a row has no major sense at all (中共 =
   // "abbr. for 中國共產黨" is the only meaning), in which case they ARE the definition and stay visible.
   // expandSenses splits a CC-CEDICT gloss that packs several marker-tagged senses into one ";"-line
   // (加盟 "(of a nation)…; (of an athlete)…") into separate enumerated senses, while leaving plain
@@ -631,7 +631,7 @@
   const falseFriendLangs = $derived(defLangs.join(' and '))
 
   // The single character's full Japanese on/kun readings (kana + romaji), shown right on the 日
-  // definition row — Chinese readers can't read kana, so each gets its romaji. Capped to JA_CAP with a
+  // definition row: Chinese readers can't read kana, so each gets its romaji. Capped to JA_CAP with a
   // "+N" toggle so a kanji with a dozen readings doesn't wrap into a wall. (中 pinyin / 粵 jyutping are
   // short and already sit on their rows; there is no separate "readings" section any more.)
   let jaReadOpen = $state(false)
@@ -670,7 +670,7 @@
       ? scriptChangeNote(head, headChar.variants ?? [], headChar.is_orthodox) ?? scriptChangeFromForms(headChar.script_forms)
       : null,
   )
-  // item 161: the traditional/simplified counterpart of the viewed glyph, if one exists — drives the
+  // item 161: the traditional/simplified counterpart of the viewed glyph, if one exists: drives the
   // small two-arrow switch button at the top-right of the header glyph. Tap it to jump to the other
   // script's form (馬 ⇄ 马). Only for a genuine TC/SC pair (not shinjitai-only or z-variants).
   const scCounterpart = $derived(scSwitchTarget(headChar?.script_forms ?? null, head))
@@ -706,7 +706,7 @@
   const isRadicalChar = $derived(!!headChar?.is_radical)
   // rarity tag from the MAX word-frequency of words containing this glyph in that language (a real
   // frequency signal; the old containing-word count mislabelled common particles like 嗎/也).
-  // Cantonese borrows the Mandarin frequency corpus, so its scores understate core 粵字 — we suppress
+  // Cantonese borrows the Mandarin frequency corpus, so its scores understate core 粵字: we suppress
   // the tag for 粵 rather than emit wrong labels (until a real Cantonese char-frequency source).
   function rowUsage(variety: Variety): string {
     if (variety === 'yue') return ''
@@ -717,13 +717,13 @@
     return ''
   }
   // a single kanji that forms native words via okurigana (乗 → 乗る, 化 → 化ける) is a WORD STEM, not a
-  // bound morpheme — its kun readings carry an okurigana split (の.る). Used to avoid mis-tagging the
+  // bound morpheme: its kun readings carry an okurigana split (の.る). Used to avoid mis-tagging the
   // synthetic Japanese row "bound" (item 4: 乗 is effectively a word, unlike 津 which is truly bound).
   const headHasOkurigana = $derived(
     (headChar?.readings ?? []).some((r) => r.kind === 'kunyomi' && r.value.includes('.')),
   )
   // a kanji that is itself a standalone Japanese WORD (本=ほん, 水=みず, 木=き) is NOT a bound morpheme,
-  // even with no okurigana — detected by a real same-glyph ja word-lexeme among the HITS. Checked
+  // even with no okurigana: detected by a real same-glyph ja word-lexeme among the HITS. Checked
   // against every listed form, not each row's displayed primary: the いち lexeme proves 壱 is a
   // standalone word even though its row displays 一. Falls back to the rendered rows for entries
   // reached without a search (deep links enrich without hits).
@@ -743,7 +743,7 @@
     return null
   }
 
-  // one compact reading for a component character in the breakdown row — primary pinyin (tone-marked),
+  // one compact reading for a component character in the breakdown row: primary pinyin (tone-marked),
   // else jyutping, else the first few kana on/kun. Keeps the row consistent with the word rows.
   function charReading(c: CharInfo): string {
     const p = c.readings.filter((r) => r.kind === 'pinyin').map((r) => r.value)
@@ -769,7 +769,7 @@
   // a confusing self-reference ("only used in compounds" → first compound is the same glyph).
   const compoundList = $derived((entry?.compounds ?? []).filter((l) => l.headword !== head))
   // map the compound LinkLites onto the shared Row shape so the "used in" list renders with the SAME
-  // rowItem style as every other entry list (usually-written / written-differently / characters) —
+  // rowItem style as every other entry list (usually-written / written-differently / characters) :
   // one singular row style across the app (item 155). The relation is kept for the variant divider.
   const compoundRows = $derived.by(() => {
     // dedupe by form+variety+reading: the full JMdict ships near-identical sense-lexemes (大陸 "mainland
@@ -861,7 +861,7 @@
     deepOpen = n
   }
 
-  // Bound form: a morpheme that doesn't stand alone as a word — it only carries meaning inside
+  // Bound form: a morpheme that doesn't stand alone as a word: it only carries meaning inside
   // compounds. CC-CEDICT flags these; instead of leaking the jargon into the prose we show a small
   // tappable "bound" tag whose popup explains it and lists the compounds the character lives in.
   let boundOpen = $state<Row | null>(null)
@@ -950,7 +950,7 @@
   let yueReadOver = $state(false)
   // per-row clamp state for a plain word reading (中 pinyin / 粵 jyutping / 日 word kana): a long
   // multi-syllable reading (中國國民黨革命委員會) would otherwise run off the viewport, so each row's
-  // reading clamps to one line with a "+" — keyed by row id since a card has several reading rows.
+  // reading clamps to one line with a "+": keyed by row id since a card has several reading rows.
   let readOver = $state<Set<number>>(new Set())
   let readOpen = $state<Set<number>>(new Set())
   function setReadOver(id: number, v: boolean) {
@@ -1059,7 +1059,7 @@
                   <!-- a SYNTHETIC ja row (kanji used only in compounds) shows the character's full on/kun
                        (kana + romaji), clamped to one line with a "+" (and horizontally scrollable). A
                        REAL ja word-row shows its OWN reading instead. The readings are plain text; the
-                       single speaker icon plays them — one consistent speech affordance across 中/粵/日. -->
+                       single speaker icon plays them: one consistent speech affordance across 中/粵/日. -->
                   <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe={(v) => (jaReadOver = v)}>{#each jaReadItems as it, i}{@const cells = pitchCells(it.main, it.accent)}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{#if cells}<span class="pitch" title="pitch accent (Kanjium)">{#each cells as c}<span class="pmora" class:phigh={c.high} class:pdrop={c.drop}>{c.mora}</span>{/each}</span>{:else}{it.main}{/if}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{#if speakOn}<button class="spk spk-sm" class:speaking={playingKey === 'ja:' + it.main} onclick={() => speak('ja:' + it.main, it.main, 'ja', undefined, it.accent)} aria-label="listen to {it.main}" title="listen"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{#if jaReadOpen}<Minus size={15} />{:else}<Plus size={15} />{/if}</button>{/if}
                 {:else if r.reading}
                   {@const cells = r.variety === 'ja' ? pitchCells(r.reading, r.accent) : null}
@@ -1074,7 +1074,7 @@
             </div>
             {#if boundKind(r) || (soundLoan && r.variety === 'zh') || (single && headChar && (isRadicalChar || rowUsage(r.variety)))}
               <!-- tags (bound, written-for-sound, rarely-used, radical) on their own line, indented under
-                   the readings — UNDER the language row, not the header. "rarely used" is for THIS row's
+                   the readings: UNDER the language row, not the header. "rarely used" is for THIS row's
                    language; "radical" is character-wide. The character badges are gated on headChar so
                    they don't FLASH before the entry enriches. -->
               <div class="rtagline">
@@ -1146,7 +1146,7 @@
   {#if isGlyphSearch && activeTab === 'forms' && single && headChar}
     <!-- single character: a compact structure line (no repeated glyph), then the words that use it.
          (Readings used to live in their own section here; they're now folded onto the definition rows
-         above — 中 pinyin / 粵 jyutping / 日 on·kun — so there's no duplicate "readings" block.) -->
+         above: 中 pinyin / 粵 jyutping / 日 on·kun: so there's no duplicate "readings" block.) -->
     <section class="struct">
       {#if headChar.is_radical && (headChar.radical_number || headChar.standalone)}
         <!-- a radical's detail (Kangxi number, standalone form). The "radical" badge itself now sits
@@ -1199,7 +1199,7 @@
       {/if}
       {#if headChar.confusables.length}
         <!-- Unihan kSpoofingVariant: glyphs easily MISREAD for this one. A look-alike note, NOT a
-             variant/meaning link — kept visually distinct from the "across scripts" strip. -->
+             variant/meaning link: kept visually distinct from the "across scripts" strip. -->
         <div class="confus">
           <span class="sublabel">easily confused with</span>
           <div class="confrow">{#each headChar.confusables as cf}<button class="part confbtn" onclick={() => onsearch(cf)} title="look up {cf} (look-alike)"><Glyph ch={cf} font="var(--han)" /></button>{/each}</div>
@@ -1308,7 +1308,7 @@
   {/if}
 
   {#if openTerm}
-    <!-- term/explainer popup (origin jargon + the "written for sound" chip) — at the component root so
+    <!-- term/explainer popup (origin jargon + the "written for sound" chip): at the component root so
          it opens from any tab, not only the Origin section. -->
     <!-- svelte-ignore a11y_click_events_have_key_events -- backdrop dismiss; Escape (svelte:window) is the keyboard path -->
     <div class="termpop" role="presentation" onclick={() => (openTerm = null)}>
@@ -1360,7 +1360,7 @@
   /* just the two-arrow icon, no box around it (item) */
   .scswitch { display: inline-flex; align-items: center; justify-content: center; margin-top: 0.45rem; padding: 0.15rem; color: var(--muted); background: none; border: none; }
   .scswitch:hover { color: var(--text); background: none; }
-  /* small country tag(s) for a region-exclusive word (Taiwan/Hong Kong) — sits up by the headword */
+  /* small country tag(s) for a region-exclusive word (Taiwan/Hong Kong): sits up by the headword */
   .regiontags { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.55rem; }
   .rtag { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.02em; color: var(--muted); line-height: 1.5; }
   .defs { display: flex; flex-direction: column; gap: 1.1rem; }
@@ -1380,7 +1380,7 @@
   .drow2 { display: inline-flex; align-items: baseline; gap: 0.7rem; min-width: 0; flex: 1 1 0; }
   .dread { font-family: var(--mono); font-size: 0.9rem; color: var(--muted); }
   /* Japanese pitch-accent contour (Kanjium): a subtle MONOCHROME overline over the high morae with a
-     downstep tick where the pitch falls. No accent colour — the app is strictly monochrome; the line
+     downstep tick where the pitch falls. No accent colour: the app is strictly monochrome; the line
      uses currentColor at low opacity so it reads as a quiet annotation, not a second reading. */
   .pitch { display: inline-flex; }
   .pitch .pmora { position: relative; padding-top: 1px; }
@@ -1400,7 +1400,7 @@
   /* collapsed: clip to ~2 lines and fade the cut, so a long definition doesn't wall off the page */
   .senses.clamp { max-height: 2.9rem; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 74%, transparent); mask-image: linear-gradient(to bottom, #000 74%, transparent); }
   .senses li { position: relative; padding-left: 1.5rem; font-size: 1rem; line-height: 1.45; color: var(--text); counter-increment: s; }
-  /* always number senses — including a single-sense definition — so "1." reads as a definition, not
+  /* always number senses: including a single-sense definition: so "1." reads as a definition, not
      as loose text bumping against the language tag. */
   .senses li::before { content: counter(s) '.'; position: absolute; left: 0; top: 0.05rem; font-family: var(--mono); font-size: 0.78rem; color: var(--faint); }
   .more { background: none; border: none; padding: 0.3rem 0; margin-top: 0.1rem; font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.02em; color: var(--muted); }
@@ -1409,10 +1409,10 @@
   .xref:hover { color: var(--hi); background: none; }
   .more:hover { color: var(--text); background: none; }
 
-  /* "bound" tag — a bound morpheme (only used in compounds); taps open an explainer + its compounds */
+  /* "bound" tag: a bound morpheme (only used in compounds); taps open an explainer + its compounds */
   /* item 16: make the "bound" tag clearly visible (it marks a morpheme that only lives in compounds) */
 
-  /* bound-form popup — minimal monochrome dialog */
+  /* bound-form popup: minimal monochrome dialog */
   .mbg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 50; }
   .modal { width: min(28rem, 100%); max-height: 80vh; overflow-y: auto; background: var(--bg); border: 1px solid var(--border-strong); border-radius: 16px; box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.7); padding: 1.2rem 1.2rem 1rem; }
   .mh { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
@@ -1428,7 +1428,7 @@
   .bridge { margin-bottom: 0.6rem; }
   /* the bottom "related" band gets breathing room from origin / used-in above it */
   .bridge.related { margin-top: 1.4rem; }
-  /* entry lists (bridges, used-in, characters) — the rows themselves are rendered by EntryRow, which
+  /* entry lists (bridges, used-in, characters): the rows themselves are rendered by EntryRow, which
      owns the row layout and the hairline separators; this just resets the <ul>. */
   .langs { list-style: none; margin: 0; padding: 0; }
   .strip { margin-top: 0.5rem; }
@@ -1436,14 +1436,14 @@
      a faint label and a hairline rule, so they don't read as one undifferentiated run. */
   .sublabel { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.02em; color: var(--faint); margin-bottom: 0.45rem; }
   .substep { margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--border); }
-  /* the first sub-section (the forms strip) follows the heading directly — no rule above it */
+  /* the first sub-section (the forms strip) follows the heading directly: no rule above it */
   .substep:first-of-type { margin-top: 0.6rem; padding-top: 0; border-top: none; }
   .note { color: var(--faint); font-size: 0.82rem; margin: 0.5rem 0 0; line-height: 1.5; display: flex; align-items: flex-start; gap: 0.4rem; }
   /* align the warning triangle with the cap of the first text line (was sitting a touch low) */
   .note :global(svg) { flex: none; margin-top: 0.02rem; color: var(--muted); }
 
   /* CJKV-style segmented control for the below-definition sections */
-  /* Hybrid: underline tabs (not a segmented pill) — a hairline rule with a white indicator. */
+  /* Hybrid: underline tabs (not a segmented pill): a hairline rule with a white indicator. */
   /* overflow-x:auto alone coerces overflow-y to auto too (CSS spec), which let the tab strip scroll
      vertically; pin overflow-y:hidden so it only ever scrolls horizontally when tabs don't fit. */
   .seg { display: flex; align-items: stretch; gap: 1.5rem; border-bottom: 0.5px solid var(--border); margin: 1.5rem 0 0.2rem; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
@@ -1472,15 +1472,15 @@
   /* flex-basis 0 so the readings never trigger a wrap of the header (which would push the 日 label
      to its own line); it grows into the space after the label and clips to one line when long. */
   .dreads { flex: 1 1 0; min-width: 0; line-height: 1.5; }
-  /* clamped to one line, but horizontally SCROLLABLE — you can either swipe the readings right to see
+  /* clamped to one line, but horizontally SCROLLABLE: you can either swipe the readings right to see
      more, or tap "+" to expand them onto multiple lines (item: both open and scroll). */
   .dreads.clamp { white-space: nowrap; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
   .dreads.clamp::-webkit-scrollbar { display: none; }
-  /* fade the last renderable character into nothing (like a "show more" cue) instead of a hard cut —
+  /* fade the last renderable character into nothing (like a "show more" cue) instead of a hard cut :
      only when the readings actually overflow */
   .dreads.faded { -webkit-mask-image: linear-gradient(to right, #000 80%, transparent); mask-image: linear-gradient(to right, #000 80%, transparent); }
   /* a single long plain reading (multi-syllable pinyin/jyutping) WRAPS when expanded rather than
-     overflowing — its .rdg is otherwise nowrap (which keeps the speaker tight while clamped). */
+     overflowing: its .rdg is otherwise nowrap (which keeps the speaker tight while clamped). */
   .plainread:not(.clamp) .rdg { white-space: normal; overflow-wrap: anywhere; }
   /* radical line (#16) + usage badge (#17) + script-strip caption (#7) */
   .radline { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 0.55rem; font-size: 0.9rem; }
@@ -1502,7 +1502,7 @@
   .spk-sm { padding: 0 0.1rem; vertical-align: -0.15em; margin-left: 0.1rem; }
   .rtagline { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; margin: 0.2rem 0 0; padding-left: 1.6rem; }
   /* one unified style for every small row tag: radical, rarely used, uncommon, only/often in compounds */
-  /* soft filled pill — noticeable (uncommon / only-in-compounds shouldn't be missed) without the harsh
+  /* soft filled pill: noticeable (uncommon / only-in-compounds shouldn't be missed) without the harsh
      outlined box used on row variety tags */
   .ltag { font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.02em; color: var(--muted); background: var(--surface-2); border: none; border-radius: 999px; padding: 0.12rem 0.5rem; line-height: 1.5; }
   .ltag.rad { color: var(--text); }
@@ -1513,7 +1513,7 @@
   .oacc:first-of-type { margin-top: 0; }
   .olang { display: flex; align-items: baseline; gap: 0.4rem; margin-bottom: 0.25rem; }
   /* brighter origin header, but keep a hierarchy (not all one colour): the hanzi being explained is
-     full-ink white, the language label + TC/SC tag sit a tier down at muted — both brighter than the
+     full-ink white, the language label + TC/SC tag sit a tier down at muted: both brighter than the
      old dim faint, and visibly separated from the headword glyph. */
   .olang .ovar { font-size: 0.95rem; color: var(--muted); }
   .olang .ohw { font-size: 0.95rem; color: var(--text); }
@@ -1524,12 +1524,12 @@
   /* structure block - composition (what parts make it up, e.g. 森 = three 木) + a quiet stroke count */
   .cln { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 0.5rem; font-size: 0.8rem; }
   /* English label + Chinese glyph kept close in size so the line reads as one phrase (was 0.82rem vs
-     1.6rem — too far apart). The component glyph leads only slightly. */
+     1.6rem: too far apart). The component glyph leads only slightly. */
   /* item 11 + wrap fix: flow components as inline text so each glyph stays with its own gloss and
      wraps as a unit (the gloss never drops to its own line right after the kanji). Inline flow also
      baseline-aligns the larger kanji with their latin meanings. */
   /* flex + align-items:center so the IDC box, the colon, and the part glosses sit on one vertical
-     centre line — the latin gloss text no longer rides high above the boxes. */
+     centre line: the latin gloss text no longer rides high above the boxes. */
   .comp { display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.1rem; line-height: 1.6; margin: 0.6rem 0 0; }
   .comp :global(svg) { vertical-align: middle; }
   /* each component (glyph + its gloss + role) flows as one inline unit, so the gloss never drops to a
@@ -1545,7 +1545,7 @@
   .confbtn:hover { color: var(--text); border-color: var(--border-strong); }
   .comp .dim { font-size: 0.95rem; }
   .plus { color: var(--faint); font-family: var(--mono); margin: 0 0.35rem; }
-  /* a component's meaning, e.g. 木 (tree) — the "explain the parts" layer */
+  /* a component's meaning, e.g. 木 (tree): the "explain the parts" layer */
   .cmean { color: var(--muted); font-size: 0.9rem; margin-left: -0.05rem; }
   .cmean::before { content: '('; }
   .cmean::after { content: ')'; }
@@ -1590,7 +1590,7 @@
   .ety rt { font-size: 0.55em; color: var(--faint); font-family: var(--han); }
   .ety .kanji { background: none; border: none; padding: 0; font: inherit; color: var(--text); font-family: var(--han); }
   .ety .kanji:hover { text-decoration: underline; }
-  /* clickable hanzi in origin prose: a thin SOLID underline — distinct from the DOTTED underline that
+  /* clickable hanzi in origin prose: a thin SOLID underline: distinct from the DOTTED underline that
      marks abbreviation/jargon terms (.term), so the two reading cues don't get confused (item 156). */
   .ety .etylink { text-decoration: underline solid; text-decoration-thickness: 1px; text-underline-offset: 2px; text-decoration-color: var(--border-strong); background: none; padding: 0; }
   .ety .etylink:hover { text-decoration-color: var(--text); color: var(--hi); background: none; }
@@ -1607,7 +1607,7 @@
   .ety .recon { font-size: 0.78em; color: var(--faint); font-family: var(--mono); }
   .ety .recon[title] { cursor: help; }
 
-  /* tapped-term explanation — a small centred card (mobile-friendly; no hover needed) */
+  /* tapped-term explanation: a small centred card (mobile-friendly; no hover needed) */
   .termpop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 50; }
   .termcard { width: min(24rem, 100%); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 16px; box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.7); padding: 1.1rem 1.1rem 0.9rem; }
   .termcard p { margin: 0; font-size: 0.95rem; line-height: 1.5; color: var(--text); }

@@ -19,7 +19,7 @@ pub struct AppState {
     /// OCR engine (PaddleOCR via ONNX); None if models are unavailable
     pub ocr: Option<Arc<oar_ocr::prelude::OAROCR>>,
     /// in-memory cache for the /mt translate proxy ("sl|q" → (translation, detected_source)); the DB
-    /// pool is read-only so we can't persist there. Lost on restart, which is fine — cheap to refetch.
+    /// pool is read-only so we can't persist there. Lost on restart, which is fine: cheap to refetch.
     pub mt_cache: Arc<Mutex<HashMap<String, (String, String)>>>,
     /// in-memory cache of proxied pronunciation clips ("zh/ni3" → mp3 bytes). The zh/yue clips are
     /// fetched from upstream CDNs server-side and served same-origin, so they work where those CDNs are

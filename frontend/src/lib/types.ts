@@ -73,7 +73,7 @@ export interface CharInfo {
   decomp: { base: string; count: number } | null
   /** distinct components with meanings (好 → 女 "woman", 子 "child"); radical forms glossed via parent.
    * role: 'semantic' carries the meaning, 'phonetic' carries the sound (媽 = 女 semantic + 馬 phonetic).
-   * mc_sound: a phonetic component's Middle Chinese (廣韻 / Baxter) reading(s) — the historical sound
+   * mc_sound: a phonetic component's Middle Chinese (廣韻 / Baxter) reading(s): the historical sound
    * it lent (同 → ["duwng"]); absent/empty for non-phonetic components or when no MC data exists. */
   components: { ch: string; gloss: string | null; role: string | null; sound: string | null; mc_sound?: string[] }[]
   /** the glyph is primarily a Kangxi radical / bound component (彳, 辵, 氵…), not a standalone word */
@@ -82,7 +82,7 @@ export interface CharInfo {
   radical_number: number | null
   /** standalone character a radical-variant form stands for (氵→水), when it differs */
   standalone: string | null
-  /** how many lexemes contain this character — global usage signal (0 = archaic, large = core) */
+  /** how many lexemes contain this character: global usage signal (0 = archaic, large = core) */
   used_count: number
   /** per-language containing-word counts ({zh,yue,ja}) for a language-specific rarity tag */
   used_by_variety: Record<string, number>

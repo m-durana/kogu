@@ -116,7 +116,7 @@ async fn english_results_language_balanced() {
     let vars = varieties(&v);
     assert!(vars.len() >= 4, "expected several results for unity");
     // Check the HEAD, where interleaving is possible. (Deep in the list one variety is exhausted and
-    // the remainder naturally clusters — that's expected, the cap only governs the dominated head.)
+    // the remainder naturally clusters: that's expected, the cap only governs the dominated head.)
     let head: Vec<&String> = vars.iter().take(12).collect();
     let mut run = 1usize;
     let mut max_run = 1usize;
@@ -161,7 +161,7 @@ async fn english_exact_sense_beats_frequent_fringe() {
         assert!(e < r, "耳 (#{e}) must outrank 稲穂 ear-of-rice (#{r})");
     }
 }
-// 4d. Plural query still finds the singular gloss (porter stemming) — used to return nothing.
+// 4d. Plural query still finds the singular gloss (porter stemming): used to return nothing.
 #[tokio::test]
 async fn english_plural_query_stems() {
     let hw = headwords(&search("ears").await);
@@ -175,7 +175,7 @@ async fn english_plural_cats_stems() {
 #[tokio::test]
 async fn english_plural_mountains_stems_and_ranks() {
     // porter stems mountains→mountain; 山 must surface near the top (it was absent before). It sits
-    // just behind 岳 ("high mountain") only because the frequency data is saturated — a separate
+    // just behind 岳 ("high mountain") only because the frequency data is saturated: a separate
     // freq-backfill concern; both are genuine mountain words, so top-3 is the honest bar here.
     let hw = headwords(&search("mountains").await);
     let rank = hw.iter().position(|h| h == "山");
@@ -315,7 +315,7 @@ async fn cognate_label() {
     assert_eq!(sf["relation"], "cognate");
 }
 
-// The "characters" breakdown of a word lists only Han ideographs — kana/okurigana are NOT components.
+// The "characters" breakdown of a word lists only Han ideographs: kana/okurigana are NOT components.
 // あずかり知る must break down to 知 alone, never to a hiragana like り.
 #[tokio::test]
 async fn characters_breakdown_excludes_kana() {
@@ -457,7 +457,7 @@ async fn char_decomposition_repeats() {
     assert!(e["characters"][0]["decomp"].is_null(), "好 (女+子) has no uniform decomposition");
 }
 
-// Kana search: as-you-type prefix, hiragana/katakana folding, and mixed kanji+kana prefix — the
+// Kana search: as-you-type prefix, hiragana/katakana folding, and mixed kanji+kana prefix: the
 // cases that previously returned an empty screen until the exact dictionary form was fully typed.
 #[tokio::test]
 async fn kana_reading_prefix() {
@@ -591,7 +591,7 @@ async fn char_components_have_meanings() {
 #[tokio::test]
 async fn char_components_radical_variant_parent_gloss() {
     // 倭 = 人(semantic) + 委(phonetic). With phono-semantic role data we now surface the real,
-    // lookupable component 人 ("person") glossed correctly — not the bound radical 亻 nor "radical no.".
+    // lookupable component 人 ("person") glossed correctly: not the bound radical 亻 nor "radical no.".
     let hit = entry_of(&search("倭").await, "zh", "倭");
     let e = get(&format!("/entry/{}", hit["lexeme_id"].as_i64().unwrap())).await.1;
     let comps = components(&e, 0);
@@ -618,14 +618,14 @@ async fn char_components_repeated_base_meaning() {
 }
 #[tokio::test]
 async fn char_components_empty_for_atomic() {
-    // 木 is atomic — no sub-components to explain
+    // 木 is atomic: no sub-components to explain
     let hit = entry_of(&search("木").await, "zh", "木");
     let e = get(&format!("/entry/{}", hit["lexeme_id"].as_i64().unwrap())).await.1;
     assert!(e["characters"][0]["components"].as_array().unwrap().is_empty(), "木 is atomic");
 }
 
 // CC-CEDICT '/'-delimited senses become separate numbered senses (like JMdict), instead of
-// collapsing into one "1." — so Chinese and Japanese entries enumerate uniformly.
+// collapsing into one "1.": so Chinese and Japanese entries enumerate uniformly.
 #[tokio::test]
 async fn cedict_senses_enumerate_uniformly() {
     let hit = entry_of(&search("輪").await, "zh", "輪");
@@ -736,7 +736,7 @@ async fn ja_kana_reading_has_pitch_accent() {
 }
 
 // C5. a SINGLE kanji's kana on/kun reading also carries the word-level Kanjium accent, so a single-
-// character entry (箸/橋/端 — the minimal pairs) shows the pitch contour, not just multi-kanji words.
+// character entry (箸/橋/端: the minimal pairs) shows the pitch contour, not just multi-kanji words.
 #[tokio::test]
 async fn single_kanji_char_reading_has_pitch_accent() {
     let e = entry_top("箸").await;
@@ -756,7 +756,7 @@ async fn single_kanji_char_reading_has_pitch_accent() {
 }
 
 // C7. a cross-listed ja word (空港 also exists in zh) carries its Kanjium accent on the search hit,
-// not only on a direct ja entry — so the forced-accent synth + contour work everywhere it's shown.
+// not only on a direct ja entry: so the forced-accent synth + contour work everywhere it's shown.
 #[tokio::test]
 async fn cross_listed_ja_hit_has_accent() {
     let v = search("空港").await;
@@ -1059,7 +1059,7 @@ fn first_id(v: &Value) -> i64 {
 #[tokio::test]
 async fn xi_homograph_leads_with_wash_not_xiang_ma() {
     // 洗 has xǐ ("to wash", rich) and xiǎn ("used in 洗馬", a bare cross-reference). The wash reading
-    // must lead — the richer-meaning tiebreak picks it over the minor-gloss homograph.
+    // must lead: the richer-meaning tiebreak picks it over the minor-gloss homograph.
     let v = search("洗").await;
     let g = v["results"][0]["glosses"].as_array().unwrap();
     let joined = g.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join("; ");
@@ -1082,7 +1082,7 @@ async fn xi_ranking_is_stable_across_requests() {
 #[tokio::test]
 async fn homograph_xing_is_stable_across_requests() {
     // 行 is a multi-reading homograph (xíng / háng / héng). Whichever leads, it must be the SAME one
-    // every time — no per-request flicker.
+    // every time: no per-request flicker.
     let id0 = first_id(&search("行").await);
     for _ in 0..6 {
         assert_eq!(first_id(&search("行").await), id0, "行 lead lexeme must be deterministic");
@@ -1106,7 +1106,7 @@ async fn richer_reading_outranks_bare_cross_reference() {
 #[tokio::test]
 async fn equal_score_results_have_total_order() {
     // two 洗 lexemes share a frequency/score; the result order must be a total order (no duplicate
-    // ids, deterministic) — re-running yields an identical id sequence.
+    // ids, deterministic): re-running yields an identical id sequence.
     let ids = |v: &Value| -> Vec<i64> {
         v["results"].as_array().unwrap().iter().map(|r| r["lexeme_id"].as_i64().unwrap()).collect()
     };
@@ -1190,28 +1190,28 @@ async fn badges_for(q: &str) -> Vec<String> {
 
 #[tokio::test]
 async fn sofa_is_phono_semantic_matching() {
-    // 沙發 shāfā "sofa" — a phonetic loan; the characters were chosen for their sound.
+    // 沙發 shāfā "sofa": a phonetic loan; the characters were chosen for their sound.
     let b = badges_for("沙發").await;
     assert!(b.contains(&"phono-semantic-matching".to_string()), "沙發 badges = {b:?}");
 }
 
 #[tokio::test]
 async fn humour_is_phono_semantic_matching() {
-    // 幽默 yōumò "humour" — Hu Shih's classic psm coinage.
+    // 幽默 yōumò "humour": Hu Shih's classic psm coinage.
     let b = badges_for("幽默").await;
     assert!(b.contains(&"phono-semantic-matching".to_string()), "幽默 badges = {b:?}");
 }
 
 #[tokio::test]
 async fn club_is_phono_semantic_matching() {
-    // 俱樂部 "club" — a phonetic loan written with sound-and-meaning-fitting characters.
+    // 俱樂部 "club": a phonetic loan written with sound-and-meaning-fitting characters.
     let b = badges_for("俱樂部").await;
     assert!(b.contains(&"phono-semantic-matching".to_string()), "俱樂部 badges = {b:?}");
 }
 
 #[tokio::test]
 async fn telephone_is_not_a_sound_loan() {
-    // 電話 "telephone" — a normal semantic compound (electric + speech), NOT a transliteration.
+    // 電話 "telephone": a normal semantic compound (electric + speech), NOT a transliteration.
     let b = badges_for("電話").await;
     assert!(
         !b.contains(&"phono-semantic-matching".to_string()),
@@ -1221,7 +1221,7 @@ async fn telephone_is_not_a_sound_loan() {
 
 #[tokio::test]
 async fn ordinary_word_has_no_sound_loan_badge() {
-    // 機場 "airport" — a plain compound; no phonetic-loan signal.
+    // 機場 "airport": a plain compound; no phonetic-loan signal.
     let b = badges_for("機場").await;
     assert!(
         !b.contains(&"phono-semantic-matching".to_string()),
@@ -1914,7 +1914,7 @@ async fn merged_simplification_lists_all_parents() {
 
 #[tokio::test]
 async fn three_way_merger_gan() {
-    // 干 absorbed 乾, 幹 and 榦 — all three must be offered.
+    // 干 absorbed 乾, 幹 and 榦: all three must be offered.
     let (_, e) = get(&format!("/entry/{}", -(0x5E72_i64))).await; // 干
     let forms = branch_forms(&e);
     for f in ["乾", "幹", "干"] {

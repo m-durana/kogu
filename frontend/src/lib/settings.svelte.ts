@@ -23,7 +23,7 @@ export const settings = $state({
   romanization: loadRom() as Romanization,
   // show the Japanese pitch-accent contour (overline + downstep tick) on kana readings
   pitchAccent: loadBool('kogu:pitch', true),
-  // play readings aloud (tap the speaker) — when off, the speaker buttons are hidden
+  // play readings aloud (tap the speaker): when off, the speaker buttons are hidden
   audio: loadBool('kogu:audio', true),
 })
 

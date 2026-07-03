@@ -190,7 +190,7 @@ fn contains_word(hay: &str, needle: &str) -> bool {
 
 /// Light English stemmer for RANKING alignment only (FTS porter handles retrieval): strip a common
 /// inflectional suffix so "ears"→"ear", "studies"→"study", "loved"→"lov", "running"→"runn". It does
-/// NOT need to be linguistically perfect — `stem_close` absorbs porter's silent-e (lov ≈ love).
+/// NOT need to be linguistically perfect: `stem_close` absorbs porter's silent-e (lov ≈ love).
 fn stem_word(w: &str) -> String {
     for (suf, rep) in [
         ("ies", "y"),
@@ -244,7 +244,7 @@ fn gloss_match_quality(gloss: &str, ql: &str) -> f64 {
 }
 
 /// Map gloss-match quality to a retrieval weight with a DECISIVE exact-sense bonus: when the query
-/// term IS a full sense of an entry, that must beat a fringe entry that merely mentions it — even one
+/// term IS a full sense of an entry, that must beat a fringe entry that merely mentions it: even one
 /// with far higher frequency. So "ear" → 耳 (a sense "ear"), not 稲穂 ("ear of rice"). The old linear
 /// 0.45+0.55·quality let frequency swamp the meaning signal; these tiers don't.
 fn english_weight(quality: f64) -> f64 {
@@ -261,7 +261,7 @@ fn english_weight(quality: f64) -> f64 {
 
 /// Count glosses that carry real meaning, ignoring bare cross-references ("used in 洗馬", "variant of
 /// X", "see Y", "surname Z", "abbr…"). Used only as a deterministic ranking tiebreak so the richer
-/// reading of a homograph leads — mirrors the frontend `isMinorGloss` so backend rank and the def the
+/// reading of a homograph leads: mirrors the frontend `isMinorGloss` so backend rank and the def the
 /// UI keeps agree. Lowercased prefix check; deliberately cheap.
 fn meaningful_gloss_count(glosses: &[String]) -> usize {
     glosses
@@ -365,7 +365,7 @@ fn collect_suggest(
 }
 
 /// Lightweight autocomplete: prefix matches on the written form (Han), the reading (kana /
-/// pinyin / jyutping), or an English gloss term — frequency-ranked, deduped by headword. No senses,
+/// pinyin / jyutping), or an English gloss term: frequency-ranked, deduped by headword. No senses,
 /// so it is cheap to call on every keystroke.
 pub fn suggest(conn: &Connection, q: &str, limit: usize) -> rusqlite::Result<SuggestResponse> {
     let q = q.trim();
@@ -463,7 +463,7 @@ fn wildcard_search(
             }
         }
     }
-    // a pattern with no literal characters (just * / ?) would dump the corpus — refuse it.
+    // a pattern with no literal characters (just * / ?) would dump the corpus: refuse it.
     if literals == 0 {
         return Ok(SearchResponse {
             query: q.to_string(),
@@ -472,7 +472,7 @@ fn wildcard_search(
         });
     }
     // match on the lexeme's PRIMARY/headword form only, so the displayed headword actually fits the
-    // pattern. (Without this, a usually-kana word with a rare kanji variant ending in 場 — 鱈場/タラバ —
+    // pattern. (Without this, a usually-kana word with a rare kanji variant ending in 場: 鱈場/タラバ :
     // leaks into a "*場" search as タラバ.)
     let mut stmt = conn.prepare(
         "SELECT DISTINCT sf.lexeme_id FROM surface_form sf JOIN lexeme l ON l.id = sf.lexeme_id \
@@ -642,11 +642,11 @@ pub fn search(
                     let mut w = english_weight(quality);
                     if quality >= 1.0 && reading_hit && ql_single {
                         // the query is a romanization and this "gloss" is just that single token (a
-                        // transliteration label, e.g. 仞 "ren (a measure)") — demote so the phonetic
+                        // transliteration label, e.g. 仞 "ren (a measure)"): demote so the phonetic
                         // reading (人) leads, not the transliterated obscure word.
                         w = english_weight(0.5);
                     } else if quality >= 1.0 && sense_order == 0 {
-                        // the query IS this word's PRIMARY meaning (exact match on sense 0) — a stronger
+                        // the query IS this word's PRIMARY meaning (exact match on sense 0): a stronger
                         // signal than an exact match on a word's minor sense, and big enough to beat the
                         // (unreliable) frequency tiebreak: 山 leads "mountain", not 深山 ("deep mountains"),
                         // whose bare "mountain" sense is secondary.
@@ -691,7 +691,7 @@ pub fn search(
             // languages, so the homographs tie on match-weight and frequency alone would decide. Since
             // the full JMdict added many common Japanese single-kanji that outscore their Chinese twin
             // on the Japanese corpus, nudge the Chinese (then Cantonese) reading ahead by a small
-            // amount — enough to win a near-tie (洗→xǐ, 火車→huǒchē "train"), never enough to override a
+            // amount: enough to win a near-tie (洗→xǐ, 火車→huǒchē "train"), never enough to override a
             // genuinely better match. No effect on kana/Latin queries.
             if kind == Kind::Han {
                 hit.score += match hit.variety.as_str() {
@@ -703,7 +703,7 @@ pub fn search(
             hits.push(hit);
         }
     }
-    // Rank by score, then DETERMINISTIC tiebreaks — without them, equal-score homographs (洗 xǐ "to
+    // Rank by score, then DETERMINISTIC tiebreaks: without them, equal-score homographs (洗 xǐ "to
     // wash" vs xiǎn "used in 洗馬", same freq → same score) were ordered by HashMap iteration, which is
     // randomly seeded per request, so the same character led with a different reading on each visit.
     // Tiebreak on richer-meaning first (more non-cross-reference glosses), then lowest lexeme_id, so a
@@ -717,7 +717,7 @@ pub fn search(
     });
 
     // English (Latin) queries: a common word's meaning-match tiers collapse to a near-tie, so the freq
-    // tiebreak decides — and freq is systematically higher for Japanese (separate corpora, not
+    // tiebreak decides: and freq is systematically higher for Japanese (separate corpora, not
     // cross-comparable), which stacked 10+ ja hits before the first Chinese one. Reflow so at most
     // CAP_RUN in a row share a variety, surfacing a 中/粵 result near the top, without disturbing the
     // score order within each variety. Latin-only so Han/kana/wildcard ordering is untouched.

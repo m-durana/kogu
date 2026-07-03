@@ -18,7 +18,7 @@
   } = $props()
 
   const ordered = $derived(forms ? orderBranches(forms.branches) : [])
-  // the reform arrow sits between the traditional form(s) and what they became — with merged
+  // the reform arrow sits between the traditional form(s) and what they became: with merged
   // simplifications there can be SEVERAL traditional parents before it (乾 幹 榦 → 干)
   const arrowAt = $derived(ordered.findIndex((b) => !b.script.split('+').includes('traditional')))
 </script>
@@ -53,10 +53,12 @@
     padding: 0.1rem 0.2rem; border-radius: var(--r); border: 1px solid transparent;
   }
   .b:hover { background: var(--surface); }
-  /* the looked-up form is marked by a stronger tag colour only — no ring, no underline (item 14) */
+  /* the looked-up form is marked by a stronger tag colour only: no ring, no underline (item 14) */
   .b.cur { background: none; }
   .b.cur .tag { color: var(--text); font-weight: 600; }
-  .tag { font-family: var(--mono); font-size: 0.62rem; color: var(--faint); }
+  /* muted, not faint: TC/SC/JP here tell you WHICH form you're looking at (the def rows' .ftag
+     uses the same tier), and faint (#4b4b4e on black) is below readable contrast */
+  .tag { font-family: var(--mono); font-size: 0.62rem; color: var(--muted); }
   .g { font-family: var(--han); font-size: 1.7rem; line-height: 1; color: var(--text); }
   .arrow { color: var(--faint); align-self: center; }
   .cap { font-family: var(--mono); font-size: 0.6rem; color: var(--faint); letter-spacing: 0.02em; padding-left: 0.2rem; }

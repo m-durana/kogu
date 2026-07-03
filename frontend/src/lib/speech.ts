@@ -1,13 +1,13 @@
 // Pronunciation, per displayed reading. The old version fed the Han text to one OS voice, so a
 // multi-reading character only ever spoke its default reading and Cantonese (zh-HK, rarely installed)
 // was silent. Now each reading is voiced from its OWN romanisation:
-//   • Mandarin  — per-syllable mp3 clips keyed by numbered pinyin (jsDelivr, CORS *).
-//   • Cantonese — per-syllable mp3 clips keyed by jyutping (jyutping.org, CORS *).
-//   • Japanese  — Web Speech fed the KANA reading, so the shown yomi is what's spoken.
+//   • Mandarin : per-syllable mp3 clips keyed by numbered pinyin (jsDelivr, CORS *).
+//   • Cantonese: per-syllable mp3 clips keyed by jyutping (jyutping.org, CORS *).
+//   • Japanese : Web Speech fed the KANA reading, so the shown yomi is what's spoken.
 // Clips are cached by the service worker (cache-first), so repeat taps and offline both work. If a
 // clip is missing or the network is down we fall back to the OS voice on the Han text.
 
-// Pronunciation clips are proxied through our own backend (/api/clip/...) so they are SAME-ORIGIN —
+// Pronunciation clips are proxied through our own backend (/api/clip/...) so they are SAME-ORIGIN :
 // the upstream CDNs (jsDelivr for Mandarin, jyutping.org for Cantonese) are unreachable for some users
 // (mainland China blocks jsDelivr; some iOS/PWA setups fail the cross-origin fetch), which silently
 // broke zh/yue audio while the same-origin Japanese synth kept working.
@@ -80,7 +80,7 @@ async function fetchClip(url: string): Promise<string | null> {
   try {
     const res = await fetch(url)
     const type = res.headers.get('content-type') || ''
-    // jyutping.org serves a 200 text/html SPA page for a missing syllable — accept only real audio.
+    // jyutping.org serves a 200 text/html SPA page for a missing syllable: accept only real audio.
     if (!res.ok || !type.startsWith('audio')) return null
     return URL.createObjectURL(await res.blob())
   } catch {
@@ -125,7 +125,7 @@ function playOne(obj: string, my: number, rate: number): Promise<void> {
 }
 
 async function playClips(urls: string[], my: number): Promise<number> {
-  // Kick off ALL fetches in parallel, but play each clip the MOMENT its own fetch resolves — the first
+  // Kick off ALL fetches in parallel, but play each clip the MOMENT its own fetch resolves: the first
   // syllable starts as soon as it's ready instead of blocking on the slowest clip (that all-or-nothing
   // wait was the multi-second delay before playback began). Remaining clips keep loading during
   // playback, so a multi-syllable word still runs together with no gap.
@@ -150,7 +150,7 @@ async function playClips(urls: string[], my: number): Promise<number> {
   return played
 }
 
-// Web Speech on the Han text — the offline / clip-missing fallback, and the path used when we have no
+// Web Speech on the Han text: the offline / clip-missing fallback, and the path used when we have no
 // usable romanisation. rate 0.9 to match the clip pace.
 function speakSynth(text: string, variety: string): void {
   if (!haveSynth() || !text) return
@@ -214,12 +214,12 @@ export function speakReading(
     .filter((x): x is string => !!x)
 
   if (!files.length) {
-    // no romanisation to key clips on (e.g. a bare letter/number reading) — use the OS voice.
+    // no romanisation to key clips on (e.g. a bare letter/number reading): use the OS voice.
     speakSynth(fallbackText || '', variety)
     return Promise.resolve()
   }
 
-  // resolves when playback finishes (or is superseded) — the UI uses this to light the speaker only
+  // resolves when playback finishes (or is superseded): the UI uses this to light the speaker only
   // while it's actually sounding.
   return playClips(files.map((f) => base + f + '.mp3'), my).then((played) => {
     // every syllable was missing (and we weren't superseded) → fall back to the OS voice.

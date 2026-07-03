@@ -89,7 +89,7 @@ pub struct OriginAccount {
     pub headword: String,
     pub text: String,
     /// which script this glyph is, when it diverges across reforms: "traditional" | "simplified".
-    /// None when the glyph is the same in every script (山, 古) — nothing to disambiguate.
+    /// None when the glyph is the same in every script (山, 古): nothing to disambiguate.
     pub script: Option<String>,
     /// a clarifying note when this glyph ALSO doubles as the simplified form of a distinct character
     /// (丑 is the earthly branch AND the simplified form of 醜 "ugly"). Prevents the reader from
@@ -140,12 +140,12 @@ pub struct CharInfo {
     /// the character's script family across reforms (繁→简·日), for the forms strip. None when the
     /// glyph has no living cross-script branches and isn't a kokuji (nothing to show).
     pub script_forms: Option<ScriptForms>,
-    /// confusable look-alikes (Unihan kSpoofingVariant) — glyphs easily MISREAD for this one (㓕/滅).
+    /// confusable look-alikes (Unihan kSpoofingVariant): glyphs easily MISREAD for this one (㓕/滅).
     /// Purely a visual-confusability note, NOT identity or meaning; empty for most characters.
     pub confusables: Vec<String>,
     /// when the character is built entirely from repetitions of ONE simpler glyph (森 = three 木,
     /// 晶 = three 日, 淼 = three 水), resolved recursively through "doubled" intermediates (林, 昍, 沝).
-    /// None for mixed-component characters (好 = 女 + 子) — the frontend then shows the flat parts.
+    /// None for mixed-component characters (好 = 女 + 子): the frontend then shows the flat parts.
     pub decomp: Option<CharDecomp>,
     /// the character's distinct components WITH their meanings (森 → 木 "tree"; 好 → 女 "woman", 子
     /// "child"), so the structure section explains the parts, not just lists them. Radical-variant
@@ -175,12 +175,12 @@ pub struct Component {
     pub ch: String,
     pub gloss: Option<String>,
     /// 'semantic' (carries the meaning) | 'phonetic' (carries the sound) | 'form' | 'iconic' | None.
-    /// From Wiktionary's structured Han-compound data — 媽 = 女 (semantic) + 馬 (phonetic).
+    /// From Wiktionary's structured Han-compound data: 媽 = 女 (semantic) + 馬 (phonetic).
     pub role: Option<String>,
-    /// for a phonetic component, the sound it lends — the component's own reading (馬 → "ma3"), so the
+    /// for a phonetic component, the sound it lends: the component's own reading (馬 → "ma3"), so the
     /// UI can show "(sound: mǎ)". None for non-phonetic components or when no reading is known.
     pub sound: Option<String>,
-    /// for a phonetic component, its Middle Chinese (廣韻 / Baxter) reading(s) — the HISTORICAL sound
+    /// for a phonetic component, its Middle Chinese (廣韻 / Baxter) reading(s): the HISTORICAL sound
     /// it lent (同 → "duwng"), so the structure section can show the phonological "why": the modern
     /// pinyin link plus the older Middle Chinese one. Empty for non-phonetic components or no MC data.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

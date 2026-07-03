@@ -11,7 +11,7 @@ export interface SavedItem {
   variety: Variety
   gloss: string | null
   ts: number
-  /** a raw SEARCH query (no single word/entry matched, e.g. 中宇大廈) — tapping it re-runs the search
+  /** a raw SEARCH query (no single word/entry matched, e.g. 中宇大廈): tapping it re-runs the search
    * rather than opening an entry by id. Entry items omit this. */
   query?: boolean
 }
@@ -51,7 +51,7 @@ export function getHistory(): SavedItem[] {
 }
 // Stable identity across DB rebuilds: lexeme ids are REASSIGNED on a rebuild, so matching saved/history
 // entries by id can show the wrong word as bookmarked and silently unsave an unrelated one. Match by
-// content instead — written form + variety + reading (or just the form, for a raw search query).
+// content instead: written form + variety + reading (or just the form, for a raw search query).
 type ItemKey = Pick<SavedItem, 'headword' | 'variety' | 'reading' | 'query'>
 function sameEntry(a: ItemKey, b: ItemKey): boolean {
   if (!!a.query !== !!b.query) return false
@@ -86,7 +86,7 @@ export function recordHistory(item: SavedItem) {
     // drop an exact duplicate query anywhere…
     list = list.filter((s) => !(s.query && s.headword === item.headword))
     // …and collapse ONLY the consecutive live-typing chain: if the most-recent entry is a prefix of
-    // this one (or vice versa) — 中 → 中宇 → 中宇大廈 — drop just it. Older distinct searches survive
+    // this one (or vice versa): 中 → 中宇 → 中宇大廈: drop just it. Older distinct searches survive
     // (a later 中國 no longer wipes an earlier standalone 中).
     const head = list[0]
     if (head?.query && (head.headword.startsWith(item.headword) || item.headword.startsWith(head.headword))) {

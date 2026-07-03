@@ -75,7 +75,7 @@ export function varietyLabel(v: Variety): string {
   return v === 'zh' ? '中' : v === 'yue' ? '粵' : '日'
 }
 
-/** Full language name for a variety — used for section/divider headings (e.g. the language-sorted
+/** Full language name for a variety: used for section/divider headings (e.g. the language-sorted
  * Related / Used-in lists, where each 中/粵/日 group gets a labelled divider). */
 export function varietyName(v: Variety): string {
   return v === 'zh' ? 'Mandarin' : v === 'yue' ? 'Cantonese' : 'Japanese'
@@ -87,7 +87,7 @@ export function varietyName(v: Variety): string {
  * Unicode code-point count ([...head].length). */
 export function headwordGlyphSize(len: number): string {
   // full size up to 4 characters; one modest step down beyond that. A really long word is NOT shrunk
-  // further — it clamps to one line and the UI offers a "+" to expand it downward instead.
+  // further: it clamps to one line and the UI offers a "+" to expand it downward instead.
   if (len <= 4) return 'clamp(2.8rem, 14vw, 3.8rem)'
   return 'clamp(2.0rem, 9vw, 2.6rem)'
 }
@@ -98,14 +98,14 @@ export function langTag(v: Variety): string {
   return v === 'ja' ? 'ja' : v === 'yue' ? 'zh-Hant' : 'zh-Hans'
 }
 
-/** Region-correct Han serif for a variety — applied inline so it beats component-scoped styles. U+8AA4
+/** Region-correct Han serif for a variety: applied inline so it beats component-scoped styles. U+8AA4
  * 誤 (and many Han-unified chars) render with different shapes per region; a single Simplified cut drew
  * the Chinese 誤 even for a Japanese word, so Japanese/Cantonese get their own cut. */
 export function hanFont(v: Variety): string {
   return v === 'ja' ? 'var(--han-ja)' : v === 'yue' ? 'var(--han-tc)' : 'var(--han)'
 }
 
-/** A region-EXCLUSIVE word — one used only in a particular region, written with its own characters
+/** A region-EXCLUSIVE word: one used only in a particular region, written with its own characters
  * (taxi: Taiwan 計程車 vs mainland 出租車). CC-CEDICT marks these per sense with "(Tw)" / "(HK)". A word
  * earns a region badge only when its PRIMARY (first non-minor) sense carries the marker, so a general
  * word that merely has one regional sense is NOT tagged: 計程車 "(Tw) taxi" → ['Taiwan']; 出租車 "taxi" +
@@ -253,7 +253,7 @@ export function glyphWikiUrl(ch: string): string | null {
 // there is no genuine TC/SC pair (identical forms, kokuji, shinjitai-only, z-variants).
 export function scSwitchTarget(sf: ScriptForms | null, head: string): { to: string; label: string } | null {
   if (!sf || sf.is_kokuji) return null
-  // a merger target (干, 周, 面) is its own traditional form — jumping to one of the characters
+  // a merger target (干, 周, 面) is its own traditional form: jumping to one of the characters
   // that merged INTO it (乾, 賙, 麪) would claim a false equivalence, so no switch button
   const cur = sf.branches.find((b) => b.form === head)
   if (cur?.is_orthodox && cur.script.split('+').includes('simplified')) return null
@@ -265,7 +265,7 @@ export function scSwitchTarget(sf: ScriptForms | null, head: string): { to: stri
   return null
 }
 
-// Tag for a surface_form's script (trad/simp/shinjitai) — used to label both Chinese forms equally.
+// Tag for a surface_form's script (trad/simp/shinjitai): used to label both Chinese forms equally.
 export function formTag(script: string): string {
   return ({ trad: 'TC', simp: 'SC', shinjitai: 'JP' } as Record<string, string>)[script] ?? ''
 }
@@ -306,10 +306,10 @@ const EDGE_KIND: Record<string, string> = {
 }
 // A full-sentence explanation of a script change for the structure section (item 14): the two forms
 // carry the same meaning, and the reason for the divergence (reform + year). A glyph can be BOTH a
-// Japanese shinjitai AND a PRC simplification of the same parent (萬 → 万) — say it's both, so it never
+// Japanese shinjitai AND a PRC simplification of the same parent (萬 → 万): say it's both, so it never
 // reads as if Chinese took the form from Japanese. A reform can also merge SEVERAL characters into one
 // glyph (沖+衝 → 冲, 乾+幹+榦 → 干); and the merged glyph can be a traditional character in its own
-// right (selfOrthodox: 干, 后, 面) — the old single-parent sentence wrongly presented those as nothing
+// right (selfOrthodox: 干, 后, 面): the old single-parent sentence wrongly presented those as nothing
 // but derived forms. Returns null when there's no orthodox parent.
 export function scriptChangeNote(head: string, variants: VariantEdge[], selfOrthodox = false): string | null {
   if (!variants.length) return null
@@ -402,7 +402,7 @@ export function cleanIds(ids: string | null): string {
 /** Describe a character's composition from its IDS, KEEPING the structural information cleanIds throws
  * away: which components it's built from, how many of each (so 森 = three 木, 淼 = three 水), and how
  * they're arranged (the top-level Ideographic Description Character). This is the "background on the
- * character" — what radicals/parts make it up — not just a flat component list. */
+ * character": what radicals/parts make it up: not just a flat component list. */
 export type IdsPart = { component: string; count: number }
 export interface IdsInfo {
   parts: IdsPart[]
@@ -473,13 +473,13 @@ export function cleanGloss(g: string): string {
   s = s.replace(/\[[A-Za-zÀ-ÿüÜ0-9·,.\s]*\]/g, '') // [hang2 kong1 gang3], [fa3] - before pipes
   s = s.replace(/([^\s;,，|[\]]+)\|([^\s;,，|[\]]+)/g, '$1') // 處|处 -> 處
   s = s.replace(/[,;]?\s*(?:Taiwan|Mainland|also|old|erhua|Cantonese)\s+pr\.\s*/gi, ' ') // pr. notes
-  // trailing borrowed-source note ("…(from Japanese 入 "iri")") — metadata, not meaning; drop it but
+  // trailing borrowed-source note ("…(from Japanese 入 "iri")"): metadata, not meaning; drop it but
   // keep the actual sense before it (馬鹿 "idiot (from Japanese)" → "idiot").
   s = s.replace(/[,;]?\s*\(from (?:Japanese|English|French|German|Latin|Korean|Chinese|Sanskrit|Mongolian|Manchu)\b[^)]*\)\s*$/i, '')
   // metadata tags / radical-number boilerplate are not meanings: 働 "…; (kokuji)" → drop tag;
   // 氵 "water; radical number 85" → "water"; 彳 "…; rad. no 60" → drop; "going man radical (no. 60)".
   s = s.replace(/[;,]?\s*\(?\s*kokuji\s*\)?/gi, '')
-  // paren-wrapped radical note ("(Kangxi radical 60)", "(radical 60)", "(no. 60)") — keyword-anchored
+  // paren-wrapped radical note ("(Kangxi radical 60)", "(radical 60)", "(no. 60)"): keyword-anchored
   // so it never eats an ordinary numeric parenthetical like "(5)".
   s = s.replace(/\s*[;,]?\s*\(\s*(?:kangxi\s+)?(?:radical|rad\.?|no\.?)\s*(?:number|no\.?)?\s*\d+\s*\)/gi, '')
   // bare radical-number boilerplate ("radical number 85", "Kangxi radical 144", "rad. no 60")
@@ -494,10 +494,10 @@ export function cleanGloss(g: string): string {
 }
 
 // CC-CEDICT separates SENSES with "/" (each becomes its own row) but within one sense uses ";" for
-// BOTH synonyms ("I; me; my" — one meaning) AND, sometimes, genuinely distinct senses each carrying a
+// BOTH synonyms ("I; me; my": one meaning) AND, sometimes, genuinely distinct senses each carrying a
 // scope marker ("(of a nation) to join an alliance; (of an athlete) to join a sports team; …"). The
 // first must stay on one line; the second should enumerate. The reliable distinct-sense signal is a
-// leading scope marker — "(…)", "lit.", "fig.", "(idiom)" — on the parts. So we split a single gloss
+// leading scope marker: "(…)", "lit.", "fig.", "(idiom)": on the parts. So we split a single gloss
 // into multiple senses ONLY when ≥2 of its ";"-parts carry such a marker; plain synonym lists are left
 // as one line (so 我 stays "I; me; my", not "1. I 2. me 3. my").
 const SENSE_MARKER = /^\(|^lit\.|^fig\.|^\s*idiom\b/i
@@ -552,13 +552,13 @@ export function meaningfulGlossCount(glosses: string[]): number {
  * leading "variant of / used in / see / see also" cue followed by a Han run; everything else is one
  * plain text part. (CJK range, not \p{Han}: the build-time regex parser rejects script-name escapes.) */
 /** CC-CEDICT marks morphemes that never stand alone as words with "(bound form)" (occasionally
- * "(meaningless bound form)"). True if any of a row's raw glosses carries that marker — the prose has
+ * "(meaningless bound form)"). True if any of a row's raw glosses carries that marker: the prose has
  * it stripped (see cleanGloss), so detect it here to show a small tappable "bound" tag instead. */
 const BOUND_FORM_RE = /\(\s*(?:meaningless\s+)?bound form\s*\)/i
 export function isBoundForm(glosses: string[]): boolean {
   return glosses.some((g) => BOUND_FORM_RE.test(g))
 }
-/** True only when EVERY meaningful sense is bound — a genuinely always-bound morpheme. 日 has both
+/** True only when EVERY meaningful sense is bound: a genuinely always-bound morpheme. 日 has both
  * bound senses ("(bound form) sun") and free senses ("day"), so it is NOT always-bound; 的/號 are. */
 export function isAlwaysBound(glosses: string[]): boolean {
   const real = glosses.filter(Boolean)
@@ -573,11 +573,11 @@ export type GlossPart = { v: string; link?: boolean }
 // \p{Han}/the `u` flag: the build-time regex parser rejects Unicode script-name escapes.
 // Use \u escapes, not literal chars: the literal lead of the compat-ideograph range was mis-typed as
 // 豈 U+8C48 (a UNIFIED ideograph) instead of U+F900, so the class spanned U+8C48–U+FAFF and swallowed
-// the entire Hangul Syllables block — Korean 말 was being turned into a (dead) link. Ranges: CJK Ext A
+// the entire Hangul Syllables block: Korean 말 was being turned into a (dead) link. Ranges: CJK Ext A
 // + Unified (3400–9FFF), iteration marks 々〆 (3005–3006), CJK Compat Ideographs (F900–FAFF), and the
 // Supplementary Ideographic Plane via surrogate pairs (item 159).
 const HAN_RUN = /(?:[\u3400-\u9FFF\u3005\u3006\uF900-\uFAFF]|[\uD840-\uD8BF][\uDC00-\uDFFF])+/g
-/** Split a string so every Han run becomes a tappable link and the rest stays plain text — used in
+/** Split a string so every Han run becomes a tappable link and the rest stays plain text: used in
  * glosses ("variant of 著" → 著 links; "ear; handle 耳" → 耳 links) and origin prose. */
 export function linkifyHan(s: string): GlossPart[] {
   const out: GlossPart[] = []
@@ -596,10 +596,10 @@ export const glossParts = linkifyHan
 
 // === "Written for sound" marker (phonetic-loan / transliteration words) ===
 // For a CHARACTER the app shows which component is semantic vs phonetic (媽 = 女 meaning + 馬 sound).
-// For most multi-character WORDS that doesn't apply — words are semantic compounds. The exception is
+// For most multi-character WORDS that doesn't apply: words are semantic compounds. The exception is
 // transliterations / phonetic loans, where the characters were chosen for their SOUND, not meaning
 // (沙發 shāfā "sofa", 幽默 yōumò "humour", 俱樂部 "club"). We surface those with a small marker, driven
-// ENTIRELY by the existing origin badges — no classifier. The strongest, precise signal is wiktextract's
+// ENTIRELY by the existing origin badges: no classifier. The strongest, precise signal is wiktextract's
 // `phono-semantic-matching` (psm) badge: a foreign word written with sound-fitting characters. A plain
 // `borrowed-*` badge alone is NOT enough (a Sino-Japanese loan / wasei-kango is borrowed but is still a
 // meaning-compound), so we require the psm badge. Single characters are excluded by the caller (they use
@@ -613,7 +613,7 @@ export function isSoundLoan(badges: string[] | null | undefined): boolean {
 // modern pinyin shows the present-day link; the Middle Chinese (廣韻 / Baxter) reading shows the
 // HISTORICAL one, which is often closer (and sometimes diverged: 媽 muX in 廣韻 ≠ 馬 maeX, a modern-only
 // re-analysis). These helpers split a Baxter reading so the UI can say WHETHER the sound link holds in
-// Middle Chinese — honestly, never asserting a match that the readings don't support.
+// Middle Chinese: honestly, never asserting a match that the readings don't support.
 
 // Strip Baxter tone marks (final X = rising 上, H = departing 去; level/entering carry none).
 function mcToneless(r: string): string {
@@ -644,7 +644,7 @@ export interface McLink {
    *  - 'related' some shared sound (same rhyme and/or same initial consonant)
    *  - 'diverged' no shared initial or rhyme (the series only works in the modern reading) */
   relation: 'same' | 'related' | 'diverged'
-  /** a short plain-English sentence describing the historical sound link — phrased cautiously so a
+  /** a short plain-English sentence describing the historical sound link: phrased cautiously so a
    * partial resemblance (shared initial only) is never overstated as a full sound match */
   note: string
 }
@@ -715,7 +715,7 @@ export function soundLoanTitle(badges: string[] | null | undefined): string {
 // and sometimes numbered "Etymology 1/2" sections, peppered with academic jargon (形聲, OC, STEDT,
 // Proto-Sino-Tibetan…). We (1) split it into clearly-delineated segments, and within each segment
 // (2) keep phonological reconstructions faint, (3) attach plain-English tooltips to the jargon, and
-// (4) make every Han run tappable — composed as ordered passes so they don't fight each other.
+// (4) make every Han run tappable: composed as ordered passes so they don't fight each other.
 
 // Plain-English glossary for the jargon. Longest keys first so phrases beat their abbreviations and
 // CJK terms match before single chars. `word: true` adds \b boundaries (so "OC" ≠ inside "OCt").
@@ -835,9 +835,9 @@ const ETY_GLOSSARY: GlossEntry[] = [
   { term: 'PIE', title: 'Proto-Indo-European.', word: true, cs: true },
   // Historical sources & script stages (item 158). Listed longest-variant first so the dated forms
   // ("… of 720 CE") match and collapse to the work name before the bare name is tried.
-  { term: 'Nihon Shoki of 720 CE', abbr: 'Nihon Shoki', title: 'Nihon Shoki — Japan’s oldest official chronicle, compiled 720 CE.', word: true },
-  { term: 'Kojiki of 712 CE', abbr: 'Kojiki', title: 'Kojiki — Japan’s oldest extant chronicle, compiled 712 CE.', word: true },
-  { term: "Man'yōshū of 759 CE", abbr: "Man'yōshū", title: 'Man’yōshū — the oldest Japanese poetry anthology, compiled after 759 CE.', word: true },
+  { term: 'Nihon Shoki of 720 CE', abbr: 'Nihon Shoki', title: 'Nihon Shoki: Japan’s oldest official chronicle, compiled 720 CE.', word: true },
+  { term: 'Kojiki of 712 CE', abbr: 'Kojiki', title: 'Kojiki: Japan’s oldest extant chronicle, compiled 712 CE.', word: true },
+  { term: "Man'yōshū of 759 CE", abbr: "Man'yōshū", title: 'Man’yōshū: the oldest Japanese poetry anthology, compiled after 759 CE.', word: true },
   { term: 'Shuowen Jiezi', title: 'The first Chinese character dictionary, ~100 CE.', word: true },
   { term: 'Classic of Poetry', title: 'China’s oldest poetry collection (~1000-600 BCE), the Shijing.', word: true },
   { term: 'Kangxi dictionary', title: 'The imperial Chinese character dictionary of 1716.', word: true },
@@ -935,7 +935,7 @@ function tokenizeBy(s: string, re: RegExp, make: (m: string) => EtyInline): EtyI
 const RECON_RE = /(\([^)]*\*[^)]*\)|\/\*[^/]{0,40}\/|\((?:OC|MC|OJ|PIE|PST|STEDT|Old Chinese|Middle Chinese)[^)]*\))/g
 const REGISTER_RE = /\b(OC|MC|OJ|PIE|PST|Old Chinese|Middle Chinese)\b/
 function inlineEty(s: string): EtyInline[] {
-  // 1. furigana ruby (Han + (kana/romaji reading)) — must win over plain Han-linkify
+  // 1. furigana ruby (Han + (kana/romaji reading)): must win over plain Han-linkify
   let toks: EtyInline[] = furiganaTokens(s).map((t) =>
     t.t === 'ruby' ? { t: 'ruby', base: t.base, rt: t.rt } : { t: 'text', v: t.v },
   )
@@ -973,7 +973,7 @@ function inlineEty(s: string): EtyInline[] {
 // The horizontal rule before a stacked paragraph marks a COMPETING / alternative origin theory, so it
 // must only fire on lines that genuinely open a new account ("From …", "Alternatively…", a dated
 // "Author (1998)…" reconstruction). "Compare …" and "Cognate with …" are supplementary
-// cross-references, not rival theories — they were drawing a divider mid-account, so they're excluded.
+// cross-references, not rival theories: they were drawing a divider mid-account, so they're excluded.
 const ALT_LEADIN = /^(From |Possibly |Perhaps |Alternatively\b|[A-Z][a-zA-Z]+ \(\d{4}\))/
 
 // A supplementary DEEP comparative-linguistics paragraph: cross-family cognates and reconstructions,
@@ -1008,7 +1008,7 @@ export function etymologyTokens(text: string): EtySegment[] {
     let ordinal: number | null = null
     const bm = line.match(/^([*#]+)(:+)?[ \t]+/)
     if (bm) {
-      if (bm[2]) continue // "*: …" / "#: …" pronunciation table — not etymology
+      if (bm[2]) continue // "*: …" / "#: …" pronunciation table: not etymology
       depth = bm[1].length
       if (bm[1][0] === '#') {
         ordCounter += 1
@@ -1022,11 +1022,11 @@ export function etymologyTokens(text: string): EtySegment[] {
     }
     if (!line) continue
     // a line that is now just ONE stray ASCII char (":", "*", ".", "]", "+", "#", "-" or a lone
-    // laryngeal "h"/letter left over from a wiki template) is upstream markup noise, never prose —
+    // laryngeal "h"/letter left over from a wiki template) is upstream markup noise, never prose :
     // skip it. Single-codepoint CJK lines are kept (a character can legitimately stand alone). (153)
     if ([...line].length === 1 && /^[\x21-\x7e▲]$/.test(line)) continue
     // "More at *márkos." is Wiktionary's cross-reference to a fuller (proto-form) entry that Kogu does
-    // not have — a dead link. Drop the trailing "More at …." sentence. (item 159)
+    // not have: a dead link. Drop the trailing "More at …." sentence. (item 159)
     line = line.replace(/\s*\bMore at [^.]*\.\s*$/i, '').trim()
     // a raw "|" leaks from Wiktionary as an alternate-reading separator ("MC 'jij lje|lejH") or a
     // trad|simp pair; it renders as a bare vertical line with no meaning. Show a clear " / " instead.
@@ -1074,10 +1074,10 @@ export function furiganaTokens(text: string): FuriToken[] {
 // === Japanese pitch accent (Kanjium) ===
 // The backend carries the downstep mora index ("accent") on a ja kana reading. Tokyo-dialect pitch is
 // a binary high/low contour determined entirely by that one number and the mora count:
-//   0  heiban   — mora 1 low, all the rest high, no drop (a following particle stays high)
-//   1  atamadaka — mora 1 high, all the rest low
-//   n (1<n<len)  nakadaka — rises after mora 1, stays high through mora n, then drops
-//   n == len     odaka   — rises after mora 1, high to the end, drops onto the FOLLOWING particle
+//   0  heiban  : mora 1 low, all the rest high, no drop (a following particle stays high)
+//   1  atamadaka: mora 1 high, all the rest low
+//   n (1<n<len)  nakadaka: rises after mora 1, stays high through mora n, then drops
+//   n == len     odaka  : rises after mora 1, high to the end, drops onto the FOLLOWING particle
 // These helpers are pure so they can be unit-tested directly and rendered as a monochrome overline
 // with a downstep tick in the UI.
 

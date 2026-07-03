@@ -75,7 +75,7 @@ impl VariantGraph {
         for row in rows {
             let (c, p) = row?;
             // region-standard pairs are same-character print variants (汙/污, 説/說) EXCEPT 鯰/鮎,
-            // which Chinese treats as one catfish but Japanese splits into namazu vs ayu — unioning
+            // which Chinese treats as one catfish but Japanese splits into namazu vs ayu: unioning
             // them would list sweetfish words when someone looks up the catfish kanji.
             if (c, p) == (0x9BF0, 0x9B8E) || (c, p) == (0x9B8E, 0x9BF0) {
                 continue;
@@ -95,7 +95,7 @@ impl VariantGraph {
 
         // --- build the backbone-key index from every DISPLAYED surface form (rare=0) ---
         // rare/search-only forms (rK/iK/oK/sK) must not bridge cross-script or shadow a kokuji's
-        // character page (込 is only an sK alt-form of 込み — it should still resolve to its own glyph).
+        // character page (込 is only an sK alt-form of 込み: it should still resolve to its own glyph).
         let mut stmt = conn.prepare("SELECT form, lexeme_id FROM surface_form WHERE rare = 0")?;
         let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?;
         for row in rows {

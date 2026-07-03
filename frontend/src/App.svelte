@@ -20,7 +20,7 @@
   let enrichEntry = $state<Entry | null>(null)
   let enriching = $state(false)
   // the /entry enrich failed after the search succeeded: the card renders from hits alone (no
-  // structure/origin/words tabs) — say so and offer a retry instead of silently showing less
+  // structure/origin/words tabs): say so and offer a retry instead of silently showing less
   let enrichFailed = $state(false)
   let enrichFailedId = 0
   let unified = $state(false)
@@ -48,7 +48,7 @@
   let didYouMean = $state<Suggestion[]>([])
 
   const HAN = /\p{Script=Han}/u
-  // easter egg: 古古 ("old old") is the app's name, not a real word — shown when looked up (item 8)
+  // easter egg: 古古 ("old old") is the app's name, not a real word: shown when looked up (item 8)
   const isEasterEgg = $derived(q.trim() === '古古')
 
   // ── save / history / share (item 7) ────────────────────────────────────────────────────────────
@@ -62,14 +62,14 @@
     }
     return null
   })
-  // save/share belong only on an actual word page — NOT on the History or Saved list views (where a
+  // save/share belong only on an actual word page: NOT on the History or Saved list views (where a
   // stale `unified` from a prior search would otherwise keep them visible). Gate on the current view.
   const onWordPage = $derived(view === 'entry' || (view === 'results' && unified && results.length > 0))
   const canSaveShare = $derived(currentItem != null && onWordPage)
 
   // record each visited word in history, and keep the bookmark toggle in sync with what's shown.
   // Wait until enrichment settles: while /entry is in flight, currentItem is the top SEARCH hit
-  // (學校, zh) and flips to the enriched lexeme (学校, ja) when it lands — recording both wrote two
+  // (學校, zh) and flips to the enriched lexeme (学校, ja) when it lands: recording both wrote two
   // history rows for one visit.
   $effect(() => {
     const it = currentItem
@@ -175,7 +175,7 @@
       return breakdown.map((c) => charMeaning(c).split(',')[0].trim()).filter(Boolean).join(' · ')
     return ''
   })
-  // in-app lookup panel (Translate + Wiktionary) for the typed term — works whether or not Kogu has
+  // in-app lookup panel (Translate + Wiktionary) for the typed term: works whether or not Kogu has
   // the word, useful for names, neologisms, and partial phrases.
   let lookupOpen = $state(false)
   // source-language hint for the translate proxy: a Han query uses its result variety; otherwise auto.
@@ -214,14 +214,14 @@
   type NavMode = 'push' | 'replace' | 'none'
   const resultsUrl = (t: string) => (t ? `?q=${encodeURIComponent(t)}` : location.pathname)
 
-  // the term whose results are currently shown — used to skip a redundant re-search (e.g. tapping the
+  // the term whose results are currently shown: used to skip a redundant re-search (e.g. tapping the
   // word you're already on). NOT `q`: onInput overwrites q with the NEW typed value before doSearch
   // runs, so comparing to q made every edit look like "same query" and silently skipped the search.
   let lastSearched = ''
   async function doSearch(query: string, mode: NavMode = 'push') {
     const term = query.trim()
     // already showing this exact query ON THE RESULTS VIEW (e.g. tapped the row/character for the page
-    // you're on): do nothing, so the view doesn't blank and reload. Must check view — tapping a search
+    // you're on): do nothing, so the view doesn't blank and reload. Must check view: tapping a search
     // from the History/Saved view needs to actually switch back to results even for the same term.
     if (term && term === lastSearched && searched && !loading && view === 'results' && (results.length || entry)) return
     lastSearched = term
@@ -257,13 +257,13 @@
       classified = res.classified_as
       searched = true
       // Only a query the user typed with Han GLYPHS resolves directly to the unified word card
-      // (incl. mixed kanji+kana like 入り口). Searches by sound or meaning — kana (パレスチナ), romaji
-      // pinyin/jyutping, or English — stay a plain list; they're lookups, not "this exact word", so
+      // (incl. mixed kanji+kana like 入り口). Searches by sound or meaning: kana (パレスチナ), romaji
+      // pinyin/jyutping, or English: stay a plain list; they're lookups, not "this exact word", so
       // they get no word card, no character breakdown, and no save/share (the user drills in to get
       // those). Enrich the lexeme whose form is EXACTLY what was typed, falling back to the top hit.
-      // a wildcard query (你* / *場) is a browse/filter with no single headword — always a list.
+      // a wildcard query (你* / *場) is a browse/filter with no single headword: always a list.
       // a "partial" top hit means the query didn't resolve to a whole word (a name glued to a common
-      // word) — show the contained words as a LIST, not a unified card for one of them.
+      // word): show the contained words as a LIST, not a unified card for one of them.
       const isWildcard = /[*?＊？]/.test(term)
       const queryHasHan = HAN.test(term) && !isWildcard
       if (queryHasHan && results.length && results[0].match_type !== 'partial') {
@@ -323,7 +323,7 @@
       // "moutain" or "fei1ji"): offer the closest real entries as "did you mean …".
       if (results.length === 0 && !breaking) loadDidYouMean(term)
       // record the SEARCH itself in history when it did NOT resolve to a single word card/entry (a
-      // list, a partial match, or a no-word query like 中宇大廈) — those have no entry to record via
+      // list, a partial match, or a no-word query like 中宇大廈): those have no entry to record via
       // the visited-page effect, so they'd otherwise never appear in history. (Skip back/forward nav.)
       if (mode !== 'none' && !unified) {
         recordHistory({
@@ -345,7 +345,7 @@
 
   // closest real entries for a query that matched nothing. /suggest is prefix-based, so we try the
   // term, its adjacent-letter transpositions ("xuexaio" → "xuexiao"), then progressively shorter
-  // prefixes ("mountainz" → "mountain") — see typoCandidates for the reasoning and ordering.
+  // prefixes ("mountainz" → "mountain"): see typoCandidates for the reasoning and ordering.
   async function loadDidYouMean(term: string) {
     for (const t of typoCandidates(term.trim())) {
       if (q.trim() !== term) return // superseded by a newer query
@@ -357,7 +357,7 @@
           return
         }
       } catch {
-        /* a stale/aborted suggest is fine — leave didYouMean empty */
+        /* a stale/aborted suggest is fine: leave didYouMean empty */
       }
     }
   }
@@ -369,7 +369,7 @@
     q = v
     if (composing) return
     clearTimeout(timer)
-    // emptying the field keeps the current page (results/entry stay) until a new character is typed —
+    // emptying the field keeps the current page (results/entry stay) until a new character is typed :
     // don't run an empty search that would blank back to the home screen.
     if (!v.trim()) return
     timer = setTimeout(() => doSearch(v, 'replace'), 160)
@@ -570,7 +570,7 @@
   }
 
   // draw: toggle the inline pad. photo: trigger the OS-native picker (Photo Library / Camera /
-  // Files menu on iOS) right here — no separate page. The image opens in an inline panel.
+  // Files menu on iOS) right here: no separate page. The image opens in an inline panel.
   function toggleDraw() {
     panel = panel === 'draw' ? 'none' : 'draw'
   }
@@ -591,7 +591,7 @@
     ;(e.target as HTMLInputElement).value = '' // allow re-picking the same file
   }
 
-  // the X button just EMPTIES the text — it keeps whatever page is shown (results / entry / card)
+  // the X button just EMPTIES the text: it keeps whatever page is shown (results / entry / card)
   // until you type a new character, so you can clear and retype without it blanking to the home
   // screen. (The logo, goHome, is the full reset.) lastSearched is left intact so retyping the same
   // term doesn't reload the identical page.
@@ -626,7 +626,7 @@
     window.scrollTo(0, 0) // home always resets to the top
   }
 
-  // a character was chosen from the photo selection — search it and close the panel
+  // a character was chosen from the photo selection: search it and close the panel
   function fromInput(text: string) {
     panel = 'none'
     ocrFile = null
@@ -828,7 +828,7 @@
     </ul>
     {#if searched && !loading}
       {#if breakdown.length}
-        <!-- every character of the query, with its meaning — shown whether the query matched no word
+        <!-- every character of the query, with its meaning: shown whether the query matched no word
              OR only a partial word (so all characters always appear). When a partial word WAS caught,
              this is a "characters" breakdown under the results; otherwise it's the no-word page. -->
         <section class="noword" data-testid="breakdown">
@@ -1021,7 +1021,7 @@
   /* track-style segmented control: a quiet rounded track, only the SELECTED segment is filled. No
      per-segment border/divider, so the unselected side has no stray outline of the selector (item 7). */
   .seg { display: inline-flex; gap: 2px; padding: 2px; background: var(--surface); border-radius: 999px; align-self: start; margin-top: 0.15rem; }
-  /* 0.6rem vertical padding keeps each toggle ~34px tall — the old 0.38rem gave 25px targets,
+  /* 0.6rem vertical padding keeps each toggle ~34px tall: the old 0.38rem gave 25px targets,
      well under a comfortable touch size on phones */
   .seg button { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.02em; color: var(--muted); background: none; border: none; border-radius: 999px; padding: 0.6rem 0.95rem; }
   .seg button:hover { color: var(--text); background: none; }
@@ -1084,7 +1084,7 @@
   @media (prefers-reduced-motion: reduce) { .rowbtn { transition: none; } }
   /* draw pad: a FLOATING panel just under the search row. position:absolute with no offset keeps it at
      its natural place in flow but lifts it OUT of flow, so the results list / about text render full
-     height behind it and simply continue past — the pad overlays them instead of pushing them down. */
+     height behind it and simply continue past: the pad overlays them instead of pushing them down. */
   /* docked handwriting panel (Google Translate / PLECO style): fixed to the bottom of the screen,
      full width, content scrolls behind it. Not a floating window. */
   .drawpanel {
@@ -1149,7 +1149,7 @@
   .dym-hw { font-family: var(--han); font-size: 1.3rem; line-height: 1.1; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; max-width: 9em; }
   .dym-rd { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dym-var { font-family: var(--han); font-size: 0.78rem; color: var(--faint); margin-left: auto; flex: none; }
-  /* "look it up on the web" — an external lookup that works regardless of whether Kogu has the word */
+  /* "look it up on the web": an external lookup that works regardless of whether Kogu has the word */
   .lookup { display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 1rem; font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.02em; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: var(--r); padding: 0.4rem 0.7rem; }
   .lookup:hover { color: var(--text); border-color: var(--border-strong); background: var(--surface); }
   /* About page (item 2): what Kogu is, what each section means, and the data sources */

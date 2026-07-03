@@ -1,5 +1,5 @@
 <script module lang="ts">
-  // Memoised font-coverage probes, keyed by `${codepoint}|${font}` — the same glyphs recur constantly
+  // Memoised font-coverage probes, keyed by `${codepoint}|${font}`: the same glyphs recur constantly
   // across an entry, so we measure each (codepoint, font) pair at most once per session.
   const probeCache = new Map<string, boolean>()
 </script>
@@ -8,7 +8,7 @@
   import { glyphWikiUrl } from './display'
   // A Han glyph that falls back to a GlyphWiki SVG when the device font can't render it. This covers
   // BOTH the rare supplementary-plane ideographs (U+20000+, missing from almost every installed font)
-  // AND ordinary BMP characters the loaded fonts happen to lack — e.g. a traditional-only form like 關
+  // AND ordinary BMP characters the loaded fonts happen to lack: e.g. a traditional-only form like 關
   // on a device whose Simplified-first font stack doesn't carry it. Without the BMP case those showed
   // as a permanent tofu box (□) with no fallback.
   let {
@@ -29,7 +29,7 @@
   //  • Supplementary plane (≥U+20000): assume ABSENT until proven present, so the SVG shows on the
   //    first paint (these are almost never in a font; avoids a tofu→image pop-in).
   //  • BMP (U+3400–U+1FFFF): assume PRESENT (the common case) and only swap to the SVG once the probe
-  //    CONFIRMS the fonts lack it — so common characters never trigger a needless network image.
+  //    CONFIRMS the fonts lack it: so common characters never trigger a needless network image.
   const missing = $derived(
     probable &&
       (cp >= 0x20000 ? fontHas !== true : fontHas === false),
