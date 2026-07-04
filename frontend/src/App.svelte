@@ -80,6 +80,31 @@
     }
   })
 
+  // Settings: "clear cache": wipe everything Kogu stores on this device (history, bookmarks,
+  // preferences, the offline app shell and cached audio) and reload fresh. Two-tap confirm so a
+  // stray tap can't erase the user's saved words.
+  let clearArmed = $state(false)
+  async function clearAllData() {
+    if (!clearArmed) {
+      clearArmed = true
+      setTimeout(() => (clearArmed = false), 4000)
+      return
+    }
+    for (const k of Object.keys(localStorage)) {
+      if (k.startsWith('kogu:')) localStorage.removeItem(k)
+    }
+    try {
+      if ('caches' in window) {
+        for (const k of await caches.keys()) await caches.delete(k)
+      }
+      const regs = (await navigator.serviceWorker?.getRegistrations?.()) ?? []
+      for (const r of regs) await r.unregister()
+    } catch {
+      // storage APIs can throw in private windows; the reload still gives a clean state
+    }
+    location.href = location.pathname // full reload, no hash/query, re-registers the SW
+  }
+
   function toggleSave() {
     if (!currentItem) return
     savedNow = toggleSaved(currentItem)
@@ -127,14 +152,14 @@
     savedList = getSaved()
     view = 'saved'
     panel = 'none'
-    history.pushState({ view: 'saved' }, '', '#/saved')
+    history.pushState({ view: 'saved' }, '', `${location.pathname}#/saved`)
   }
   function openHistory() {
     if (view === 'history') return closePanelView()
     historyList = getHistory()
     view = 'history'
     panel = 'none'
-    history.pushState({ view: 'history' }, '', '#/history')
+    history.pushState({ view: 'history' }, '', `${location.pathname}#/history`)
   }
   function wipeHistory() {
     clearHistory()
@@ -442,13 +467,15 @@
       view = 'entry'
       // store the headword in history state so Back/Forward to this entry can re-resolve if the id
       // went stale after a DB rebuild (see the openEntry stale-id guard above).
+      // pathname-anchored so a leftover ?q= from the search view can't ride along in the URL
+      // (a bare "#/entry/…" pushState kept it: shared links looked like "#/entry/71976?q=犬")
       if (mode === 'push') {
-        history.pushState({ view: 'entry', id, hw: e.headword }, '', `#/entry/${id}`)
+        history.pushState({ view: 'entry', id, hw: e.headword }, '', `${location.pathname}#/entry/${id}`)
         window.scrollTo(0, 0) // a freshly opened entry starts at the top
       } else if (mode === 'replace') {
         // a deep link must ALSO stamp its state: without it, navigating away and pressing Back
         // pops a null-state #/entry URL and the entry never comes back (stale card stays on screen)
-        history.replaceState({ view: 'entry', id, hw: e.headword }, '', `#/entry/${id}`)
+        history.replaceState({ view: 'entry', id, hw: e.headword }, '', `${location.pathname}#/entry/${id}`)
       }
     } catch {
       // a saved/history id that no longer exists (reassigned/removed by a DB rebuild): if we know the
@@ -511,7 +538,12 @@
         view = 'results'
         entry = null
         const term = st?.q ?? ''
-        if (term && term !== q) await doSearch(term, 'none')
+        // re-search when the term changed OR when the results view lost its content along the
+        // way: opening an entry (from History, a row, a character tap) clears results and flips
+        // searched/unified off, and a stale enrichEntry can't render without them. Without this,
+        // Back landed on a blank page even though q still held the term.
+        const intact = searched && (results.length > 0 || enrichEntry != null)
+        if (term && (term !== q || !intact)) await doSearch(term, 'none')
         else q = term
       }
     }
@@ -977,6 +1009,13 @@
             <button class:on={!settings.audio} onclick={() => setAudio(false)}>Off</button>
           </div>
         </div>
+        <div class="setrow">
+          <span class="setlabel">Stored data</span>
+          <span class="setsub">Removes history, saved words, preferences, and everything cached for offline use.</span>
+          <button class="setclear" class:armed={clearArmed} onclick={clearAllData}>
+            {clearArmed ? 'tap again to clear everything' : 'clear cache'}
+          </button>
+        </div>
       </div>
     </div>
   {/if}
@@ -1023,6 +1062,10 @@
   .setrow:first-of-type { border-top: none; padding-top: 0; }
   .setlabel { font-family: var(--sans); font-size: 0.95rem; color: var(--text); }
   .setsub { font-size: 0.8rem; color: var(--faint); line-height: 1.4; margin-top: -0.15rem; }
+  /* quiet outline button on the flat-black card; arming fills it so the second tap reads as deliberate */
+  .setclear { align-self: start; font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.02em; color: var(--muted); background: none; border: 1px solid var(--border-strong); border-radius: 999px; padding: 0.45rem 0.95rem; }
+  .setclear:hover { color: var(--text); }
+  .setclear.armed { background: var(--text); color: var(--bg); border-color: var(--text); }
   /* track-style segmented control: a quiet rounded track, only the SELECTED segment is filled. No
      per-segment border/divider, so the unselected side has no stray outline of the selector (item 7). */
   .seg { display: inline-flex; gap: 2px; padding: 2px; background: var(--surface); border-radius: 999px; align-self: start; margin-top: 0.15rem; }

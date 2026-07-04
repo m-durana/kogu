@@ -7,7 +7,7 @@
     showOrigin: boolean
     showWords: boolean
     jaReadOpen: boolean
-    yueReadOpen: boolean
+    yueOpen: number[]
     activeTab: string
     boundId: number | null
     ts: number
@@ -636,7 +636,7 @@
   // "+N" toggle so a kanji with a dozen readings doesn't wrap into a wall. (中 pinyin / 粵 jyutping are
   // short and already sit on their rows; there is no separate "readings" section any more.)
   let jaReadOpen = $state(false)
-  let yueReadOpen = $state(false)
+  let yueReadOpen = $state<Set<number>>(new Set())
   // a single character with exactly ONE Japanese row should show the CHARACTER's full on/kun set
   // (志 → シ · こころざ.す · こころざし), not just the one reading of the word-lexeme that happens to
   // exist (こころざし). When a character has several ja words (生: なま/いきる/セイ…) they stay as
@@ -882,7 +882,7 @@
       showOrigin,
       showWords,
       jaReadOpen,
-      yueReadOpen,
+      yueOpen: [...yueReadOpen],
       activeTab,
       boundId: boundOpen?.id ?? null,
       ts: Date.now(),
@@ -905,8 +905,11 @@
     jaReadOpen = !jaReadOpen
     save()
   }
-  function toggleYueRead() {
-    yueReadOpen = !yueReadOpen
+  function toggleYueRead(id: number) {
+    const n = new Set(yueReadOpen)
+    if (n.has(id)) n.delete(id)
+    else n.add(id)
+    yueReadOpen = n
     save()
   }
   function pivot(q: string) {
@@ -930,7 +933,7 @@
       showOrigin = snap.showOrigin
       showWords = snap.showWords
       jaReadOpen = snap.jaReadOpen
-      yueReadOpen = snap.yueReadOpen ?? false
+      yueReadOpen = new Set(snap.yueOpen ?? [])
       activeTab = snap.activeTab ?? ''
       boundOpen = snap.boundId != null ? allRows.find((r) => r.id === snap.boundId) ?? null : null
     } else {
@@ -938,7 +941,7 @@
       showOrigin = false
       showWords = false
       jaReadOpen = false
-      yueReadOpen = false
+      yueReadOpen = new Set()
       activeTab = ''
       boundOpen = null
     }
@@ -948,7 +951,14 @@
   // would overflow (and the line stays side-scrollable). Used by BOTH the 日 on/kun list and the 粵
   // jyutping list, so readProbe takes a setter for whichever "over" flag this line drives. ──
   let jaReadOver = $state(false)
-  let yueReadOver = $state(false)
+  let yueReadOver = $state<Set<number>>(new Set())
+  function setYueOver(id: number, v: boolean) {
+    if (v === yueReadOver.has(id)) return
+    const n = new Set(yueReadOver)
+    if (v) n.add(id)
+    else n.delete(id)
+    yueReadOver = n
+  }
   // per-row clamp state for a plain word reading (中 pinyin / 粵 jyutping / 日 word kana): a long
   // multi-syllable reading (中國國民黨革命委員會) would otherwise run off the viewport, so each row's
   // reading clamps to one line with a "+": keyed by row id since a card has several reading rows.
@@ -1070,7 +1080,7 @@
                        monochrome pitch contour (overline over high morae + a downstep tick) instead. -->
                   <span class="dread dreads plainread" class:clamp={!readOpen.has(r.id)} class:faded={readOver.has(r.id) && !readOpen.has(r.id)} use:readProbe={(v) => setReadOver(r.id, v)}><span class="rdg">{#if cells}<span class="pitch" title="pitch accent (Kanjium)">{#each cells as c}<span class="pmora" class:phigh={c.high} class:pdrop={c.drop}>{c.mora}</span>{/each}</span>{:else}{dispReading(r.variety, r.reading)}{/if}{#if speakOn}<button class="spk spk-sm" class:speaking={playingKey === r.variety + ':' + r.reading} onclick={() => speak(r.variety + ':' + r.reading, r.reading, r.variety, r.form, r.accent)} aria-label="listen" title="listen"><Volume2 size={13} /></button>{/if}</span></span>{#if readOver.has(r.id)}<button class="rmore" onclick={() => toggleRead(r.id)} aria-label={readOpen.has(r.id) ? 'collapse reading' : 'show full reading'}>{#if readOpen.has(r.id)}<Minus size={15} />{:else}<Plus size={15} />{/if}</button>{/if}
                 {/if}
-                {#if r.variety === 'zh' && rowJyutList(r).length && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread dreads" class:clamp={!yueReadOpen} class:faded={yueReadOver && !yueReadOpen} use:readProbe={(v) => (yueReadOver = v)}>{#each rowJyutList(r) as j, i}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{settings.romanization === 'yale' ? jyutpingToYale(j) : j}{#if speakOn}<button class="spk spk-sm" class:speaking={playingKey === 'yue:' + j} onclick={() => speak('yue:' + j, j, 'yue', r.form)} aria-label="listen to {j}, Cantonese" title="listen (Cantonese)"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if yueReadOver}<button class="rmore" onclick={toggleYueRead} aria-label={yueReadOpen ? 'show fewer readings' : 'show more readings'}>{#if yueReadOpen}<Minus size={15} />{:else}<Plus size={15} />{/if}</button>{/if}{/if}
+                {#if r.variety === 'zh' && rowJyutList(r).length && !hasYueDef}<span class="dvar dcanto">粵</span><span class="dread dreads" class:clamp={!yueReadOpen.has(r.id)} class:faded={yueReadOver.has(r.id) && !yueReadOpen.has(r.id)} use:readProbe={(v) => setYueOver(r.id, v)}>{#each rowJyutList(r) as j, i}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{settings.romanization === 'yale' ? jyutpingToYale(j) : j}{#if speakOn}<button class="spk spk-sm" class:speaking={playingKey === 'yue:' + j} onclick={() => speak('yue:' + j, j, 'yue', r.form)} aria-label="listen to {j}, Cantonese" title="listen (Cantonese)"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if yueReadOver.has(r.id)}<button class="rmore" onclick={() => toggleYueRead(r.id)} aria-label={yueReadOpen.has(r.id) ? 'show fewer readings' : 'show more readings'}>{#if yueReadOpen.has(r.id)}<Minus size={15} />{:else}<Plus size={15} />{/if}</button>{/if}{/if}
               </span>
             </div>
             {#if boundKind(r) || (soundLoan && r.variety === 'zh') || (single && headChar && (isRadicalChar || rowUsage(r.variety)))}
@@ -1473,6 +1483,10 @@
   /* flex-basis 0 so the readings never trigger a wrap of the header (which would push the 日 label
      to its own line); it grows into the space after the label and clips to one line when long. */
   .dreads { flex: 1 1 0; min-width: 0; line-height: 1.5; }
+  /* the zh pinyin block must NOT grow: with a short reading (语 yǔ) the flexible block swallowed
+     the whole middle of the row, shoving the 粵 jyutping against the right edge (and off-screen).
+     shrink stays enabled so a long idiom reading still clamps instead of wrapping the row. */
+  .plainread { flex: 0 1 auto; }
   /* clamped to one line, but horizontally SCROLLABLE: you can either swipe the readings right to see
      more, or tap "+" to expand them onto multiple lines (item: both open and scroll). */
   .dreads.clamp { white-space: nowrap; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
