@@ -7,6 +7,7 @@ ExecStart=/mnt/HC_Volume_102319212/kogu-tts/venv/bin/python /srv/miro/kogu/tts/s
 WorkingDirectory=/srv/miro/kogu/tts
 Environment=KOGU_TTS_PORT=4120
 Environment=KOGU_TTS_CACHE=/mnt/HC_Volume_102319212/kogu-tts/cache
+Environment=KOGU_TTS_VOICE=/mnt/HC_Volume_102319212/kogu-tts/voices/tohoku-f01-neutral.htsvoice
 Restart=on-failure
 RestartSec=2
 # loopback-only sidecar; needs to write its mp3 cache on the data volume
