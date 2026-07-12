@@ -193,6 +193,19 @@ CREATE TABLE lexeme_equivalent (
 CREATE INDEX idx_lex_equiv_src ON lexeme_equivalent(src_lexeme_id);
 CREATE INDEX idx_lex_equiv_dst ON lexeme_equivalent(dst_lexeme_id);
 
+-- Curated English search aliases: extra query terms that should retrieve a lexeme even when its own
+-- gloss doesn't spell them out. Fills paradigm gaps in closed classes: the Cantonese pronoun 佢 is
+-- glossed "he, she, it" but users also search "him"/"her"/"his"; 佢哋 is "they" but also "them"/
+-- "their". Populated by pipeline/refresh_aliases.py; consulted by the English search pass as a
+-- decisive, curated match so the canonical word leads over high-frequency written-Chinese forms.
+CREATE TABLE lexeme_alias (
+    lexeme_id INTEGER NOT NULL REFERENCES lexeme(id),
+    term      TEXT NOT NULL,                    -- lowercase English search term
+    source    TEXT NOT NULL DEFAULT 'paradigm', -- provenance of the alias set
+    PRIMARY KEY (lexeme_id, term)
+) WITHOUT ROWID;
+CREATE INDEX idx_lexeme_alias_term ON lexeme_alias(term);
+
 -- ============================================================================
 -- 4. "Why" payloads (Phases 3-4) -- origin badges + etymology passthrough, phonology notes
 -- ============================================================================

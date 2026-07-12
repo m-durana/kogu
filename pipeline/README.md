@@ -97,8 +97,10 @@ A fresh full build already includes everything above. The `apply_*` modules
 (`kogupipe.apply_accents`, `apply_cantonese`, `apply_components`, `apply_confusables`,
 `apply_equivalents`, `apply_frequency`, `apply_gloss_clean`, `apply_kanji_ja`,
 `apply_loanwords`, `apply_mc`, `apply_translations`) and the standalone
-`refresh_char_readings.py`, `refresh_concepts.py`, `refresh_omw.py`, `migrate_canto_senses.py`
-patch an **existing** DB idempotently without a full rebuild; they exist because the live DB
+`refresh_char_readings.py`, `refresh_concepts.py`, `refresh_omw.py`, `migrate_canto_senses.py`,
+`refresh_aliases.py` (curated English search aliases: `lexeme_alias`, fills closed-class paradigm
+gaps so "her"/"him"/"them" reach 佢/佢哋; edit its `PARADIGMS` list to cover more; restart the
+service after) patch an **existing** DB idempotently without a full rebuild; they exist because the live DB
 predates several ingest fixes. Each module's docstring states what it needs and whether a
 service restart is required afterwards. They are independent of each other except that
 `refresh_concepts.py` should run before `refresh_omw.py` (it rebuilds the gloss-pivot concepts

@@ -107,6 +107,39 @@ async fn english_pivot() {
     assert!(hw.contains(&"機場".to_string()), "missing zh 機場");
 }
 
+// 4b. Paradigm aliases: a closed-class word's gloss omits object/possessive forms, so English users
+//     searching "her"/"him"/"them" used to miss the canonical Cantonese pronoun (佢/佢哋) and land on a
+//     high-frequency written-Chinese form (她的) instead. Curated aliases (lexeme_alias) surface the
+//     real word at the very top. This is the golden set for the "surface programmatically" lever.
+#[tokio::test]
+async fn cantonese_pronoun_paradigm() {
+    // The canonical pronoun in EACH variety leads (zh/ja/yue interleaved by the variety cap), and the
+    // gloss-noise that used to top these queries (香具師 "con-man", 鯡魚 "herring") is pushed below.
+    let top_n = |v: &Value, n: usize| headwords(v).into_iter().take(n).collect::<Vec<_>>();
+
+    let her = search("her").await;
+    assert_eq!(her["classified_as"], "latin");
+    let t = top_n(&her, 4);
+    for want in ["她", "彼女", "佢"] {
+        assert!(t.contains(&want.to_string()), "'her' top 4 should include {want}, got {t:?}");
+    }
+    let t3 = top_n(&her, 3);
+    assert!(!t3.contains(&"香具師".to_string()) && !t3.contains(&"鯡魚".to_string()),
+        "'her' top 3 should be real pronouns, got {t3:?}");
+
+    for q in ["he", "him", "his"] {
+        let t = top_n(&search(q).await, 4);
+        for want in ["他", "彼", "佢"] {
+            assert!(t.contains(&want.to_string()), "'{q}' top 4 should include {want}, got {t:?}");
+        }
+    }
+    for q in ["them", "their"] {
+        let t = top_n(&search(q).await, 5);
+        assert!(t.iter().any(|h| h == "佢哋" || h == "佢地"), "'{q}' should surface Cantonese 佢哋/佢地, got {t:?}");
+        assert!(t.iter().any(|h| h == "他們" || h == "她們"), "'{q}' should surface 他們/她們, got {t:?}");
+    }
+}
+
 // 4a2. English results are language-balanced: the freq tiebreak (higher for ja) used to stack 10+
 //      Japanese hits before the first Chinese one. A per-variety consecutive cap (Latin-only) reflows
 //      so no more than 3 in a row share a variety and a 中/粵 result surfaces near the top.

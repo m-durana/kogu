@@ -289,6 +289,12 @@ const W_EXACT: f64 = 1.0;
 // word: ボーリング (boring) must lead over ボウリング (bowling), which merely lists ボーリング as a
 // variant kana form. Exceeds FREQ_BONUS so frequency can never flip it back.
 const W_EXACT_PRIMARY: f64 = 1.16;
+// A curated English alias (lexeme_alias) is an authoritative statement that the query term names this
+// word: used to fill paradigm gaps a CC-Canto gloss omits (佢 glossed "he, she, it" also answers
+// "him"/"her"/"his"). Ranked as a decisive tier ABOVE every ordinary match (incl. exact primary +
+// max freq) so the canonical word leads over a high-frequency written-Chinese form that merely spells
+// the term in its gloss (她的 for "her"). Only fires on curated terms, so it can't over-rank generally.
+const W_ALIAS: f64 = 1.35;
 const W_VARIANT: f64 = 0.85;
 const W_READING: f64 = 0.72;
 const W_READING_PREFIX: f64 = 0.55; // as-you-type prefix (たべ→たべる); below an exact reading
@@ -605,6 +611,17 @@ pub fn search(
             }
         }
         Kind::Latin => {
+            // curated paradigm aliases (lexeme_alias): fill gloss paradigm gaps so "her"/"him"/"them"
+            // reach the canonical Cantonese pronoun (佢 / 佢哋) even though the gloss omits those forms.
+            // Decisive tier so the real word leads over a high-freq written-Chinese form (她的).
+            {
+                let ql = q.trim().to_lowercase();
+                let mut stmt = conn.prepare("SELECT lexeme_id FROM lexeme_alias WHERE term = ?1")?;
+                let ids: Vec<i64> = stmt.query_map([&ql], |r| r.get(0))?.collect::<Result<_, _>>()?;
+                for id in ids {
+                    bump(&mut cand, id, "english", W_ALIAS);
+                }
+            }
             // phonetic (toneless fold) - tolerant of tone marks / numbers / no tone.
             // pinyin_plain and jyutping_plain share the same fold (letters only), so one key
             // matches Mandarin *and* Cantonese readings (jyutping was the original's blind spot).
