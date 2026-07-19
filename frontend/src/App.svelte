@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { search, entry as fetchEntry, segment as fetchSegment, suggest as fetchSuggest, type SegmentPart, type Suggestion } from './lib/api'
+  import { search, entry as fetchEntry, segment as fetchSegment, suggest as fetchSuggest, interesting, type SegmentPart, type Suggestion, type InterestingItem } from './lib/api'
   import { dialogFocus } from './lib/modal'
   import type { Entry, Hit, CharInfo } from './lib/types'
   import { primaryForm, varietyLabel, regionsOf, shortGloss, cleanGloss, langTag, hanFont, placeholderAt, formatReading } from './lib/display'
@@ -29,6 +29,8 @@
   // saved (bookmarks) + history lists, loaded from localStorage when their view opens
   let savedList = $state<SavedItem[]>([])
   let historyList = $state<SavedItem[]>([])
+  // homepage showcase: a fresh-random handful of noteworthy entries (kokuji, false friends, …)
+  let interestingList = $state<InterestingItem[]>([])
   let savedNow = $state(false) // is the currently shown word bookmarked
   let toast = $state('') // transient "Link copied" confirmation for share
   // inline input panel below the search row: 'draw' shows the pad; 'photo' shows the picked image
@@ -556,6 +558,8 @@
     if ('scrollRestoration' in history) history.scrollRestoration = 'manual'
     window.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('popstate', onPop)
+    // fresh-random homepage showcase (fails soft to []): loaded once on mount
+    interesting(8).then((items) => (interestingList = items))
     // deep link: a shared #/entry/<id> (id may be negative for a char-only page) reopens that entry
     const m = location.hash.match(/^#\/entry\/(-?\d+)$/)
     const term = new URLSearchParams(location.search).get('q')
@@ -925,6 +929,29 @@
         <p class="intropos"><span class="intropron">/ko.gu/</span> <span class="introtag">noun</span></p>
 
         <p class="introgloss">A dictionary for the living Han script: one word across <b>中文</b> (Mandarin), <b>粵語</b> (Cantonese), and <b>日本語</b> (Japanese) at once, and why the written forms differ.</p>
+
+        {#if interestingList.length}
+          <!-- homepage showcase: a fresh-random sample of noteworthy entries (kokuji, false friends,
+               words coined in Japan, surprising loanwords, calques). Reuses the canonical EntryRow;
+               the "why" rides its optional note caption. Tap opens the full entry. -->
+          <section class="showcase" data-testid="interesting">
+            <h2 class="abh">Worth exploring</h2>
+            <ul class="results">
+              {#each interestingList as it (it.category + '|' + it.lexeme_id)}
+                <EntryRow
+                  glyph={it.headword}
+                  font={hanFont(it.variety)}
+                  lang={langTag(it.variety)}
+                  reading={formatReading(it.variety, it.reading, settings.romanization === 'yale')}
+                  tags={[varietyLabel(it.variety)]}
+                  gloss={it.gloss ? shortGloss([it.gloss]) : ''}
+                  note={it.why}
+                  onclick={() => openEntry(it.lexeme_id, 'push', it.headword)}
+                />
+              {/each}
+            </ul>
+          </section>
+        {/if}
 
         <h2 class="abh">On each page</h2>
         <dl class="ablist">

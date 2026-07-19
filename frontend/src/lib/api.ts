@@ -1,4 +1,4 @@
-import type { Entry, SearchResponse } from './types'
+import type { Entry, SearchResponse, Variety } from './types'
 
 const BASE = '/api'
 
@@ -71,6 +71,30 @@ export async function suggest(q: string, signal?: AbortSignal): Promise<Suggesti
 export async function entry(id: number, signal?: AbortSignal): Promise<Entry> {
   const r = await fetchRetry(`${BASE}/entry/${id}`, { signal }, 'entry')
   return r.json()
+}
+
+export interface InterestingItem {
+  lexeme_id: number
+  variety: Variety
+  headword: string
+  reading: string | null
+  gloss: string | null
+  why: string
+  category: string
+}
+// Homepage showcase: a fresh-random handful of noteworthy entries. Purely decorative, so it fails
+// soft (returns []) rather than retrying or surfacing an error.
+export async function interesting(limit = 8, signal?: AbortSignal): Promise<InterestingItem[]> {
+  const u = new URL(BASE + '/interesting', location.origin)
+  u.searchParams.set('limit', String(limit))
+  try {
+    const r = await fetch(u, { signal })
+    if (!r.ok) return []
+    const d = await r.json()
+    return d.items ?? []
+  } catch {
+    return []
+  }
 }
 
 export async function translate(q: string, signal?: AbortSignal): Promise<import('./types').TranslateResponse> {

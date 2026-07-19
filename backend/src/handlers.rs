@@ -539,6 +539,247 @@ fn build_char_entry(conn: &rusqlite::Connection, cp: u32) -> rusqlite::Result<Op
 /// test wrongly splits when the zh and ja dictionaries lead with different senses (天 = sky/heaven in
 /// both, but zh lists "day" first; 本 = root/book in both). It only ever turns a candidate
 /// false-friend INTO a cognate, so it cannot mislabel a real false friend (手紙, 娘, 会社 share none).
+#[derive(Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct InterestingParams {
+    /// maximum number of items (default 8, clamped 1..=30)
+    pub limit: Option<usize>,
+}
+
+/// A fresh-random showcase of noteworthy entries for the homepage: kanji invented in Japan (国字),
+/// false friends, words coined in Japan and re-borrowed into Chinese, surprising loanwords, and
+/// calques. Each call returns a different mix.
+#[utoipa::path(
+    get, path = "/interesting", tag = "dictionary",
+    params(InterestingParams),
+    responses(
+        (status = 200, description = "Random showcase of noteworthy entries", body = InterestingResponse),
+        (status = 500, description = "Internal error", body = ApiError),
+    )
+)]
+pub async fn interesting_handler(
+    State(st): State<AppState>,
+    Query(p): Query<InterestingParams>,
+) -> Result<Json<InterestingResponse>, (StatusCode, Json<Value>)> {
+    let conn = st.pool.get().map_err(internal)?;
+    let limit = p.limit.unwrap_or(8).clamp(1, 30);
+    let items = build_interesting(&conn, limit).map_err(internal)?;
+    Ok(Json(InterestingResponse { items }))
+}
+
+/// A headword that will actually render on a device font: contains Han or kana and no Latin letters
+/// (skips fullwidth-Latin junk like ＬＡＭＰ and astral-plane tofu is naturally rare here).
+fn renderable_cjk(s: &str) -> bool {
+    let has_cjk = s.chars().any(|c| {
+        let u = c as u32;
+        (0x3040..=0x30FF).contains(&u) || (0x4E00..=0x9FFF).contains(&u) || (0x3400..=0x4DBF).contains(&u)
+    });
+    has_cjk && !s.chars().any(|c| c.is_ascii_alphabetic())
+}
+
+fn cap_first(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+        None => String::new(),
+    }
+}
+
+/// Run a 5-column category query (id, variety, headword, reading, gloss), keep renderable rows,
+/// tag each with a fixed `why`/`category`, and return up to `want`.
+fn simple_cat(
+    conn: &rusqlite::Connection,
+    sql: &str,
+    want: usize,
+    category: &str,
+    why: &str,
+) -> rusqlite::Result<Vec<InterestingItem>> {
+    let mut stmt = conn.prepare(sql)?;
+    let rows = stmt.query_map([], |r| {
+        Ok(InterestingItem {
+            lexeme_id: r.get(0)?,
+            variety: r.get(1)?,
+            headword: r.get(2)?,
+            reading: r.get(3)?,
+            gloss: r.get(4)?,
+            why: why.to_string(),
+            category: category.to_string(),
+        })
+    })?;
+    let mut out = Vec::new();
+    for it in rows {
+        let it = it?;
+        if renderable_cjk(&it.headword) {
+            out.push(it);
+            if out.len() >= want {
+                break;
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Surprising loanwords: the `why` names the source language, parsed from the origin badge.
+fn loanword_items(conn: &rusqlite::Connection, want: usize) -> rusqlite::Result<Vec<InterestingItem>> {
+    let mut stmt = conn.prepare(
+        "SELECT l.id, l.variety, l.headword, l.reading, \
+           (SELECT gloss_en FROM sense WHERE lexeme_id=l.id ORDER BY sense_order LIMIT 1), ob.badge \
+         FROM origin_badge ob JOIN lexeme l ON l.id = ob.lexeme_id \
+         WHERE ob.badge IN ('borrowed-from-ainu','borrowed-from-portuguese','borrowed-from-dutch', \
+           'borrowed-from-sanskrit','borrowed-from-korean','borrowed-from-hawaiian','borrowed-from-malay', \
+           'borrowed-from-mongolian','borrowed-from-tibetan','borrowed-from-vietnamese','borrowed-from-persian') \
+         ORDER BY RANDOM() LIMIT 40",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        let badge: String = r.get(5)?;
+        let lang = cap_first(badge.strip_prefix("borrowed-from-").unwrap_or(&badge));
+        Ok(InterestingItem {
+            lexeme_id: r.get(0)?,
+            variety: r.get(1)?,
+            headword: r.get(2)?,
+            reading: r.get(3)?,
+            gloss: r.get(4)?,
+            why: format!("a loanword from {lang}"),
+            category: "loanword".to_string(),
+        })
+    })?;
+    let mut out = Vec::new();
+    for it in rows {
+        let it = it?;
+        if renderable_cjk(&it.headword) {
+            out.push(it);
+            if out.len() >= want {
+                break;
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Calques and phono-semantic matchings: the `why` distinguishes the two (a calque translates the
+/// meaning piece by piece; a PSM is chosen to fit BOTH the foreign sound and a plausible meaning).
+fn calque_items(conn: &rusqlite::Connection, want: usize) -> rusqlite::Result<Vec<InterestingItem>> {
+    let mut stmt = conn.prepare(
+        "SELECT l.id, l.variety, l.headword, l.reading, \
+           (SELECT gloss_en FROM sense WHERE lexeme_id=l.id ORDER BY sense_order LIMIT 1), ob.badge \
+         FROM origin_badge ob JOIN lexeme l ON l.id = ob.lexeme_id \
+         WHERE ob.badge IN ('calque','phono-semantic-matching') \
+         ORDER BY RANDOM() LIMIT 40",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        let badge: String = r.get(5)?;
+        let why = if badge == "phono-semantic-matching" {
+            "a phono-semantic match · chosen to fit both the sound and a meaning"
+        } else {
+            "a calque · meaning translated piece by piece"
+        };
+        Ok(InterestingItem {
+            lexeme_id: r.get(0)?,
+            variety: r.get(1)?,
+            headword: r.get(2)?,
+            reading: r.get(3)?,
+            gloss: r.get(4)?,
+            why: why.to_string(),
+            category: "calque".to_string(),
+        })
+    })?;
+    let mut out = Vec::new();
+    for it in rows {
+        let it = it?;
+        if renderable_cjk(&it.headword) {
+            out.push(it);
+            if out.len() >= want {
+                break;
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// False friends: sample same-form zh/ja pairs, keep the ones `classify_relation` flags as genuinely
+/// divergent, and return the Japanese side (its kana reading makes the contrast concrete).
+fn false_friend_items(conn: &rusqlite::Connection, want: usize) -> rusqlite::Result<Vec<InterestingItem>> {
+    let mut stmt = conn.prepare(
+        "SELECT z.id, j.id, j.variety, j.headword, j.reading, \
+           (SELECT gloss_en FROM sense WHERE lexeme_id=j.id ORDER BY sense_order LIMIT 1) \
+         FROM lexeme z JOIN lexeme j ON z.headword = j.headword \
+           AND z.variety='zh' AND j.variety='ja' \
+         WHERE z.freq IS NOT NULL AND j.freq IS NOT NULL AND length(z.headword) >= 2 \
+         ORDER BY RANDOM() LIMIT 80",
+    )?;
+    let cands: Vec<(i64, i64, String, String, Option<String>, Option<String>)> = stmt
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)))?
+        .collect::<Result<_, _>>()?;
+    let mut out = Vec::new();
+    for (zid, jid, variety, headword, reading, gloss) in cands {
+        if out.len() >= want {
+            break;
+        }
+        if renderable_cjk(&headword) && classify_relation(conn, zid, jid)? == "false-friend" {
+            out.push(InterestingItem {
+                lexeme_id: jid,
+                variety,
+                headword,
+                reading,
+                gloss,
+                why: "false friend · same writing, different meaning in 中 and 日".to_string(),
+                category: "false-friend".to_string(),
+            });
+        }
+    }
+    Ok(out)
+}
+
+/// Assemble the homepage showcase: a couple from each category, round-robin merged so every
+/// category is represented, truncated to `limit`. Fresh random on every call (SQL RANDOM()).
+fn build_interesting(conn: &rusqlite::Connection, limit: usize) -> rusqlite::Result<Vec<InterestingItem>> {
+    let per = 2usize;
+    let buckets: Vec<Vec<InterestingItem>> = vec![
+        simple_cat(
+            conn,
+            // true kokuji: a Japanese single-char word, kunyomi-bearing, with NO Chinese/Cantonese
+            // lexeme of the same glyph AND no identity edge to an orthodox parent (which would make it
+            // a mere shinjitai/simplified FORM of an existing character - 徴←徵, 厨←廚 - not invented in Japan).
+            "SELECT l.id,l.variety,l.headword,l.reading, \
+               (SELECT gloss_en FROM sense WHERE lexeme_id=l.id ORDER BY sense_order LIMIT 1) \
+             FROM lexeme l WHERE l.variety='ja' AND length(l.headword)=1 \
+               AND unicode(l.headword) IN (SELECT cp FROM char_reading WHERE kind='kunyomi') \
+               AND NOT EXISTS (SELECT 1 FROM lexeme z WHERE z.variety IN ('zh','yue') AND z.headword=l.headword) \
+               AND NOT EXISTS (SELECT 1 FROM glyph_edge WHERE child_cp=unicode(l.headword) \
+                 AND type IN ('simplification','shinjitai','z-variant')) \
+             ORDER BY RANDOM() LIMIT 40",
+            per,
+            "kokuji",
+            "国字 · a kanji invented in Japan",
+        )?,
+        false_friend_items(conn, per)?,
+        simple_cat(
+            conn,
+            "SELECT l.id,l.variety,l.headword,l.reading, \
+               (SELECT gloss_en FROM sense WHERE lexeme_id=l.id ORDER BY sense_order LIMIT 1) \
+             FROM origin_badge ob JOIN lexeme l ON l.id=ob.lexeme_id \
+             WHERE ob.badge IN ('borrowed-from-japanese','wasei-kango') \
+             ORDER BY RANDOM() LIMIT 40",
+            per,
+            "wasei",
+            "和製漢語 · coined in Japan, borrowed into Chinese",
+        )?,
+        loanword_items(conn, per)?,
+        calque_items(conn, per)?,
+    ];
+    // round-robin merge so a small limit still shows a variety of categories
+    let mut out = Vec::new();
+    for i in 0..per {
+        for b in &buckets {
+            if let Some(it) = b.get(i) {
+                out.push(it.clone());
+            }
+        }
+    }
+    out.truncate(limit);
+    Ok(out)
+}
+
 fn shares_concept(conn: &rusqlite::Connection, a: i64, b: i64) -> rusqlite::Result<bool> {
     // Only STRONG links (confidence >= 1.0 = exact gloss-pivot / OMW) may rescue a cognate; the looser
     // content-word "gloss-token" links (confidence 0.5) widen the Related list but must NOT flip a real

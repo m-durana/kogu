@@ -10,6 +10,27 @@ pub struct SearchResponse {
     pub results: Vec<Hit>,
 }
 
+/// /interesting response: a fresh-random showcase of noteworthy entries for the homepage
+/// (kokuji, false friends, words coined in Japan, surprising loanwords, calques). Each item
+/// carries a short `why` label explaining what makes it interesting.
+#[derive(Serialize, ToSchema)]
+pub struct InterestingResponse {
+    pub items: Vec<InterestingItem>,
+}
+
+#[derive(Serialize, Clone, ToSchema)]
+pub struct InterestingItem {
+    pub lexeme_id: i64,
+    pub variety: String, // zh | yue | ja
+    pub headword: String,
+    pub reading: Option<String>,
+    pub gloss: Option<String>,
+    /// short human label for what makes this entry interesting ("国字 · a kanji invented in Japan")
+    pub why: String,
+    /// machine key for the category: kokuji | false-friend | wasei | loanword | calque
+    pub category: String,
+}
+
 /// /suggest response: lightweight autocomplete candidates (no senses), fast per-keystroke.
 #[derive(Serialize, ToSchema)]
 pub struct SuggestResponse {

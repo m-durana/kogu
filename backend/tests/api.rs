@@ -2054,3 +2054,76 @@ async fn common_word_outranks_homophone_museum_piece() {
     let v = search("かばん").await;
     assert_eq!(v["results"][0]["headword"], "鞄", "かばん leads with 鞄");
 }
+
+// ── /interesting: the homepage showcase of noteworthy entries ──
+
+async fn interesting(limit: usize) -> Value {
+    get(&format!("/interesting?limit={limit}")).await.1
+}
+const INTERESTING_CATS: &[&str] = &["kokuji", "false-friend", "wasei", "loanword", "calque"];
+
+// I1. shape: 200, non-empty, and every item is fully populated with a known category + why label.
+#[tokio::test]
+async fn interesting_ok_and_shaped() {
+    let (st, v) = get("/interesting").await;
+    assert_eq!(st, StatusCode::OK);
+    let items = v["items"].as_array().expect("items array");
+    assert!(!items.is_empty(), "interesting should return items");
+    for it in items {
+        assert!(it["lexeme_id"].is_i64(), "item has a lexeme_id");
+        assert!(["zh", "yue", "ja"].contains(&it["variety"].as_str().unwrap()), "valid variety");
+        assert!(!it["headword"].as_str().unwrap().is_empty(), "headword present");
+        assert!(!it["why"].as_str().unwrap().is_empty(), "why label present");
+        assert!(INTERESTING_CATS.contains(&it["category"].as_str().unwrap()), "known category: {}", it["category"]);
+    }
+}
+
+// I2. the limit is respected.
+#[tokio::test]
+async fn interesting_limit_respected() {
+    for lim in [1usize, 3, 5] {
+        let n = interesting(lim).await["items"].as_array().unwrap().len();
+        assert!(n <= lim, "limit {lim} should cap items, got {n}");
+    }
+}
+
+// I3. headwords render on a device font: Han/kana only, never Latin-letter junk (ＬＡＭＰ).
+#[tokio::test]
+async fn interesting_headwords_renderable() {
+    for it in interesting(30).await["items"].as_array().unwrap() {
+        let hw = it["headword"].as_str().unwrap();
+        assert!(!hw.chars().any(|c| c.is_ascii_alphabetic()), "headword {hw:?} has Latin letters");
+    }
+}
+
+// I4. every showcased item opens as a real entry (the lexeme_ids are valid).
+#[tokio::test]
+async fn interesting_items_open_as_entries() {
+    for it in interesting(10).await["items"].as_array().unwrap() {
+        let id = it["lexeme_id"].as_i64().unwrap();
+        let (st, e) = get(&format!("/entry/{id}")).await;
+        assert_eq!(st, StatusCode::OK, "item {id} should open as an entry");
+        assert!(e["headword"].is_string());
+    }
+}
+
+// I5. across several calls: multiple categories appear AND the picks are fresh-random (the id set
+//     grows beyond a single call's worth).
+#[tokio::test]
+async fn interesting_categories_and_fresh_random() {
+    use std::collections::HashSet;
+    let (mut cats, mut ids) = (HashSet::new(), HashSet::new());
+    let mut one_call = 0usize;
+    for k in 0..8 {
+        let arr = interesting(10).await["items"].as_array().unwrap().clone();
+        if k == 0 {
+            one_call = arr.len();
+        }
+        for it in &arr {
+            cats.insert(it["category"].as_str().unwrap().to_string());
+            ids.insert(it["lexeme_id"].as_i64().unwrap());
+        }
+    }
+    assert!(cats.len() >= 3, "expected >=3 categories across calls, got {cats:?}");
+    assert!(ids.len() > one_call, "fresh-random should surface more ids across calls ({}) than one call ({one_call})", ids.len());
+}

@@ -17,6 +17,7 @@
     gloss = '',
     onclick,
     title = '',
+    note = '',
   }: {
     glyph: string
     font?: string
@@ -28,6 +29,9 @@
     gloss?: string
     onclick: () => void
     title?: string
+    // optional caption under the gloss (the homepage "interesting" showcase uses it for the "why");
+    // empty by default, so every other list renders exactly as before.
+    note?: string
   } = $props()
 
   // long headwords (idioms, katakana loanwords) step the type down so the row still shows the
@@ -44,6 +48,7 @@
         {#if tags.length || regions.length}<span class="tags">{#each tags as t}<span class="var">{t}</span>{/each}{#each regions as rg}<span class="rg">{rg}</span>{/each}</span>{/if}
       </span>
       {#if gloss}<span class="gl">{gloss}</span>{/if}
+      {#if note}<span class="note">{note}</span>{/if}
     </span>
   </button>
 </li>
@@ -75,4 +80,6 @@
   .var { font-family: var(--han); font-size: 0.78rem; color: var(--faint); }
   .rg { font-size: 0.62rem; color: var(--faint); font-family: var(--mono); }
   .gl { color: var(--muted); font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* the "why this is interesting" caption (homepage showcase only); quiet + italic so it reads as a note */
+  .note { color: var(--faint); font-size: 0.72rem; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
