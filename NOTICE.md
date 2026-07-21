@@ -68,6 +68,10 @@ Phono-semantic **character** etymologies, used to gap-fill single characters whe
 none. Etymological interpretations © Lawrence J. Howell / Hikaru Morimoto, **MIT-licensed**.
 <https://github.com/conscientiousCode/Etymological-Dictionary-of-Han-Chinese-Characters-Database>
 
+### chinese-xinhua (成語 idiom origins)
+The classical source (出處) of Chinese four-character idioms, used to gap-fill **word** etymology.
+**MIT-licensed**. <https://github.com/pwxcoo/chinese-xinhua>
+
 ### wordfreq
 Primary word-frequency source (Zipf scale, multi-corpus blend). Code Apache-2.0, data
 CC BY-SA 4.0. <https://github.com/rspeer/wordfreq>

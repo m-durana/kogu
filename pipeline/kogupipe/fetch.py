@@ -97,6 +97,10 @@ SOURCES: dict[str, Source] = {
     "howell": Source(
         "howell", "https://raw.githubusercontent.com/conscientiousCode/Etymological-Dictionary-of-Han-Chinese-Characters-Database/main/data/howell_etymology.txt",
         "howell_etymology.txt", "MIT"),
+    # Idiom etymology (chinese-xinhua, MIT) - the classical source (出處) of 成語; multi-char word origins.
+    "idiom": Source(
+        "idiom", "https://raw.githubusercontent.com/pwxcoo/chinese-xinhua/master/data/idiom.json",
+        "idiom.json", "MIT"),
 }
 
 
