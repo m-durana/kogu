@@ -737,6 +737,16 @@
     if (n === 0) return `${head} in ${lang}: no everyday word is written with this character.`
     return `${head} in ${lang}: it appears in only ${n} scored ${lang} ${n === 1 ? 'word' : 'words'}, and even its most common one is low-frequency.`
   }
+  // tap-to-explain behind the region chip (Taiwan / Hong Kong)
+  function regionExplain(t: string): string {
+    return `Used mainly in ${t}. This word or spelling is region-specific; other regions often use a different word for the same thing.`
+  }
+  // tap-to-explain behind the "radical" chip
+  function radicalExplain(): string {
+    const n = headChar?.radical_number
+    const base = n ? `This character is Kangxi radical ${n}` : 'This character is a Kangxi radical'
+    return `${base} — one of the 214 classic components that Han characters are built from and indexed by.`
+  }
   // a single kanji that forms native words via okurigana (乗 → 乗る, 化 → 化ける) is a WORD STEM, not a
   // bound morpheme: its kun readings carry an okurigana split (の.る). Used to avoid mis-tagging the
   // synthetic Japanese row "bound" (item 4: 乗 is effectively a word, unlike 津 which is truly bound).
@@ -888,7 +898,12 @@
   let boundOpen = $state<Row | null>(null)
   // origin jargon (形聲, OC, STEDT…): a plain-English explanation. On desktop it's the button's
   // title= (hover), but hover doesn't exist on touch, so tapping a term opens this small popup too.
-  let openTerm = $state<string | null>(null)
+  let openTerm = $state<{ text: string; wiki?: string } | null>(null)
+  // Wikipedia article for a glossary term (language families, historical stages). Wikipedia's
+  // redirects resolve most linguistic terms (Sino-Tibetan → Sino-Tibetan languages, etc.).
+  function wikiUrl(term: string): string {
+    return `https://en.wikipedia.org/wiki/${encodeURIComponent(term.trim().replace(/ /g, '_'))}`
+  }
   function boundCompounds(r: Row): { lexeme_id: number; headword: string; glosses: string[] }[] {
     // never list the character itself as one of "its" compounds (之 → 之)
     return (entry?.compounds ?? []).filter((l) => l.variety === r.variety && l.headword !== head).slice(0, 30)
@@ -1080,7 +1095,7 @@
         {/if}
         {#if regionBadges.length}
           <!-- small country tag: this word is used only in this region (e.g. Taiwan 計程車) -->
-          <span class="regiontags">{#each regionBadges as t}<span class="rtag" title="used mainly in {t}">{t}</span>{/each}</span>
+          <span class="regiontags">{#each regionBadges as t}<button class="rtag tappable" onclick={() => (openTerm = { text: regionExplain(t) })} title="tap to explain">{t}</button>{/each}</span>
         {/if}
       </div>
       <div class="defs">
@@ -1128,9 +1143,9 @@
                    they don't FLASH before the entry enriches. -->
               <div class="rtagline">
                 {#if boundKind(r) === 'always'}<button class="ltag tappable" onclick={() => openBound(r)} title="only used in compounds, never as a word on its own">only in compounds</button>{:else if boundKind(r) === 'often'}<button class="ltag tappable" onclick={() => openBound(r)} title="bound in some senses; often used in compounds">often in compounds</button>{/if}
-                {#if soundLoan && r.variety === 'zh'}<button class="ltag tappable" onclick={() => (openTerm = soundLoanExplain)} title="tap to explain">written for sound</button>{/if}
-                {#if single && headChar && isRadicalChar}<span class="ltag rad">radical</span>{/if}
-                {#if single && headChar && rowUsage(r.variety)}<button class="ltag tappable" onclick={() => (openTerm = usageExplain(r.variety))} title="tap to explain">{rowUsage(r.variety)}</button>{/if}
+                {#if soundLoan && r.variety === 'zh'}<button class="ltag tappable" onclick={() => (openTerm = { text: soundLoanExplain })} title="tap to explain">written for sound</button>{/if}
+                {#if single && headChar && isRadicalChar}<button class="ltag rad tappable" onclick={() => (openTerm = { text: radicalExplain() })} title="tap to explain">radical</button>{/if}
+                {#if single && headChar && rowUsage(r.variety)}<button class="ltag tappable" onclick={() => (openTerm = { text: usageExplain(r.variety) })} title="tap to explain">{rowUsage(r.variety)}</button>{/if}
               </div>
             {/if}
             {#if ss.length}
@@ -1290,7 +1305,7 @@
   {#snippet etySeg(seg: ReturnType<typeof etymologyTokens>[number])}
     <div class="etyseg" class:sub={seg.depth > 0} class:alt={seg.alt} class:ord={seg.ordinal != null} style="--depth:{seg.depth}">
       {#if seg.heading}<div class="etyhead">{seg.heading}</div>{/if}
-      <p class="ety">{#if seg.ordinal != null}<span class="etynum">{seg.ordinal}.</span> {/if}{#each seg.tokens as s}{#if s.t === 'ruby'}<ruby><button class="kanji etylink" onclick={() => onsearch(s.base)}>{s.base}</button><rt>{s.rt}</rt></ruby>{:else if s.t === 'recon'}<span class="recon" title={s.title}>{s.v}</span>{:else if s.t === 'abbr'}<button class="term" title={s.title} onclick={() => (openTerm = s.title)}>{s.v}</button>{:else if s.t === 'han'}<button class="kanji etylink" onclick={() => onsearch(s.v)}>{s.v}</button>{:else}{s.v}{/if}{/each}</p>
+      <p class="ety">{#if seg.ordinal != null}<span class="etynum">{seg.ordinal}.</span> {/if}{#each seg.tokens as s}{#if s.t === 'ruby'}<ruby><button class="kanji etylink" onclick={() => onsearch(s.base)}>{s.base}</button><rt>{s.rt}</rt></ruby>{:else if s.t === 'recon'}<span class="recon" title={s.title}>{s.v}</span>{:else if s.t === 'abbr'}<button class="term" title={s.title} onclick={() => (openTerm = { text: s.title, wiki: wikiUrl(s.v) })}>{s.v}</button>{:else if s.t === 'han'}<button class="kanji etylink" onclick={() => onsearch(s.v)}>{s.v}</button>{:else}{s.v}{/if}{/each}</p>
     </div>
   {/snippet}
 
@@ -1362,7 +1377,8 @@
     <!-- svelte-ignore a11y_click_events_have_key_events -- backdrop dismiss; Escape (svelte:window) is the keyboard path -->
     <div class="termpop" role="presentation" onclick={() => (openTerm = null)}>
       <div class="termcard" role="dialog" aria-modal="true" tabindex="-1" use:dialogFocus onclick={(e) => e.stopPropagation()}>
-        <p>{openTerm}</p>
+        <p>{openTerm.text}</p>
+        {#if openTerm.wiki}<a class="wikilink" href={openTerm.wiki} target="_blank" rel="noopener noreferrer external">Read more on Wikipedia</a>{/if}
         <button class="mclose" onclick={() => (openTerm = null)}>close</button>
       </div>
     </div>
@@ -1421,6 +1437,8 @@
   /* small country tag(s) for a region-exclusive word (Taiwan/Hong Kong): sits up by the headword */
   .regiontags { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.55rem; }
   .rtag { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.02em; color: var(--muted); line-height: 1.5; }
+  .rtag.tappable { background: none; border: none; padding: 0; cursor: pointer; }
+  .rtag.tappable:hover { color: var(--text); }
   .defs { display: flex; flex-direction: column; gap: 1.1rem; }
   .dlh { display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap; }
   /* the language leads (it's the heading of the definition); the reading is secondary */
@@ -1673,6 +1691,8 @@
   .termpop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(10px) saturate(1.4); -webkit-backdrop-filter: blur(10px) saturate(1.4); display: flex; align-items: center; justify-content: center; padding: 1.2rem; z-index: 50; }
   .termcard { width: min(24rem, 100%); background: var(--bg); border: 1px solid var(--border-strong); border-radius: 16px; box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.7); padding: 1.1rem 1.1rem 0.9rem; }
   .termcard p { margin: 0; font-size: 0.95rem; line-height: 1.5; color: var(--text); }
+  .wikilink { display: inline-block; margin-top: 0.7rem; font-family: var(--mono); font-size: 0.76rem; color: var(--muted); text-decoration: none; border-bottom: 1px solid var(--border-strong); }
+  .wikilink:hover { color: var(--text); border-bottom-color: currentColor; }
 
   /* loading skeleton - reserves the lower sections' space so they don't pop in */
   .skel { margin-top: 1.4rem; }
