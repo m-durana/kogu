@@ -451,6 +451,38 @@ pub fn is_wildcard(q: &str) -> bool {
     q.chars().any(|c| matches!(c, '*' | '?' | '＊' | '？'))
 }
 
+/// How to interpret a romanized/ambiguous query. `you` can mean the WORD (English gloss → 你) or a
+/// SOUND (a reading → 有/又/よ); by default we blend both, but the caller can force one lens.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Scope {
+    /// blend meaning + sound (the default)
+    Auto,
+    /// only phonetic matches: words whose reading (pinyin / jyutping / romaji / kana) is the query
+    Sound,
+    /// only meaning matches: words whose English gloss is the query
+    Meaning,
+}
+
+impl Scope {
+    pub fn from_param(s: Option<&str>) -> Scope {
+        match s.map(str::trim).map(str::to_ascii_lowercase).as_deref() {
+            Some("sound") | Some("phonetic") | Some("reading") => Scope::Sound,
+            Some("meaning") | Some("english") | Some("gloss") => Scope::Meaning,
+            _ => Scope::Auto,
+        }
+    }
+    /// Does a candidate that matched via `match_type` survive this scope? Written-form matches
+    /// (exact/variant, and wildcards, which restrict their own fields) always survive; only the two
+    /// ambiguous tiers - `reading` (sound) and `english` (meaning) - are filtered.
+    fn keeps(self, match_type: &str) -> bool {
+        match self {
+            Scope::Auto => true,
+            Scope::Sound => match_type != "english",
+            Scope::Meaning => match_type != "reading",
+        }
+    }
+}
+
 /// Wildcard search over the written form: `*` = any run of characters, `?` = exactly one. Uses GLOB
 /// (case-sensitive, so leading-literal patterns like 你* use the surface_form.form index; LIKE is
 /// case-insensitive and would full-scan). Frequency-ranked, returned as a flat list.
@@ -458,6 +490,7 @@ fn wildcard_search(
     conn: &Connection,
     q: &str,
     pref_script: Option<&str>,
+    scope: Scope,
     limit: usize,
 ) -> rusqlite::Result<SearchResponse> {
     // normalise fullwidth ＊／？ → ASCII; wrap a literal '[' as GLOB's [[] (GLOB has no ESCAPE clause)
@@ -482,16 +515,36 @@ fn wildcard_search(
             results: vec![],
         });
     }
-    // match on the lexeme's PRIMARY/headword form only, so the displayed headword actually fits the
-    // pattern. (Without this, a usually-kana word with a rare kanji variant ending in 場: 鱈場/タラバ :
-    // leaks into a "*場" search as タラバ.)
-    let mut stmt = conn.prepare(
-        "SELECT DISTINCT sf.lexeme_id FROM surface_form sf JOIN lexeme l ON l.id = sf.lexeme_id \
-         WHERE sf.form GLOB ?1 AND (sf.is_primary = 1 OR sf.form = l.headword) LIMIT 800",
-    )?;
-    let ids: Vec<i64> = stmt.query_map([&pat], |r| r.get(0))?.collect::<Result<_, _>>()?;
+    use std::collections::HashSet;
+    let mut idset: HashSet<i64> = HashSet::new();
+    // written-form match (你* / *場): the lexeme's PRIMARY/headword form only, so the displayed
+    // headword actually fits the pattern. (Without this, a usually-kana word with a rare kanji variant
+    // ending in 場: 鱈場/タラバ : leaks into a "*場" search as タラバ.) Skipped when forcing Sound.
+    if scope != Scope::Sound {
+        let mut stmt = conn.prepare(
+            "SELECT DISTINCT sf.lexeme_id FROM surface_form sf JOIN lexeme l ON l.id = sf.lexeme_id \
+             WHERE sf.form GLOB ?1 AND (sf.is_primary = 1 OR sf.form = l.headword) LIMIT 800",
+        )?;
+        for id in stmt.query_map([&pat], |r| r.get::<_, i64>(0))? {
+            idset.insert(id?);
+        }
+    }
+    // reading match (you* → 有/又, tabe* → 食べる, たべ* → 食べる): GLOB the same pattern against the
+    // folded reading keys. Romanised keys are stored lowercase, so lowercase the pattern's literals;
+    // a Han pattern simply matches nothing here. Skipped when forcing Meaning.
+    if scope != Scope::Meaning {
+        let read_pat = pat.to_lowercase();
+        let mut stmt = conn.prepare(
+            "SELECT DISTINCT lr.lexeme_id FROM lexeme_reading lr \
+             WHERE lr.kind IN ('pinyin_plain','jyutping_plain','romaji_plain','kana') \
+               AND lr.value GLOB ?1 LIMIT 800",
+        )?;
+        for id in stmt.query_map([&read_pat], |r| r.get::<_, i64>(0))? {
+            idset.insert(id?);
+        }
+    }
     let mut hits: Vec<Hit> = Vec::new();
-    for id in ids {
+    for id in idset {
         if let Some(hit) = build_hit(conn, id, "wildcard", W_WILDCARD, pref_script)? {
             hits.push(hit);
         }
@@ -513,13 +566,14 @@ pub fn search(
     conn: &Connection,
     q: &str,
     pref_script: Option<&str>,
+    scope: Scope,
     limit: usize,
 ) -> rusqlite::Result<SearchResponse> {
     let q = q.trim();
     // wildcard search (你* / *場 / 機?場): detected before classification since '*'/'?' aren't
     // Han/Kana/Latin. Always returns a plain list (no single headword to unify).
     if is_wildcard(q) {
-        return wildcard_search(conn, q, pref_script, limit);
+        return wildcard_search(conn, q, pref_script, scope, limit);
     }
     let kind = classify(q);
     // best base weight per lexeme + how it matched
@@ -719,6 +773,10 @@ pub fn search(
             }
         }
     }
+
+    // force-scope filter: drop the ambiguous tier the caller doesn't want (Sound hides gloss matches,
+    // Meaning hides phonetic ones). Written-form/exact/variant/partial matches always stay.
+    cand.retain(|_, v| scope.keeps(v.0));
 
     // assemble + rank
     let mut hits: Vec<Hit> = Vec::with_capacity(cand.len());

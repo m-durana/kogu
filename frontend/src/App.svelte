@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { search, entry as fetchEntry, segment as fetchSegment, suggest as fetchSuggest, interesting, type SegmentPart, type Suggestion, type InterestingItem } from './lib/api'
+  import { search, entry as fetchEntry, segment as fetchSegment, suggest as fetchSuggest, interesting, type SegmentPart, type Suggestion, type InterestingItem, type SearchScope } from './lib/api'
   import { dialogFocus } from './lib/modal'
   import type { Entry, Hit, CharInfo } from './lib/types'
   import { primaryForm, varietyLabel, regionsOf, shortGloss, cleanGloss, langTag, hanFont, placeholderAt, formatReading } from './lib/display'
@@ -246,6 +246,25 @@
   // word you're already on). NOT `q`: onInput overwrites q with the NEW typed value before doSearch
   // runs, so comparing to q made every edit look like "same query" and silently skipped the search.
   let lastSearched = ''
+  // Force scope for an ambiguous romanized query: `you` can be the WORD (你) or a SOUND (有/又/よ).
+  // The toggle only appears for romanized queries (Latin letters, no Han/kana) since CJK input is
+  // unambiguous; a non-roman query always searches in auto so a stale toggle can't silently filter it.
+  let searchScope = $state<SearchScope>('auto')
+  function isRoman(s: string): boolean {
+    const t = s.trim()
+    return t.length > 0 && /[a-zA-Z]/.test(t) && !HAN.test(t) && !/[぀-ヿ]/.test(t)
+  }
+  const romanQuery = $derived(isRoman(q))
+  function setScope(s: SearchScope) {
+    if (s === searchScope) return
+    searchScope = s
+    // re-run the current search under the new lens (bypass the "same term" guard in doSearch)
+    if (q.trim() && view === 'results') {
+      lastSearched = ''
+      doSearch(q, 'replace')
+    }
+  }
+
   async function doSearch(query: string, mode: NavMode = 'push') {
     const term = query.trim()
     // already showing this exact query ON THE RESULTS VIEW (e.g. tapped the row/character for the page
@@ -280,7 +299,8 @@
     loading = true
     err = ''
     try {
-      const res = await search(term, undefined, ctrl.signal)
+      // a non-roman query is unambiguous, so it always searches in auto (a stale toggle can't filter it)
+      const res = await search(term, undefined, isRoman(term) ? searchScope : 'auto', ctrl.signal)
       results = res.results
       classified = res.classified_as
       searched = true
@@ -559,7 +579,7 @@
     window.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('popstate', onPop)
     // fresh-random homepage showcase (fails soft to []): loaded once on mount
-    interesting(8).then((items) => (interestingList = items))
+    interesting(7).then((items) => (interestingList = items))
     // deep link: a shared #/entry/<id> (id may be negative for a char-only page) reopens that entry
     const m = location.hash.match(/^#\/entry\/(-?\d+)$/)
     const term = new URLSearchParams(location.search).get('q')
@@ -695,7 +715,7 @@
 
 <svelte:window onkeydown={onEscape} />
 
-<div class="wrap" class:drawing={panel === 'draw'}>
+<div class="wrap" class:drawing={panel === 'draw'} class:wide={onWordPage}>
   <header class="bar">
     <h1 class="brand">
       <button class="brandbtn" onclick={goHome} aria-label="home"><span class="mark">古古</span> <span class="word">Kogu</span></button>
@@ -745,6 +765,19 @@
     <button class="rowbtn" class:on={panel === 'photo'} aria-label="photo or image" title="photo / image" onclick={openPhoto} data-testid="scan-toggle"><Camera size={18} /></button>
     <input bind:this={fileInput} type="file" accept="image/*" onchange={onPhotoFile} hidden />
   </div>
+
+  {#if romanQuery}
+    <!-- scope lens: a romanized query like "you" is ambiguous between a SOUND and a MEANING. Force one,
+         or leave Auto to blend both. Only shown for romanized input (CJK queries are unambiguous). -->
+    <div class="scoperow" data-testid="scope">
+      <span class="scopelbl">read as</span>
+      <div class="seg scopeseg" role="radiogroup" aria-label="how to read this query">
+        <button role="radio" aria-checked={searchScope === 'auto'} class:on={searchScope === 'auto'} onclick={() => setScope('auto')} title="blend sound and meaning">Auto</button>
+        <button role="radio" aria-checked={searchScope === 'sound'} class:on={searchScope === 'sound'} onclick={() => setScope('sound')} title="only words pronounced like this">Sound</button>
+        <button role="radio" aria-checked={searchScope === 'meaning'} class:on={searchScope === 'meaning'} onclick={() => setScope('meaning')} title="only words that mean this in English">Meaning</button>
+      </div>
+    </div>
+  {/if}
 
   {#if panel === 'photo' && ocrFile}
     <section class="inputpanel"><Ocr file={ocrFile} onpick={fromInput} /></section>
@@ -930,9 +963,18 @@
 
         <p class="introgloss">A dictionary for the living Han script: one word across <b>中文</b> (Mandarin), <b>粵語</b> (Cantonese), and <b>日本語</b> (Japanese) at once, and why the written forms differ.</p>
 
+        <h2 class="abh">On each page</h2>
+        <dl class="ablist">
+          <dt>Readings</dt><dd>How the word sounds in each language: <b>中</b> pinyin, <b>粵</b> jyutping, <b>日</b> kana (on and kun) with the pitch accent, the meaning beside each.</dd>
+          <dt>Related</dt><dd>Words that carry the same meaning, including cross-language equivalents, cognates, and false friends (same writing, different meaning).</dd>
+          <dt>Used in</dt><dd>Common words that contain the character, grouped by language.</dd>
+          <dt>Origin</dt><dd>The etymology, kept per language since the Chinese and Japanese accounts of the same glyph can both be true.</dd>
+          <dt>Structure</dt><dd>What a character is built from (its parts, and which carries the meaning vs the sound), and its forms across scripts: traditional, simplified, and Japanese shinjitai, with the reform that split them.</dd>
+        </dl>
+
         {#if interestingList.length}
-          <!-- homepage showcase: a fresh-random sample of noteworthy entries (kokuji, false friends,
-               words coined in Japan, surprising loanwords, calques). Reuses the canonical EntryRow;
+          <!-- homepage showcase: a fresh-random pick, one per category (kokuji, false friends coined
+               in Japan, 粵字, simplified merges, loanwords, calques). Reuses the canonical EntryRow;
                the "why" rides its optional note caption. Tap opens the full entry. -->
           <section class="showcase" data-testid="interesting">
             <h2 class="abh">Worth exploring</h2>
@@ -952,15 +994,6 @@
             </ul>
           </section>
         {/if}
-
-        <h2 class="abh">On each page</h2>
-        <dl class="ablist">
-          <dt>Readings</dt><dd>How the word sounds in each language: <b>中</b> pinyin, <b>粵</b> jyutping, <b>日</b> kana (on and kun) with the pitch accent, the meaning beside each.</dd>
-          <dt>Related</dt><dd>Words that carry the same meaning, including cross-language equivalents, cognates, and false friends (same writing, different meaning).</dd>
-          <dt>Used in</dt><dd>Common words that contain the character, grouped by language.</dd>
-          <dt>Origin</dt><dd>The etymology, kept per language since the Chinese and Japanese accounts of the same glyph can both be true.</dd>
-          <dt>Structure</dt><dd>What a character is built from (its parts, and which carries the meaning vs the sound), and its forms across scripts: traditional, simplified, and Japanese shinjitai, with the reform that split them.</dd>
-        </dl>
 
         <h2 class="abh">Where the data comes from</h2>
         <ul class="absrc">
@@ -1108,6 +1141,13 @@
   /* item 6: larger top-left wordmark */
   .brand .mark { font-family: var(--han); font-weight: 500; font-size: 1.6rem; letter-spacing: -0.04em; color: var(--text); }
   .brand .word { font-family: var(--sans); font-size: 1.15rem; letter-spacing: 0.04em; color: var(--muted); }
+
+  /* scope lens row under the search field (romanized queries only) */
+  .scoperow { display: flex; align-items: center; gap: 0.6rem; margin: -0.2rem 0 0.9rem; }
+  .scopelbl { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.02em; color: var(--faint); }
+  /* a slightly more compact take on the settings segmented control */
+  .scopeseg { margin-top: 0; }
+  .scopeseg button { padding: 0.32rem 0.72rem; font-size: 0.72rem; }
 
   .searchrow { display: flex; align-items: stretch; margin-bottom: 0.7rem; }
   .field { position: relative; flex: 1; min-width: 0; display: flex; }
@@ -1284,12 +1324,31 @@
      the phone-first column reads lost on a large screen: give the content a wider measure and pin
      the handwriting dock to the column instead of the full viewport edge. */
   @media (min-width: 1100px) {
-    .wrap { max-width: 1128px; }
-    /* the bar keeps a hand-sized measure and shares the left edge with everything else
-       (a full-width centered bar floated awkwardly over the two-column entry pages) */
-    .searchrow { max-width: 656px; }
-    /* reading surfaces keep a readable measure inside the wide wrap */
-    .results, .empty, .dym, .noword { max-width: 780px; }
+    /* Two wrap widths, keyed off the view. Entry pages need the full 1128px for their real
+       two-column split; the homepage, result lists and saved/history are single columns, so they
+       get a narrower, centred measure instead of a phone-width ribbon stranded against the left
+       edge of a 1128px box (which is what read as "a mobile layout stretched onto a desktop"). */
+    .wrap { max-width: 880px; }
+    .wrap.wide { max-width: 1128px; }
+    /* centre the search field over the centred column; on entry pages it sits left, flush with the
+       two-column content beneath it */
+    .searchrow { max-width: 656px; margin-left: auto; margin-right: auto; }
+    .wrap.wide .searchrow { margin-left: 0; margin-right: 0; }
+    /* reading surfaces keep a readable measure, centred in the column */
+    .results, .empty, .dym, .noword { max-width: 780px; margin-left: auto; margin-right: auto; }
+    /* the About page fills the wider measure instead of a 58ch ribbon: prose stays readable, but the
+       reference lists and the showcase flow into two columns so the page looks composed for desktop */
+    .about { max-width: none; }
+    .about .introgloss { max-width: 60ch; }
+    .about .abh { column-span: all; }
+    .ablist { columns: 2; column-gap: 3rem; }
+    .ablist dt { break-after: avoid; }
+    .ablist dd { break-before: avoid; break-inside: avoid; margin-bottom: 0.55rem; }
+    .absrc { columns: 2; column-gap: 3rem; }
+    .absrc li { break-inside: avoid; }
+    .absrc li:first-child { border-top: none; }
+    .showcase .results { columns: 2; column-gap: 3rem; max-width: none; }
+    .showcase .results :global(li) { break-inside: avoid; }
     /* sit the save/share icons level with the tab bar (they read as floating on desktop otherwise) */
     .actions { margin: 0.45rem 0 -3.05rem; }
     .drawpanel {

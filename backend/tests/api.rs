@@ -1650,6 +1650,70 @@ async fn suggest_skips_wildcards() {
     assert_eq!(v["suggestions"].as_array().unwrap().len(), 0);
 }
 
+// ---- force scope: sound (phonetic) vs meaning (English gloss) for an ambiguous romanized query ----
+fn match_types(v: &Value) -> Vec<String> {
+    v["results"].as_array().unwrap().iter().map(|r| r["match_type"].as_str().unwrap().to_string()).collect()
+}
+async fn search_scoped(q: &str, scope: &str) -> Value {
+    get(&format!("/search?q={}&scope={scope}", enc(q))).await.1
+}
+
+// "you" is ambiguous: the WORD (你) and a SOUND (有/又/よ). Auto blends both tiers.
+#[tokio::test]
+async fn scope_auto_blends_sound_and_meaning() {
+    let mt = match_types(&search("you").await);
+    assert!(mt.iter().any(|m| m == "english"), "auto keeps meaning matches: {mt:?}");
+    assert!(mt.iter().any(|m| m == "reading"), "auto keeps sound matches: {mt:?}");
+}
+
+// Sound mode drops every gloss match and keeps only phonetic ones (你 the word disappears; 有 stays).
+#[tokio::test]
+async fn scope_sound_hides_meaning() {
+    let v = search_scoped("you", "sound").await;
+    let (hw, mt) = (headwords(&v), match_types(&v));
+    assert!(!mt.iter().any(|m| m == "english"), "sound drops gloss matches: {mt:?}");
+    assert!(hw.iter().any(|h| h == "有"), "sound keeps the phonetic 有 (you): {hw:?}");
+    assert!(!hw.iter().any(|h| h == "你"), "the WORD 你 (gloss 'you') is hidden in sound mode");
+}
+
+// Meaning mode drops every phonetic match and keeps only gloss ones (你 stays; 有 disappears).
+#[tokio::test]
+async fn scope_meaning_hides_sound() {
+    let v = search_scoped("you", "meaning").await;
+    let (hw, mt) = (headwords(&v), match_types(&v));
+    assert!(!mt.iter().any(|m| m == "reading"), "meaning drops phonetic matches: {mt:?}");
+    assert!(hw.iter().any(|h| h == "你"), "meaning keeps 你 (means 'you'): {hw:?}");
+    assert!(!hw.iter().any(|h| h == "有"), "the sound-only 有 is hidden in meaning mode");
+}
+
+// ---- wildcards match romanized readings (pinyin / jyutping / romaji) and kana, not just forms ----
+#[tokio::test]
+async fn wildcard_matches_pinyin_reading() {
+    let hw = headwords(&search("you*").await);
+    assert!(hw.iter().any(|h| h == "有"), "you* matches the pinyin reading of 有: {hw:?}");
+}
+
+#[tokio::test]
+async fn wildcard_matches_romaji_reading() {
+    let hw = headwords(&search("tabe*").await);
+    assert!(hw.iter().any(|h| h == "食べる"), "tabe* matches the romaji reading of 食べる: {hw:?}");
+}
+
+#[tokio::test]
+async fn wildcard_matches_kana_reading() {
+    let hw = headwords(&search("たべ*").await);
+    assert!(hw.iter().any(|h| h == "食べる"), "たべ* matches the kana reading of 食べる: {hw:?}");
+}
+
+// a sound-scoped wildcard drops written-form hits and keeps reading hits
+#[tokio::test]
+async fn wildcard_sound_scope_is_phonetic() {
+    let v = search_scoped("you*", "sound").await;
+    let hw = headwords(&v);
+    assert!(hw.iter().any(|h| h == "有"), "you* sound keeps the phonetic 有: {hw:?}");
+    assert_eq!(v["classified_as"], "wildcard");
+}
+
 // ── Middle Chinese (phonological why) ──────────────────────────────────────────────────────────
 // MC (廣韻 / Baxter) readings ride on char_reading kind='mc'; the char's own reading flows through
 // the `readings` list, and a phonetic component's reading(s) ride on `components[].mc_sound`.
@@ -2060,7 +2124,7 @@ async fn common_word_outranks_homophone_museum_piece() {
 async fn interesting(limit: usize) -> Value {
     get(&format!("/interesting?limit={limit}")).await.1
 }
-const INTERESTING_CATS: &[&str] = &["kokuji", "false-friend", "wasei", "loanword", "calque"];
+const INTERESTING_CATS: &[&str] = &["kokuji", "false-friend", "wasei", "cantoji", "merge", "loanword", "calque"];
 
 // I1. shape: 200, non-empty, and every item is fully populated with a known category + why label.
 #[tokio::test]
@@ -2126,4 +2190,41 @@ async fn interesting_categories_and_fresh_random() {
     }
     assert!(cats.len() >= 3, "expected >=3 categories across calls, got {cats:?}");
     assert!(ids.len() > one_call, "fresh-random should surface more ids across calls ({}) than one call ({one_call})", ids.len());
+}
+
+// I6. false friends state BOTH meanings (the earlier auto-classifier mislabeled near-synonyms like
+//     掃除 "cleaning"/"to clean"): the caption shows the 日 and 中 sense side by side, no bare gloss.
+#[tokio::test]
+async fn interesting_false_friends_show_both_meanings() {
+    use std::collections::HashSet;
+    let mut seen = HashSet::new();
+    for _ in 0..12 {
+        for it in interesting(30).await["items"].as_array().unwrap() {
+            if it["category"] == "false-friend" {
+                let why = it["why"].as_str().unwrap();
+                assert!(why.starts_with("日 ") && why.contains(" · 中 "), "two-sided contrast, got {why:?}");
+                // the contrast note carries the meaning, so the row omits the plain gloss
+                assert!(it["gloss"].is_null(), "false-friend gloss should be null, got {}", it["gloss"]);
+                seen.insert(it["headword"].as_str().unwrap().to_string());
+            }
+        }
+    }
+    assert!(!seen.is_empty(), "curated false friends should surface across calls");
+}
+
+// I7. the showcase is not Japan-only: the China/Cantonese-side categories (粵字, simplified merges)
+//     surface across calls, and Chinese-variety items appear - a guard against the old ja-heavy mix.
+#[tokio::test]
+async fn interesting_is_language_balanced() {
+    use std::collections::HashSet;
+    let (mut cats, mut varieties) = (HashSet::new(), HashSet::new());
+    for _ in 0..12 {
+        for it in interesting(30).await["items"].as_array().unwrap() {
+            cats.insert(it["category"].as_str().unwrap().to_string());
+            varieties.insert(it["variety"].as_str().unwrap().to_string());
+        }
+    }
+    assert!(cats.contains("cantoji"), "the Cantonese-only category should appear, got {cats:?}");
+    assert!(cats.contains("merge"), "the simplified-merge category should appear, got {cats:?}");
+    assert!(varieties.contains("zh") || varieties.contains("yue"), "Chinese-side items should appear, got {varieties:?}");
 }

@@ -45,10 +45,19 @@ async function fetchRetry(input: URL | string, init: RequestInit, label: string)
   throw lastErr
 }
 
-export async function search(q: string, script?: string, signal?: AbortSignal): Promise<SearchResponse> {
+// scope forces how a romanized/ambiguous query is read: 'sound' = phonetic only (words pronounced
+// like the query), 'meaning' = English gloss only, 'auto' (default) = blend both.
+export type SearchScope = 'auto' | 'sound' | 'meaning'
+export async function search(
+  q: string,
+  script?: string,
+  scope: SearchScope = 'auto',
+  signal?: AbortSignal,
+): Promise<SearchResponse> {
   const u = new URL(BASE + '/search', location.origin)
   u.searchParams.set('q', q)
   if (script) u.searchParams.set('script', script)
+  if (scope !== 'auto') u.searchParams.set('scope', scope)
   const r = await fetchRetry(u, { signal }, 'search')
   return r.json()
 }

@@ -30,6 +30,9 @@ pub struct SearchParams {
     pub q: String,
     /// preferred Han script for the displayed form: "trad" or "simp" (also "kana", "shinjitai")
     pub script: Option<String>,
+    /// force how a romanized/ambiguous query is read: "sound" (phonetic only), "meaning" (English
+    /// gloss only), or unset/"auto" to blend both
+    pub scope: Option<String>,
     /// maximum number of hits (default 50, clamped to 1..=200)
     pub limit: Option<usize>,
 }
@@ -52,7 +55,8 @@ pub async fn search_handler(
 ) -> Result<Json<SearchResponse>, (StatusCode, Json<Value>)> {
     let conn = st.pool.get().map_err(internal)?;
     let limit = p.limit.unwrap_or(50).clamp(1, 200);
-    let resp = search::search(&st, &conn, &p.q, p.script.as_deref(), limit).map_err(internal)?;
+    let scope = search::Scope::from_param(p.scope.as_deref());
+    let resp = search::search(&st, &conn, &p.q, p.script.as_deref(), scope, limit).map_err(internal)?;
     Ok(Json(resp))
 }
 
@@ -585,6 +589,20 @@ fn cap_first(s: &str) -> String {
     }
 }
 
+/// Curated, hand-verified genuine false friends: the SAME Han spelling with a sharply different
+/// meaning in Chinese and Japanese (手紙 = letter in 日 / toilet paper in 中). The automatic
+/// gloss-disjointness classifier (classify_relation, used by the Related list) is too noisy for a
+/// show-off homepage: it flags near-synonyms whose English glosses merely differ in wording
+/// (掃除 "cleaning" vs "to clean", 自重 "self-respect" vs "conduct oneself with dignity") and even
+/// leaves cognates like 先生/結婚/成功 looking divergent. So the showcase samples from this vetted
+/// set and prints BOTH live glosses, which can neither mislabel nor go stale. Every entry was
+/// verified present in both varieties with a genuinely divergent primary sense.
+const FALSE_FRIENDS: &[&str] = &[
+    "手紙", "汽車", "勉強", "大丈夫", "高校", "新聞", "工夫", "愛人", "丈夫", "邪魔", "皮肉",
+    "迷惑", "一味", "結束", "天井", "人間", "深刻", "老婆", "放心", "約束", "娘", "走", "節目",
+    "大家", "留守", "手心", "用意", "石頭",
+];
+
 /// Run a 5-column category query (id, variety, headword, reading, gloss), keep renderable rows,
 /// tag each with a fixed `why`/`category`, and return up to `want`.
 fn simple_cat(
@@ -696,44 +714,125 @@ fn calque_items(conn: &rusqlite::Connection, want: usize) -> rusqlite::Result<Ve
     Ok(out)
 }
 
-/// False friends: sample same-form zh/ja pairs, keep the ones `classify_relation` flags as genuinely
-/// divergent, and return the Japanese side (its kana reading makes the contrast concrete).
+/// False friends: sample the curated FALSE_FRIENDS set, show the Japanese entry (its kana reading
+/// makes the pair concrete), and put the CONTRAST in the `why` from the two live glosses -
+/// "日 letter · 中 toilet paper" - so the row teaches both meanings and shows both languages at once.
+/// The gloss is left off because the contrast note already carries the meaning.
 fn false_friend_items(conn: &rusqlite::Connection, want: usize) -> rusqlite::Result<Vec<InterestingItem>> {
-    let mut stmt = conn.prepare(
-        "SELECT z.id, j.id, j.variety, j.headword, j.reading, \
-           (SELECT gloss_en FROM sense WHERE lexeme_id=j.id ORDER BY sense_order LIMIT 1) \
-         FROM lexeme z JOIN lexeme j ON z.headword = j.headword \
-           AND z.variety='zh' AND j.variety='ja' \
-         WHERE z.freq IS NOT NULL AND j.freq IS NOT NULL AND length(z.headword) >= 2 \
-         ORDER BY RANDOM() LIMIT 80",
-    )?;
-    let cands: Vec<(i64, i64, String, String, Option<String>, Option<String>)> = stmt
-        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)))?
-        .collect::<Result<_, _>>()?;
+    let ph = FALSE_FRIENDS.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!(
+        "SELECT j.id, j.variety, j.headword, j.reading, \
+           (SELECT gloss_en FROM sense WHERE lexeme_id=j.id ORDER BY sense_order LIMIT 1), \
+           (SELECT gloss_en FROM sense WHERE lexeme_id=( \
+              SELECT id FROM lexeme WHERE headword=j.headword AND variety='zh' AND freq IS NOT NULL LIMIT 1) \
+            ORDER BY sense_order LIMIT 1) \
+         FROM lexeme j WHERE j.variety='ja' AND j.freq IS NOT NULL AND j.headword IN ({ph}) \
+         ORDER BY RANDOM()"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(rusqlite::params_from_iter(FALSE_FRIENDS.iter()), |r| {
+        Ok((
+            r.get::<_, i64>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+            r.get::<_, Option<String>>(3)?,
+            r.get::<_, Option<String>>(4)?,
+            r.get::<_, Option<String>>(5)?,
+        ))
+    })?;
     let mut out = Vec::new();
-    for (zid, jid, variety, headword, reading, gloss) in cands {
+    for row in rows {
+        let (id, variety, headword, reading, jg, zg) = row?;
+        // both glosses are needed to state the contrast; skip if either side lost its gloss in a rebuild
+        let (Some(jg), Some(zg)) = (jg, zg) else { continue };
+        if !renderable_cjk(&headword) {
+            continue;
+        }
+        out.push(InterestingItem {
+            lexeme_id: id,
+            variety,
+            headword,
+            reading,
+            gloss: None,
+            why: format!("日 {} · 中 {}", short_gloss(&jg), short_gloss(&zg)),
+            category: "false-friend".to_string(),
+        });
         if out.len() >= want {
             break;
-        }
-        if renderable_cjk(&headword) && classify_relation(conn, zid, jid)? == "false-friend" {
-            out.push(InterestingItem {
-                lexeme_id: jid,
-                variety,
-                headword,
-                reading,
-                gloss,
-                why: "false friend · same writing, different meaning in 中 and 日".to_string(),
-                category: "false-friend".to_string(),
-            });
         }
     }
     Ok(out)
 }
 
-/// Assemble the homepage showcase: a couple from each category, round-robin merged so every
-/// category is represented, truncated to `limit`. Fresh random on every call (SQL RANDOM()).
+/// 粵字: a character written only for Cantonese (冇 "not have", 佢 "he/she", 咁 "so") - no Mandarin
+/// or Japanese lexeme shares the glyph. A distinctly Chinese-side curiosity to offset the Japan-heavy
+/// categories.
+fn cantoji_items(conn: &rusqlite::Connection, want: usize) -> rusqlite::Result<Vec<InterestingItem>> {
+    simple_cat(
+        conn,
+        "SELECT l.id,l.variety,l.headword,l.reading, \
+           (SELECT gloss_en FROM sense WHERE lexeme_id=l.id ORDER BY sense_order LIMIT 1) \
+         FROM lexeme l WHERE l.variety='yue' AND length(l.headword)=1 AND l.freq IS NOT NULL \
+           AND NOT EXISTS (SELECT 1 FROM lexeme o WHERE o.variety IN ('zh','ja') AND o.headword=l.headword) \
+         ORDER BY RANDOM() LIMIT 40",
+        want,
+        "cantoji",
+        "粵字 · written only in Cantonese",
+    )
+}
+
+/// A single simplified character that absorbed several DISTINCT traditional characters (干 ← 乾/幹,
+/// 里 ← 裏/裡, 台 ← 臺/檯/颱): the classic "one simplified form, several original words" merge. The
+/// merged-away forms go in the `why`. Proper-noun senses (surnames, place-names) are dropped by
+/// keeping only lowercase-pinyin readings - CC-CEDICT capitalises proper-noun pinyin.
+fn simplified_merge_items(conn: &rusqlite::Connection, want: usize) -> rusqlite::Result<Vec<InterestingItem>> {
+    let mut stmt = conn.prepare(
+        "SELECT l.id,l.variety,l.headword,l.reading, \
+           (SELECT gloss_en FROM sense WHERE lexeme_id=l.id ORDER BY sense_order LIMIT 1), \
+           (SELECT group_concat(char(parent_cp),' · ') FROM glyph_edge \
+              WHERE child_cp=unicode(l.headword) AND type='simplification') \
+         FROM lexeme l WHERE l.variety='zh' AND length(l.headword)=1 AND l.freq IS NOT NULL \
+           AND substr(l.reading,1,1)=lower(substr(l.reading,1,1)) \
+           AND (SELECT count(DISTINCT parent_cp) FROM glyph_edge \
+                WHERE child_cp=unicode(l.headword) AND type='simplification') >= 2 \
+         ORDER BY RANDOM() LIMIT 40",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        let parents: String = r.get(5)?;
+        // at most three merged-away forms so the caption stays one line
+        let shown = parents.split(" · ").take(3).collect::<Vec<_>>().join(" · ");
+        Ok(InterestingItem {
+            lexeme_id: r.get(0)?,
+            variety: r.get(1)?,
+            headword: r.get(2)?,
+            reading: r.get(3)?,
+            gloss: r.get(4)?,
+            why: format!("one simplified form of {shown}"),
+            category: "merge".to_string(),
+        })
+    })?;
+    let mut out = Vec::new();
+    for it in rows {
+        let it = it?;
+        if renderable_cjk(&it.headword) {
+            out.push(it);
+            if out.len() >= want {
+                break;
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Assemble the homepage showcase: a fresh-random pick from each category, round-robin merged so
+/// every category is represented, truncated to `limit`. The lineup is deliberately balanced across
+/// languages - Japan-side (kokuji, wasei), cross-language (false friends), and China/Cantonese-side
+/// (粵字, simplified merges, plus the mixed loanword/calque buckets) - rather than Japan-heavy.
+/// Fresh random on every call (SQL RANDOM()).
 fn build_interesting(conn: &rusqlite::Connection, limit: usize) -> rusqlite::Result<Vec<InterestingItem>> {
-    let per = 2usize;
+    // enough from each bucket to fill `limit` when some categories come up short (div_ceil, min 1)
+    const N_BUCKETS: usize = 7;
+    let per = ((limit + N_BUCKETS - 1) / N_BUCKETS).max(1);
     let buckets: Vec<Vec<InterestingItem>> = vec![
         simple_cat(
             conn,
@@ -755,15 +854,20 @@ fn build_interesting(conn: &rusqlite::Connection, limit: usize) -> rusqlite::Res
         false_friend_items(conn, per)?,
         simple_cat(
             conn,
+            // Chinese side only (the point is that it entered Chinese), and lowercase-pinyin readings
+            // to drop the transliterated Japanese place/person names (熊本, 沖繩, 岩倉) in this badge set.
             "SELECT l.id,l.variety,l.headword,l.reading, \
                (SELECT gloss_en FROM sense WHERE lexeme_id=l.id ORDER BY sense_order LIMIT 1) \
              FROM origin_badge ob JOIN lexeme l ON l.id=ob.lexeme_id \
-             WHERE ob.badge IN ('borrowed-from-japanese','wasei-kango') \
+             WHERE l.variety='zh' AND ob.badge IN ('borrowed-from-japanese','wasei-kango') \
+               AND substr(l.reading,1,1)=lower(substr(l.reading,1,1)) \
              ORDER BY RANDOM() LIMIT 40",
             per,
             "wasei",
             "和製漢語 · coined in Japan, borrowed into Chinese",
         )?,
+        cantoji_items(conn, per)?,
+        simplified_merge_items(conn, per)?,
         loanword_items(conn, per)?,
         calque_items(conn, per)?,
     ];
@@ -838,12 +942,60 @@ fn gloss_words(conn: &rusqlite::Connection, id: i64) -> rusqlite::Result<std::co
             }
             for tok in seg.to_lowercase().split(|c: char| !c.is_ascii_alphabetic()) {
                 if tok.len() >= 3 && !GLOSS_STOPWORDS.contains(&tok) {
-                    out.insert(tok.to_string());
+                    out.insert(stem(tok).to_string());
                 }
             }
         }
     }
     Ok(out)
+}
+
+/// A light suffix stripper (NOT a full Porter stemmer) so the same meaning written in a different
+/// word FORM still counts as a match: 完成 "completion" vs "to complete", 掃除 "cleaning" vs "to
+/// clean", 成功 "success" vs "succeed". Without it, cognates whose zh and ja glosses merely inflect
+/// the meaning differently look disjoint and get mislabelled false friends. Longest suffix first.
+fn stem(t: &str) -> &str {
+    for suf in [
+        "ations", "ation", "ings", "ing", "ments", "ment", "ness", "ities", "ion", "ies", "ed",
+        "es", "ly", "s",
+    ] {
+        if let Some(base) = t.strip_suffix(suf) {
+            if base.len() >= 3 {
+                return base;
+            }
+        }
+    }
+    t
+}
+
+/// Do two stemmed gloss-word sets share meaning? An exact shared token, OR a common word-stem that
+/// only differs by a derivational tail (marriage/married, succes(s)/succe(ed)): the shorter must be
+/// a >=5-char prefix of the longer. The 5-char floor keeps unrelated short roots (act/actor,
+/// part/party) from colliding. Only ever MERGES words, so it can turn a mislabelled false friend
+/// back into a cognate but never the reverse.
+fn glosses_overlap(a: &std::collections::HashSet<String>, b: &std::collections::HashSet<String>) -> bool {
+    if !a.is_disjoint(b) {
+        return true;
+    }
+    for x in a {
+        for y in b {
+            if x.len() >= 5 && y.len() >= 5 && (x.starts_with(y.as_str()) || y.starts_with(x.as_str())) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Is this lexeme a proper noun (place, surname, given name)? CC-CEDICT capitalises the pinyin of
+/// proper-noun senses, so a romanised reading that starts with an uppercase ASCII letter marks one.
+/// A same-form proper noun (成功 the town vs 成功 "success") is not a pedagogically useful false
+/// friend, so classify_relation treats it as a plain same-form sibling instead of flagging it.
+fn is_proper_noun(conn: &rusqlite::Connection, id: i64) -> rusqlite::Result<bool> {
+    let reading: Option<String> = conn.query_row("SELECT reading FROM lexeme WHERE id=?1", [id], |r| r.get(0))?;
+    Ok(reading
+        .and_then(|r| r.chars().next())
+        .is_some_and(|c| c.is_ascii_uppercase()))
 }
 
 const IDENTITY_TYPES: &str = "('simplification','shinjitai','z-variant')";
@@ -913,7 +1065,17 @@ fn variant_spelling(conn: &rusqlite::Connection, a: i64, b: i64) -> rusqlite::Re
 /// layer, which both under-links (砂糖 = sugar/sugar) and over-links (大丈夫, 娘 - classic false
 /// friends it wrongly tied together). Variant spellings (这/這, 汉/漢) and bare variant glyphs with
 /// no glosses stay cognate; genuine same-form divergences (手紙, 汽車, 大丈夫, 娘) flag.
+///
+/// "Share no word" is measured on STEMMED tokens with a prefix-fuzzy match (glosses_overlap), so a
+/// cognate whose two glosses merely inflect the meaning differently (完成 "completion"/"to complete",
+/// 掃除 "cleaning"/"to clean", 成功 "success"/"succeed") is no longer mistaken for a false friend.
+/// Proper-noun same-forms (成功 the Taiwan town, whose zh gloss is a place name) are never flagged.
 fn classify_relation(conn: &rusqlite::Connection, a: i64, b: i64) -> rusqlite::Result<&'static str> {
+    // A same-form NAME (place, surname) beside a common word is not a teachable false friend - it is
+    // just an incidental spelling coincidence - so treat it as a plain same-form sibling.
+    if is_proper_noun(conn, a)? || is_proper_noun(conn, b)? {
+        return Ok("cognate");
+    }
     // A variant spelling means "the same word, written differently" - but only WITHIN a language.
     // Across languages, variant-equivalent forms can still be false friends (会社 jp "company" vs
     // 會社 zh "guild" - 会 is just the shinjitai of 會), so only short-circuit same-variety pairs.
@@ -922,11 +1084,11 @@ fn classify_relation(conn: &rusqlite::Connection, a: i64, b: i64) -> rusqlite::R
     if va == vb && variant_spelling(conn, a, b)? {
         return Ok("cognate");
     }
-    // primary senses share no word → a false friend (手紙, 汽車, 大丈夫, 娘, 会社); any shared
-    // primary-sense word → cognate (砂糖 = sugar, 愛 = love). One side unglossed → cognate.
+    // primary senses share no meaning word → a false friend (手紙, 汽車, 大丈夫, 娘, 会社); any shared
+    // (or prefix-equivalent) word → cognate (砂糖 = sugar, 完成 = completion/complete). One side unglossed → cognate.
     let wa = gloss_words(conn, a)?;
     let wb = gloss_words(conn, b)?;
-    let diverges = !wa.is_empty() && !wb.is_empty() && wa.is_disjoint(&wb);
+    let diverges = !wa.is_empty() && !wb.is_empty() && !glosses_overlap(&wa, &wb);
     // …but a shared concept (a non-primary sense that means the same thing) overrides a disjoint
     // primary gloss, so sense-ordering differences don't fake a false friend (天, 本).
     if diverges && shares_concept(conn, a, b)? {
