@@ -965,11 +965,11 @@
 
         <h2 class="abh">On each page</h2>
         <dl class="ablist">
-          <dt>Readings</dt><dd>How the word sounds in each language: <b>中</b> pinyin, <b>粵</b> jyutping, <b>日</b> kana (on and kun) with the pitch accent, the meaning beside each.</dd>
-          <dt>Related</dt><dd>Words that carry the same meaning, including cross-language equivalents, cognates, and false friends (same writing, different meaning).</dd>
-          <dt>Used in</dt><dd>Common words that contain the character, grouped by language.</dd>
-          <dt>Origin</dt><dd>The etymology, kept per language since the Chinese and Japanese accounts of the same glyph can both be true.</dd>
-          <dt>Structure</dt><dd>What a character is built from (its parts, and which carries the meaning vs the sound), and its forms across scripts: traditional, simplified, and Japanese shinjitai, with the reform that split them.</dd>
+          <div class="abitem"><dt>Readings</dt><dd>How the word sounds in each language: <b>中</b> pinyin, <b>粵</b> jyutping, <b>日</b> kana (on and kun) with the pitch accent, the meaning beside each.</dd></div>
+          <div class="abitem"><dt>Related</dt><dd>Words that carry the same meaning, including cross-language equivalents, cognates, and false friends (same writing, different meaning).</dd></div>
+          <div class="abitem"><dt>Used in</dt><dd>Common words that contain the character, grouped by language.</dd></div>
+          <div class="abitem"><dt>Origin</dt><dd>The etymology, kept per language since the Chinese and Japanese accounts of the same glyph can both be true.</dd></div>
+          <div class="abitem"><dt>Structure</dt><dd>What a character is built from (its parts, and which carries the meaning vs the sound), and its forms across scripts: traditional, simplified, and Japanese shinjitai, with the reform that split them.</dd></div>
         </dl>
 
         {#if interestingList.length}
@@ -988,6 +988,7 @@
                   tags={[varietyLabel(it.variety)]}
                   gloss={it.gloss ? shortGloss([it.gloss]) : ''}
                   note={it.why}
+                  notePrimary
                   onclick={() => openEntry(it.lexeme_id, 'push', it.headword)}
                 />
               {/each}
@@ -1324,37 +1325,30 @@
      the phone-first column reads lost on a large screen: give the content a wider measure and pin
      the handwriting dock to the column instead of the full viewport edge. */
   @media (min-width: 1100px) {
-    /* Two wrap widths, keyed off the view. Entry pages need the full 1128px for their real
-       two-column split; the homepage, result lists and saved/history are single columns, so they
-       get a narrower, centred measure instead of a phone-width ribbon stranded against the left
-       edge of a 1128px box (which is what read as "a mobile layout stretched onto a desktop"). */
-    .wrap { max-width: 880px; }
-    .wrap.wide { max-width: 1128px; }
-    /* centre the search field over the centred column; on entry pages it sits left, flush with the
-       two-column content beneath it */
-    .searchrow { max-width: 656px; margin-left: auto; margin-right: auto; }
-    .wrap.wide .searchrow { margin-left: 0; margin-right: 0; }
-    /* reading surfaces keep a readable measure, centred in the column */
-    .results, .empty, .dym, .noword { max-width: 780px; margin-left: auto; margin-right: auto; }
-    /* the About page fills the wider measure instead of a 58ch ribbon: prose stays readable, but the
-       reference lists and the showcase flow into two columns so the page looks composed for desktop */
+    /* ONE wrap width for every view, so the wordmark + search bar never shift when you open an entry
+       (they used to jump because entries were 1128px wide and everything else 880px). Entry pages
+       split into two columns WITHIN this width; the About page and lists fill or sit inside it. */
+    .wrap { max-width: 1200px; }
+    /* header is identical on every view: the search field keeps one measure, left-aligned, flush with
+       the content column beneath it - never re-centred, so it can't move between pages. */
+    .searchrow { max-width: 840px; margin-left: 0; margin-right: 0; }
+    /* result / list surfaces: one readable column, left-aligned (flush with the search bar) */
+    .results, .empty, .dym, .noword { max-width: 840px; }
+    /* the About page fills the full width. Its reference list is a real GRID where each term keeps
+       its own description (CSS multi-column used to orphan a heading like "Used in" from its text). */
     .about { max-width: none; }
-    .about .introgloss { max-width: 60ch; }
-    .about .abh { column-span: all; }
-    .ablist { columns: 2; column-gap: 3rem; }
-    .ablist dt { break-after: avoid; }
-    .ablist dd { break-before: avoid; break-inside: avoid; margin-bottom: 0.55rem; }
+    .about .introgloss { max-width: 62ch; }
+    .ablist { display: grid; grid-template-columns: 1fr 1fr; gap: 0.1rem 3rem; margin-top: 0.2rem; }
+    .abitem { break-inside: avoid; }
     .absrc { columns: 2; column-gap: 3rem; }
     .absrc li { break-inside: avoid; }
     .absrc li:first-child { border-top: none; }
-    .showcase .results { columns: 2; column-gap: 3rem; max-width: none; }
-    .showcase .results :global(li) { break-inside: avoid; }
+    .showcase .results { display: grid; grid-template-columns: 1fr 1fr; column-gap: 3rem; max-width: none; }
     /* sit the save/share icons level with the tab bar (they read as floating on desktop otherwise) */
     .actions { margin: 0.45rem 0 -3.05rem; }
     .drawpanel {
-      /* floor matches the wrap's own 1.5rem padding edge, so the dock stays flush with the content
-         column in the narrow 1100-1127px window (a 1rem floor sat 8px left of it) */
-      left: max(calc(50vw - 564px + 1.5rem), 1.5rem); right: auto;
+      /* floor matches the wrap's own 1.5rem padding edge so the dock stays flush with the column */
+      left: max(calc(50vw - 600px + 1.5rem), 1.5rem); right: auto;
       width: min(880px, calc(100vw - 3rem));
       border: 1px solid var(--border-strong); border-bottom: none;
       border-radius: 16px 16px 0 0;

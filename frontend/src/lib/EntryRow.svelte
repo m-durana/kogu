@@ -18,6 +18,7 @@
     onclick,
     title = '',
     note = '',
+    notePrimary = false,
   }: {
     glyph: string
     font?: string
@@ -32,6 +33,9 @@
     // optional caption under the gloss (the homepage "interesting" showcase uses it for the "why");
     // empty by default, so every other list renders exactly as before.
     note?: string
+    // when true (the showcase), the note IS the point: render it as clear primary text (up to two
+    // lines) and let the reading recede, since WHY an entry is shown matters more than how it sounds.
+    notePrimary?: boolean
   } = $props()
 
   // long headwords (idioms, katakana loanwords) step the type down so the row still shows the
@@ -42,13 +46,13 @@
 <li>
   <button class="hit" {onclick} title={title || `look up ${glyph}`}>
     <span class="hw" {lang} style="font-family:{font};font-size:{hwSize}"><Glyph ch={glyph} {font} {lang} />{#if alt}<span class="alt">{alt}</span>{/if}</span>
-    <span class="meta-col">
+    <span class="meta-col" class:np={notePrimary}>
       <span class="line1">
         {#if reading && reading !== glyph}<span class="rd">{reading}</span>{/if}
         {#if tags.length || regions.length}<span class="tags">{#each tags as t}<span class="var">{t}</span>{/each}{#each regions as rg}<span class="rg">{rg}</span>{/each}</span>{/if}
       </span>
       {#if gloss}<span class="gl">{gloss}</span>{/if}
-      {#if note}<span class="note">{note}</span>{/if}
+      {#if note}<span class="note" class:primary={notePrimary}>{note}</span>{/if}
     </span>
   </button>
 </li>
@@ -82,4 +86,10 @@
   .gl { color: var(--muted); font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* the "why this is interesting" caption (homepage showcase only); quiet + italic so it reads as a note */
   .note { color: var(--faint); font-size: 0.72rem; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* showcase "why": the reason an entry is noteworthy is the point, so make it clear primary text
+     (readable colour, upright, wraps to two lines) and let the reading fade back below it. */
+  .note.primary { color: var(--text); font-size: 0.82rem; font-style: normal; line-height: 1.35; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+  .meta-col.np { gap: 0.25rem; }
+  .meta-col.np .rd { color: var(--faint); }
+  .meta-col.np .gl { font-size: 0.82rem; color: var(--faint); }
 </style>
