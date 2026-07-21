@@ -18,7 +18,7 @@
 
 <script lang="ts">
   import type { CharInfo, Entry, Hit, ReadingKV, Variety } from './types'
-  import { primaryForm, varietyLabel, varietyName, headwordGlyphSize, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, isAlwaysBound, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle, scriptShort, scSwitchTarget, scriptChangeNote, scriptChangeFromForms, jyutpingToYale, mcSoundLink, regionTags, expandSenses, formatReading, pitchPattern, moraSplit } from './display'
+  import { primaryForm, varietyLabel, varietyName, headwordGlyphSize, pinyinMarks, cleanGloss, glossLine, briefGloss, meaningfulGlossCount, isMinorGloss, formTag, glossParts, isBoundForm, isAlwaysBound, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanTitle, scriptShort, scSwitchTarget, scSwitchOptions, scriptChangeNote, scriptChangeFromForms, jyutpingToYale, mcSoundLink, regionTags, expandSenses, formatReading, pitchPattern, moraSplit } from './display'
   import { speakReading, canSpeak } from './speech'
   import { settings } from './settings.svelte'
   import { dialogFocus } from './modal'
@@ -687,6 +687,16 @@
     }
     return null
   })
+  // the viewed WORD's own trad/simp counterpart (宁 ↔ 㝉), from the Chinese def row (lexeme-level, not
+  // the glyph graph). Feeds the menu so a merge glyph still links to its own script pair.
+  const zhOwnAlt = $derived.by(() => {
+    const zh = defRows.find((r) => r.variety === 'zh' && r.form === head)
+    return zh?.alt && zh.altScript ? { to: zh.alt, label: zh.altScript === 'trad' ? 'traditional' : 'simplified' } : null
+  })
+  // For a single glyph that maps to SEVERAL script forms (a merge: 宁 ← 寧 · 甯, 干 ← 乾 · 幹), the switch
+  // becomes a menu instead of a one-tap toggle. Words keep the single switchTarget above.
+  const switchOptions = $derived(single ? scSwitchOptions(headChar?.script_forms ?? null, head, zhOwnAlt) : [])
+  let scMenuOpen = $state(false)
   // a TRADITIONAL-script Chinese headword must use the TC font stack: the SC-first --han stack leads
   // with Simplified system fonts that can lack traditional-only forms (關), which tofu. The GlyphWiki
   // fallback in Glyph.svelte still backstops genuinely-uncovered glyphs; this just prefers the right
@@ -996,7 +1006,10 @@
   }
 </script>
 
-<svelte:window onkeydown={(e) => { if (e.key === 'Escape') { if (boundOpen) closeBound(); openTerm = null } }} />
+<svelte:window
+  onkeydown={(e) => { if (e.key === 'Escape') { if (boundOpen) closeBound(); openTerm = null; scMenuOpen = false } }}
+  onclick={() => { if (scMenuOpen) scMenuOpen = false }}
+/>
 
 <article class="u" class:split={isGlyphSearch}>
   <!-- one tappable cross-language row (bridge band + plain results list) -->
@@ -1037,7 +1050,22 @@
       <div class="glyphrow">
         <h2 class="glyph" class:clamp={!headOpen} style="font-size:{glyphSize}" use:readProbe={(v) => (headOver = v)}><Glyph ch={head} font={headFont} lang={langTag(headVariety)} /></h2>
         {#if headOver}<button class="headmore" onclick={() => (headOpen = !headOpen)} aria-label={headOpen ? 'collapse headword' : 'show full headword'} title={headOpen ? 'collapse' : 'show full word'}>{#if headOpen}<Minus size={18} />{:else}<Plus size={18} />{/if}</button>{/if}
-        {#if switchTarget}
+        {#if switchOptions.length > 1}
+          <!-- merge glyph (宁 ← 寧 · 甯): the switch opens a menu to pick which form to jump to -->
+          <span class="scswrap">
+            <button class="scswitch" onclick={(e) => { e.stopPropagation(); scMenuOpen = !scMenuOpen }} aria-haspopup="menu" aria-expanded={scMenuOpen} title="switch script form" aria-label="switch script form"><ArrowLeftRight size={17} /></button>
+            {#if scMenuOpen}
+              <ul class="scmenu" role="menu">
+                {#each switchOptions as o (o.to)}
+                  <li role="none"><button class="scmenu-item" role="menuitem" onclick={() => { scMenuOpen = false; onsearch(o.to) }}>
+                    <span class="scmenu-glyph" style="font-family:{o.script === 'traditional' ? 'var(--han-tc)' : 'var(--han)'}">{o.to}</span>
+                    <span class="scmenu-label">{o.label}</span>
+                  </button></li>
+                {/each}
+              </ul>
+            {/if}
+          </span>
+        {:else if switchTarget}
           <button class="scswitch" onclick={() => onsearch(switchTarget.to)} title="switch to the {switchTarget.label} form ({switchTarget.to})" aria-label="switch to the {switchTarget.label} form"><ArrowLeftRight size={17} /></button>
         {/if}
         {#if regionBadges.length}
@@ -1371,6 +1399,15 @@
   /* just the two-arrow icon, no box around it (item) */
   .scswitch { display: inline-flex; align-items: center; justify-content: center; margin-top: 0.45rem; padding: 0.15rem; color: var(--muted); background: none; border: none; }
   .scswitch:hover { color: var(--text); background: none; }
+  /* multi-option script switch (merge glyphs like 宁 ← 寧 · 甯): a small menu anchored to the arrow */
+  .scswrap { position: relative; display: inline-flex; }
+  .scmenu { position: absolute; top: 100%; left: 0; z-index: 40; margin: 0.2rem 0 0; padding: 0.25rem; list-style: none;
+    background: var(--bg); border: 1px solid var(--border-strong); border-radius: 12px; box-shadow: 0 12px 32px -12px rgba(0,0,0,0.7); min-width: 9rem; }
+  .scmenu-item { display: flex; align-items: baseline; gap: 0.6rem; width: 100%; text-align: left; background: none; border: none;
+    border-radius: 8px; padding: 0.4rem 0.6rem; color: var(--text); }
+  .scmenu-item:hover { background: var(--surface); }
+  .scmenu-glyph { font-size: 1.5rem; line-height: 1; }
+  .scmenu-label { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.02em; color: var(--faint); }
   /* small country tag(s) for a region-exclusive word (Taiwan/Hong Kong): sits up by the headword */
   .regiontags { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.55rem; }
   .rtag { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.02em; color: var(--muted); line-height: 1.5; }

@@ -265,6 +265,31 @@ export function scSwitchTarget(sf: ScriptForms | null, head: string): { to: stri
   return null
 }
 
+// ALL script-form counterparts of the viewed glyph, for the switch menu: every branch that isn't the
+// head (both traditional parents of a merge, e.g. 宁 ← 寧 · 甯, or 干 ← 乾 · 幹), plus the viewed word's
+// OWN trad/simp counterpart (宁 ↔ 㝉), which lives on the lexeme rather than the glyph graph. When this
+// returns a single option the caller shows a one-tap toggle; when it returns several it opens a menu.
+export function scSwitchOptions(
+  sf: ScriptForms | null,
+  head: string,
+  ownAlt?: { to: string; label: string } | null,
+): { to: string; label: string; script: string }[] {
+  const opts: { to: string; label: string; script: string }[] = []
+  if (sf && !sf.is_kokuji) {
+    for (const b of sf.branches) {
+      if (b.form === head) continue
+      const scripts = b.script.split('+')
+      const script = scripts.includes('traditional') ? 'traditional' : scripts.includes('simplified') ? 'simplified' : scripts[0]
+      const label = script === 'traditional' ? 'traditional' : script === 'simplified' ? 'simplified' : scriptShort(b.script)
+      opts.push({ to: b.form, label, script })
+    }
+  }
+  if (ownAlt?.to && ownAlt.to !== head && !opts.some((o) => o.to === ownAlt.to)) {
+    opts.push({ to: ownAlt.to, label: ownAlt.label, script: ownAlt.label === 'traditional' ? 'traditional' : 'simplified' })
+  }
+  return opts.filter((o, i) => opts.findIndex((x) => x.to === o.to) === i)
+}
+
 // Tag for a surface_form's script (trad/simp/shinjitai): used to label both Chinese forms equally.
 export function formTag(script: string): string {
   return ({ trad: 'TC', simp: 'SC', shinjitai: 'JP' } as Record<string, string>)[script] ?? ''
