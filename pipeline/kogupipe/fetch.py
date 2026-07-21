@@ -93,6 +93,10 @@ SOURCES: dict[str, Source] = {
     "kanjium-accents": Source(
         "kanjium-accents", "https://raw.githubusercontent.com/mifunetoshiro/kanjium/master/data/accents.txt",
         "accents.txt", "CC-BY-SA"),
+    # Character etymology (Howell, MIT) - phono-semantic glyph origins; gap-fills chars Wiktionary lacks.
+    "howell": Source(
+        "howell", "https://raw.githubusercontent.com/conscientiousCode/Etymological-Dictionary-of-Han-Chinese-Characters-Database/main/data/howell_etymology.txt",
+        "howell_etymology.txt", "MIT"),
 }
 
 

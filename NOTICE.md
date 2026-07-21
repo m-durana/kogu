@@ -63,6 +63,11 @@ English-pivot translation tables. Dual-licensed **CC BY-SA 3.0 + GFDL**, per Wik
 Extracted from the kaikki.org machine-readable dumps: <https://kaikki.org/>
 (wiktextract: <https://github.com/tatuylonen/wiktextract>).
 
+### Howell Etymological Dictionary of Han/Chinese Characters
+Phono-semantic **character** etymologies, used to gap-fill single characters where Wiktionary has
+none. Etymological interpretations © Lawrence J. Howell / Hikaru Morimoto, **MIT-licensed**.
+<https://github.com/conscientiousCode/Etymological-Dictionary-of-Han-Chinese-Characters-Database>
+
 ### wordfreq
 Primary word-frequency source (Zipf scale, multi-corpus blend). Code Apache-2.0, data
 CC BY-SA 4.0. <https://github.com/rspeer/wordfreq>
