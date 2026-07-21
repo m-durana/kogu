@@ -71,12 +71,16 @@
     enriching = false,
     anchor = '',
     onsearch,
+    onopen,
   }: {
     hits?: Hit[]
     entry?: Entry | null
     enriching?: boolean
     anchor?: string
     onsearch: (q: string) => void
+    // open a specific entry by lexeme id (related/bridge/used-in rows): a direct jump, not a text
+    // search - so a katakana word goes straight to its entry instead of a slow list-by-reading.
+    onopen: (id: number, glyph: string) => void
   } = $props()
 
   const VORDER = ['zh', 'yue', 'ja']
@@ -1048,7 +1052,7 @@
       reading={dispReading(r.variety, r.reading)}
       tags={[varietyLabel(r.variety)]}
       gloss={briefGloss(r.glosses)}
-      onclick={() => onsearch(r.form)}
+      onclick={() => onopen(r.id, r.form)}
     />
   {/snippet}
 

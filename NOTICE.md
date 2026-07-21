@@ -72,6 +72,10 @@ none. Etymological interpretations © Lawrence J. Howell / Hikaru Morimoto, **MI
 The classical source (出處) of Chinese four-character idioms, used to gap-fill **word** etymology.
 **MIT-licensed**. <https://github.com/pwxcoo/chinese-xinhua>
 
+### mapull/chinese-dictionary (成語 idiom origins)
+A larger idiom set with the cited classical source (book + quotation), gap-filling **word**
+etymology. **MIT-licensed**. <https://github.com/mapull/chinese-dictionary>
+
 ### wordfreq
 Primary word-frequency source (Zipf scale, multi-corpus blend). Code Apache-2.0, data
 CC BY-SA 4.0. <https://github.com/rspeer/wordfreq>

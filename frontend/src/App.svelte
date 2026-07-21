@@ -854,20 +854,20 @@
     </section>
   {:else if view === 'entry' && entry}
     {#key entry.lexeme_id}
-      <Unified entry={entry} anchor={q} onsearch={doSearch} />
+      <Unified entry={entry} anchor={q} onsearch={doSearch} onopen={(id, g) => openEntry(id, 'push', g)} />
     {/key}
   {:else if unified && enrichEntry}
     <!-- the full entry has arrived: definition + structure + origin + used-in + bridges all rendered. -->
-    <Unified hits={results} entry={enrichEntry} anchor={q} onsearch={doSearch} />
+    <Unified hits={results} entry={enrichEntry} anchor={q} onsearch={doSearch} onopen={(id, g) => openEntry(id, 'push', g)} />
   {:else if unified && enriching}
     <!-- enriching: show the DEFINITION immediately from the search hits, with the lower sections'
          scaffolding/skeleton in place; the structure/origin/used-in content fills in when /entry
          arrives in the background. The user gets the main page at once instead of a blank skeleton. -->
-    <Unified hits={results} entry={null} enriching={true} anchor={q} onsearch={doSearch} />
+    <Unified hits={results} entry={null} enriching={true} anchor={q} onsearch={doSearch} onopen={(id, g) => openEntry(id, 'push', g)} />
   {:else if unified && results.length}
     <!-- enrich finished but no entry came back (fetch failed): still show the card from search hits,
          and SAY the rest is missing: a silently reduced page reads as "that's all there is" -->
-    <Unified hits={results} entry={null} anchor={q} onsearch={doSearch} />
+    <Unified hits={results} entry={null} anchor={q} onsearch={doSearch} onopen={(id, g) => openEntry(id, 'push', g)} />
     {#if enrichFailed}
       <div class="err">
         couldn't load the full entry

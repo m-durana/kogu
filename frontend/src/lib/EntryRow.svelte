@@ -83,12 +83,13 @@
   .rd + .tags { border-left: 1px solid var(--border-strong); padding-left: 0.5rem; margin-left: 0.05rem; }
   .var { font-family: var(--han); font-size: 0.78rem; color: var(--faint); }
   .rg { font-size: 0.62rem; color: var(--faint); font-family: var(--mono); }
-  .gl { color: var(--muted); font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* line-height 1.45 + a hair of bottom padding so g/p/j/y descenders aren't clipped by overflow:hidden */
+  .gl { color: var(--muted); font-size: 0.9rem; line-height: 1.45; padding-bottom: 0.1em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* the "why this is interesting" caption (homepage showcase only); quiet + italic so it reads as a note */
-  .note { color: var(--faint); font-size: 0.72rem; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .note { color: var(--faint); font-size: 0.72rem; font-style: italic; line-height: 1.45; padding-bottom: 0.1em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* showcase "why": the reason an entry is noteworthy is the point, so make it clear primary text
      (readable colour, upright, wraps to two lines) and let the reading fade back below it. */
-  .note.primary { color: var(--text); font-size: 0.82rem; font-style: normal; line-height: 1.35; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+  .note.primary { color: var(--text); font-size: 0.82rem; font-style: normal; line-height: 1.4; padding-bottom: 0.15em; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
   .meta-col.np { gap: 0.25rem; }
   .meta-col.np .rd { color: var(--faint); }
   .meta-col.np .gl { font-size: 0.82rem; color: var(--faint); }

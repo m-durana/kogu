@@ -101,6 +101,9 @@ SOURCES: dict[str, Source] = {
     "idiom": Source(
         "idiom", "https://raw.githubusercontent.com/pwxcoo/chinese-xinhua/master/data/idiom.json",
         "idiom.json", "MIT"),
+    "mapull-idiom": Source(
+        "mapull-idiom", "https://raw.githubusercontent.com/mapull/chinese-dictionary/master/idiom/idiom.json",
+        "mapull_idiom.json", "MIT"),
 }
 
 
