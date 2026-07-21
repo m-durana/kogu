@@ -27,6 +27,11 @@ echo "==> building release binary"
 mkdir -p "$ROOT/bin"
 install -m 0755 backend/target/release/kogu "$BIN"
 
+# Regenerate the OpenAPI spec from the utoipa annotations so the shipped /api-docs never drifts
+# from the code (it silently went stale before: missing /interesting and the search `scope` param).
+echo "==> regenerating OpenAPI spec"
+( cd backend && cargo run --release --quiet --bin dump_openapi > "$ROOT/frontend/public/api-docs/openapi.json" )
+
 echo "==> ensuring database"
 [ -f "$ROOT/data/kogu.sqlite" ] || { echo "!! data/kogu.sqlite missing - run: pipeline/.venv/bin/python -m kogupipe.build"; exit 1; }
 

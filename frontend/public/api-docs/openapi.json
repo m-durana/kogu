@@ -21,7 +21,7 @@
         "tags": [
           "audio"
         ],
-        "summary": "`GET /clip/:variety/:file` — proxy a single zh/yue pronunciation clip, cached in memory and served\nsame-origin. `file` is a strict syllable (lowercase letters + a tone digit) + \".mp3\" so this can't\nbe turned into an open proxy / SSRF.",
+        "summary": "`GET /clip/:variety/:file`: proxy a single zh/yue pronunciation clip, cached in memory and served\nsame-origin. `file` is a strict syllable (lowercase letters + a tone digit) + \".mp3\" so this can't\nbe turned into an open proxy / SSRF.",
         "operationId": "clip_handler",
         "parameters": [
           {
@@ -149,6 +149,49 @@
         }
       }
     },
+    "/interesting": {
+      "get": {
+        "tags": [
+          "dictionary"
+        ],
+        "summary": "A fresh-random showcase of noteworthy entries for the homepage: kanji invented in Japan (国字),\nfalse friends, words coined in Japan and re-borrowed into Chinese, surprising loanwords, and\ncalques. Each call returns a different mix.",
+        "operationId": "interesting_handler",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "maximum number of items (default 8, clamped 1..=30)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Random showcase of noteworthy entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterestingResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/search": {
       "get": {
         "tags": [
@@ -171,6 +214,15 @@
             "name": "script",
             "in": "query",
             "description": "preferred Han script for the displayed form: \"trad\" or \"simp\" (also \"kana\", \"shinjitai\")",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "force how a romanized/ambiguous query is read: \"sound\" (phonetic only), \"meaning\" (English\ngloss only), or unset/\"auto\" to blend both",
             "required": false,
             "schema": {
               "type": "string"
@@ -367,7 +419,7 @@
           {
             "name": "accent",
             "in": "query",
-            "description": "Kanjium downstep index (\"0\" = heiban .. n); optional — without it OpenJTalk picks its default.",
+            "description": "Kanjium downstep index (\"0\" = heiban .. n); optional: without it OpenJTalk picks its default.",
             "required": false,
             "schema": {
               "type": "string"
@@ -515,7 +567,7 @@
             "items": {
               "type": "string"
             },
-            "description": "confusable look-alikes (Unihan kSpoofingVariant) — glyphs easily MISREAD for this one (㓕/滅).\nPurely a visual-confusability note, NOT identity or meaning; empty for most characters."
+            "description": "confusable look-alikes (Unihan kSpoofingVariant): glyphs easily MISREAD for this one (㓕/滅).\nPurely a visual-confusability note, NOT identity or meaning; empty for most characters."
           },
           "decomp": {
             "oneOf": [
@@ -524,7 +576,7 @@
               },
               {
                 "$ref": "#/components/schemas/CharDecomp",
-                "description": "when the character is built entirely from repetitions of ONE simpler glyph (森 = three 木,\n晶 = three 日, 淼 = three 水), resolved recursively through \"doubled\" intermediates (林, 昍, 沝).\nNone for mixed-component characters (好 = 女 + 子) — the frontend then shows the flat parts."
+                "description": "when the character is built entirely from repetitions of ONE simpler glyph (森 = three 木,\n晶 = three 日, 淼 = three 水), resolved recursively through \"doubled\" intermediates (林, 昍, 沝).\nNone for mixed-component characters (好 = 女 + 子): the frontend then shows the flat parts."
               }
             ]
           },
@@ -678,21 +730,21 @@
             "items": {
               "type": "string"
             },
-            "description": "for a phonetic component, its Middle Chinese (廣韻 / Baxter) reading(s) — the HISTORICAL sound\nit lent (同 → \"duwng\"), so the structure section can show the phonological \"why\": the modern\npinyin link plus the older Middle Chinese one. Empty for non-phonetic components or no MC data."
+            "description": "for a phonetic component, its Middle Chinese (廣韻 / Baxter) reading(s): the HISTORICAL sound\nit lent (同 → \"duwng\"), so the structure section can show the phonological \"why\": the modern\npinyin link plus the older Middle Chinese one. Empty for non-phonetic components or no MC data."
           },
           "role": {
             "type": [
               "string",
               "null"
             ],
-            "description": "'semantic' (carries the meaning) | 'phonetic' (carries the sound) | 'form' | 'iconic' | None.\nFrom Wiktionary's structured Han-compound data — 媽 = 女 (semantic) + 馬 (phonetic)."
+            "description": "'semantic' (carries the meaning) | 'phonetic' (carries the sound) | 'form' | 'iconic' | None.\nFrom Wiktionary's structured Han-compound data: 媽 = 女 (semantic) + 馬 (phonetic)."
           },
           "sound": {
             "type": [
               "string",
               "null"
             ],
-            "description": "for a phonetic component, the sound it lends — the component's own reading (馬 → \"ma3\"), so the\nUI can show \"(sound: mǎ)\". None for non-phonetic components or when no reading is known."
+            "description": "for a phonetic component, the sound it lends: the component's own reading (馬 → \"ma3\"), so the\nUI can show \"(sound: mǎ)\". None for non-phonetic components or when no reading is known."
           }
         }
       },
@@ -949,6 +1001,63 @@
           }
         }
       },
+      "InterestingItem": {
+        "type": "object",
+        "required": [
+          "lexeme_id",
+          "variety",
+          "headword",
+          "why",
+          "category"
+        ],
+        "properties": {
+          "category": {
+            "type": "string",
+            "description": "machine key for the category: kokuji | false-friend | wasei | loanword | calque"
+          },
+          "gloss": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "headword": {
+            "type": "string"
+          },
+          "lexeme_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "reading": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "variety": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string",
+            "description": "short human label for what makes this entry interesting (\"国字 · a kanji invented in Japan\")"
+          }
+        }
+      },
+      "InterestingResponse": {
+        "type": "object",
+        "description": "/interesting response: a fresh-random showcase of noteworthy entries for the homepage\n(kokuji, false friends, words coined in Japan, surprising loanwords, calques). Each item\ncarries a short `why` label explaining what makes it interesting.",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InterestingItem"
+            }
+          }
+        }
+      },
       "LinkLite": {
         "type": "object",
         "required": [
@@ -1031,7 +1140,7 @@
               "string",
               "null"
             ],
-            "description": "which script this glyph is, when it diverges across reforms: \"traditional\" | \"simplified\".\nNone when the glyph is the same in every script (山, 古) — nothing to disambiguate."
+            "description": "which script this glyph is, when it diverges across reforms: \"traditional\" | \"simplified\".\nNone when the glyph is the same in every script (山, 古): nothing to disambiguate."
           },
           "text": {
             "type": "string"
