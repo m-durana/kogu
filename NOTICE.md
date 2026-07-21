@@ -60,7 +60,8 @@ The voice is **htsvoice-tohoku-f01** (neutral style), (c) Intelligent Communicat
 ### Wiktionary (via kaikki.org / wiktextract)
 Etymology text, origin badges, phono-semantic component roles (Han compound templates), and
 English-pivot translation tables. Dual-licensed **CC BY-SA 3.0 + GFDL**, per Wikimedia terms.
-Extracted from the kaikki.org machine-readable dumps: <https://kaikki.org/>
+Extracted from the kaikki.org machine-readable dumps of the English AND the native Chinese
+(zhwiktionary) and Japanese (jawiktionary) editions: <https://kaikki.org/>
 (wiktextract: <https://github.com/tatuylonen/wiktextract>).
 
 ### Howell Etymological Dictionary of Han/Chinese Characters

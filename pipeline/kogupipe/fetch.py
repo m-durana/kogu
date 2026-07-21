@@ -104,6 +104,13 @@ SOURCES: dict[str, Source] = {
     "mapull-idiom": Source(
         "mapull-idiom", "https://raw.githubusercontent.com/mapull/chinese-dictionary/master/idiom/idiom.json",
         "mapull_idiom.json", "MIT"),
+    # Native-edition Wiktionary (zh/ja) via kaikki - 詞源/語源 for words the English edition omits.
+    "kaikki-zh": Source(
+        "kaikki-zh", "https://kaikki.org/zhwiktionary/%E6%BC%A2%E8%AA%9E/kaikki.org-dictionary-%E6%BC%A2%E8%AA%9E.jsonl",
+        "kaikki_zh.jsonl", "CC-BY-SA"),
+    "kaikki-ja": Source(
+        "kaikki-ja", "https://kaikki.org/jawiktionary/%E6%97%A5%E6%9C%AC%E8%AA%9E/kaikki.org-dictionary-%E6%97%A5%E6%9C%AC%E8%AA%9E.jsonl",
+        "kaikki_ja.jsonl", "CC-BY-SA"),
 }
 
 
