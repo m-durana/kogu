@@ -727,6 +727,16 @@
     if (f < 0.4) return 'uncommon'
     return ''
   }
+  // the tap-to-reveal behind the rarely-used / uncommon chip: the real usage stat that drove it,
+  // in plain language (it appears in only N scored words of that language).
+  function usageExplain(variety: Variety): string {
+    const label = rowUsage(variety) || 'rarely used'
+    const head = label.charAt(0).toUpperCase() + label.slice(1)
+    const lang = varietyName(variety)
+    const n = headChar?.used_by_variety?.[variety] ?? 0
+    if (n === 0) return `${head} in ${lang}: no everyday word is written with this character.`
+    return `${head} in ${lang}: it appears in only ${n} scored ${lang} ${n === 1 ? 'word' : 'words'}, and even its most common one is low-frequency.`
+  }
   // a single kanji that forms native words via okurigana (乗 → 乗る, 化 → 化ける) is a WORD STEM, not a
   // bound morpheme: its kun readings carry an okurigana split (の.る). Used to avoid mis-tagging the
   // synthetic Japanese row "bound" (item 4: 乗 is effectively a word, unlike 津 which is truly bound).
@@ -1120,7 +1130,7 @@
                 {#if boundKind(r) === 'always'}<button class="ltag tappable" onclick={() => openBound(r)} title="only used in compounds, never as a word on its own">only in compounds</button>{:else if boundKind(r) === 'often'}<button class="ltag tappable" onclick={() => openBound(r)} title="bound in some senses; often used in compounds">often in compounds</button>{/if}
                 {#if soundLoan && r.variety === 'zh'}<button class="ltag tappable" onclick={() => (openTerm = soundLoanExplain)} title="tap to explain">written for sound</button>{/if}
                 {#if single && headChar && isRadicalChar}<span class="ltag rad">radical</span>{/if}
-                {#if single && headChar && rowUsage(r.variety)}<span class="ltag">{rowUsage(r.variety)}</span>{/if}
+                {#if single && headChar && rowUsage(r.variety)}<button class="ltag tappable" onclick={() => (openTerm = usageExplain(r.variety))} title="tap to explain">{rowUsage(r.variety)}</button>{/if}
               </div>
             {/if}
             {#if ss.length}
