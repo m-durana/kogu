@@ -154,7 +154,7 @@
         "tags": [
           "dictionary"
         ],
-        "summary": "A fresh-random showcase of noteworthy entries for the homepage: kanji invented in Japan (国字),\nfalse friends, words coined in Japan and re-borrowed into Chinese, surprising loanwords, and\ncalques. Each call returns a different mix.",
+        "summary": "A fresh-random showcase of noteworthy entries for the homepage: kanji invented in Japan (国字),\n日/中 false friends, words coined in Japan and re-borrowed into Chinese, 粵字, simplified merges,\nand English false friends (katakana that looks English but means something else). Different mix each call.",
         "operationId": "interesting_handler",
         "parameters": [
           {

@@ -2170,7 +2170,7 @@ async fn common_word_outranks_homophone_museum_piece() {
 async fn interesting(limit: usize) -> Value {
     get(&format!("/interesting?limit={limit}")).await.1
 }
-const INTERESTING_CATS: &[&str] = &["kokuji", "false-friend", "wasei", "cantoji", "merge", "loanword", "calque"];
+const INTERESTING_CATS: &[&str] = &["kokuji", "false-friend", "wasei", "cantoji", "merge", "english-false-friend"];
 
 // I1. shape: 200, non-empty, and every item is fully populated with a known category + why label.
 #[tokio::test]
@@ -2256,6 +2256,42 @@ async fn interesting_false_friends_show_both_meanings() {
         }
     }
     assert!(!seen.is_empty(), "curated false friends should surface across calls");
+}
+
+// I6b. English false friends: katakana that resembles an English word (マンション) but the `why`
+//      spells out the real, divergent meaning ("looks like English ... actually means ...").
+#[tokio::test]
+async fn interesting_english_false_friends() {
+    use std::collections::HashSet;
+    let mut seen = HashSet::new();
+    for _ in 0..12 {
+        for it in interesting(30).await["items"].as_array().unwrap() {
+            if it["category"] == "english-false-friend" {
+                let why = it["why"].as_str().unwrap();
+                assert!(why.contains("looks like English") && why.contains("actually means"), "trap spelled out, got {why:?}");
+                // the "means" side must be the DIVERGENT sense, never the English lookalike restated
+                // (スマート's gloss leads with "smart"; the caption must say stylish/slim, not "smart")
+                let (look, means) = why.split_once(" · actually means ").unwrap();
+                let eng = look.trim_start_matches("looks like English ").trim_matches(|c| c == '“' || c == '”');
+                assert!(!means.eq_ignore_ascii_case(eng), "meaning just restates the lookalike: {why:?}");
+                assert_eq!(it["variety"], "ja", "English false friends are katakana ja loanwords");
+                assert!(it["gloss"].is_null(), "the contrast note carries the meaning, gloss should be null");
+                seen.insert(it["headword"].as_str().unwrap().to_string());
+            }
+        }
+    }
+    assert!(!seen.is_empty(), "curated English false friends should surface across calls");
+}
+
+// I6c. the removed categories (loanword, calque/phono-semantic) no longer appear in the showcase.
+#[tokio::test]
+async fn interesting_no_loanword_or_calque() {
+    for _ in 0..8 {
+        for it in interesting(30).await["items"].as_array().unwrap() {
+            let cat = it["category"].as_str().unwrap();
+            assert!(cat != "loanword" && cat != "calque", "retired category {cat} still showing");
+        }
+    }
 }
 
 // I7. the showcase is not Japan-only: the China/Cantonese-side categories (粵字, simplified merges)

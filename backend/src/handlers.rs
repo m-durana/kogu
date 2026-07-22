@@ -648,8 +648,8 @@ pub struct InterestingParams {
 }
 
 /// A fresh-random showcase of noteworthy entries for the homepage: kanji invented in Japan (国字),
-/// false friends, words coined in Japan and re-borrowed into Chinese, surprising loanwords, and
-/// calques. Each call returns a different mix.
+/// 日/中 false friends, words coined in Japan and re-borrowed into Chinese, 粵字, simplified merges,
+/// and English false friends (katakana that looks English but means something else). Different mix each call.
 #[utoipa::path(
     get, path = "/interesting", tag = "dictionary",
     params(InterestingParams),
@@ -676,14 +676,6 @@ fn renderable_cjk(s: &str) -> bool {
         (0x3040..=0x30FF).contains(&u) || (0x4E00..=0x9FFF).contains(&u) || (0x3400..=0x4DBF).contains(&u)
     });
     has_cjk && !s.chars().any(|c| c.is_ascii_alphabetic())
-}
-
-fn cap_first(s: &str) -> String {
-    let mut c = s.chars();
-    match c.next() {
-        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-        None => String::new(),
-    }
 }
 
 /// Curated, hand-verified genuine false friends: the SAME Han spelling with a sharply different
@@ -734,78 +726,92 @@ fn simple_cat(
     Ok(out)
 }
 
-/// Surprising loanwords: the `why` names the source language, parsed from the origin badge.
-fn loanword_items(conn: &rusqlite::Connection, want: usize) -> rusqlite::Result<Vec<InterestingItem>> {
-    let mut stmt = conn.prepare(
-        "SELECT l.id, l.variety, l.headword, l.reading, \
-           (SELECT gloss_en FROM sense WHERE lexeme_id=l.id ORDER BY sense_order LIMIT 1), ob.badge \
-         FROM origin_badge ob JOIN lexeme l ON l.id = ob.lexeme_id \
-         WHERE ob.badge IN ('borrowed-from-ainu','borrowed-from-portuguese','borrowed-from-dutch', \
-           'borrowed-from-sanskrit','borrowed-from-korean','borrowed-from-hawaiian','borrowed-from-malay', \
-           'borrowed-from-mongolian','borrowed-from-tibetan','borrowed-from-vietnamese','borrowed-from-persian') \
-         ORDER BY RANDOM() LIMIT 40",
-    )?;
-    let rows = stmt.query_map([], |r| {
-        let badge: String = r.get(5)?;
-        let lang = cap_first(badge.strip_prefix("borrowed-from-").unwrap_or(&badge));
-        Ok(InterestingItem {
-            lexeme_id: r.get(0)?,
-            variety: r.get(1)?,
-            headword: r.get(2)?,
-            reading: r.get(3)?,
-            gloss: r.get(4)?,
-            why: format!("a loanword from {lang}"),
-            category: "loanword".to_string(),
-        })
-    })?;
-    let mut out = Vec::new();
-    for it in rows {
-        let it = it?;
-        if renderable_cjk(&it.headword) {
-            out.push(it);
-            if out.len() >= want {
-                break;
-            }
+/// Curated katakana gairaigo that look like an English word but mean something else - the classic
+/// wasei-eigo false friends (マンション "mansion" = apartment, スマート "smart" = slim/stylish). Each
+/// pair is (Japanese headword, the English word it resembles); the real meaning comes from the live
+/// gloss so it can't go stale. Every entry hand-verified present as a ja lexeme with a divergent sense.
+const ENGLISH_FALSE_FRIENDS: &[(&str, &str)] = &[
+    ("マンション", "mansion"),
+    ("スマート", "smart"),
+    ("テンション", "tension"),
+    ("ナイーブ", "naive"),
+    ("カンニング", "cunning"),
+    ("コンセント", "consent"),
+    ("パンツ", "pants"),
+    ("ビニール", "vinyl"),
+    ("トランプ", "trump"),
+    ("ストーブ", "stove"),
+    ("クーラー", "cooler"),
+    ("タレント", "talent"),
+    ("マニア", "mania"),
+    ("リフォーム", "reform"),
+];
+
+/// The real, DIVERGENT meaning of an English false friend: the first gloss clause that isn't just the
+/// English lookalike restated. JMdict often leads with the source word (スマート = "smart (clothing…);
+/// stylish", クレーム = "claim (for compensation); customer complaint…") which would make the caption
+/// read "looks like smart · means smart"; skip those and surface the clause that actually differs.
+fn divergent_meaning(gloss: &str, eng: &str) -> String {
+    for seg in gloss.split(';') {
+        let cleaned = search::clean_segment(seg);
+        if cleaned.is_empty() {
+            continue;
         }
+        let clause = cleaned.split(',').next().unwrap_or(&cleaned).trim();
+        if clause.eq_ignore_ascii_case(eng) {
+            continue;
+        }
+        return clause.to_string();
     }
-    Ok(out)
+    short_gloss(gloss)
 }
 
-/// Calques and phono-semantic matchings: the `why` distinguishes the two (a calque translates the
-/// meaning piece by piece; a PSM is chosen to fit BOTH the foreign sound and a plausible meaning).
-fn calque_items(conn: &rusqlite::Connection, want: usize) -> rusqlite::Result<Vec<InterestingItem>> {
-    let mut stmt = conn.prepare(
-        "SELECT l.id, l.variety, l.headword, l.reading, \
-           (SELECT gloss_en FROM sense WHERE lexeme_id=l.id ORDER BY sense_order LIMIT 1), ob.badge \
-         FROM origin_badge ob JOIN lexeme l ON l.id = ob.lexeme_id \
-         WHERE ob.badge IN ('calque','phono-semantic-matching') \
-         ORDER BY RANDOM() LIMIT 40",
+/// English false friends: katakana loanwords that resemble an English word but diverged in meaning.
+/// Shows the Japanese entry with the trap spelled out in the `why` - looks like "mansion" · means
+/// apartment - so the row teaches the gotcha. The real meaning is the live gloss (never stale); the
+/// English lookalike is curated. A distinctly Japan-side, English-learner-friendly curiosity.
+fn english_false_friend_items(
+    conn: &rusqlite::Connection,
+    want: usize,
+) -> rusqlite::Result<Vec<InterestingItem>> {
+    let ph = ENGLISH_FALSE_FRIENDS.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!(
+        "SELECT l.id, l.headword, l.reading, \
+           (SELECT gloss_en FROM sense WHERE lexeme_id=l.id ORDER BY sense_order LIMIT 1) \
+         FROM lexeme l WHERE l.variety='ja' AND l.freq IS NOT NULL AND l.headword IN ({ph}) \
+         ORDER BY RANDOM()"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(
+        rusqlite::params_from_iter(ENGLISH_FALSE_FRIENDS.iter().map(|(h, _)| *h)),
+        |r| {
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, Option<String>>(2)?,
+                r.get::<_, Option<String>>(3)?,
+            ))
+        },
     )?;
-    let rows = stmt.query_map([], |r| {
-        let badge: String = r.get(5)?;
-        let why = if badge == "phono-semantic-matching" {
-            "a phono-semantic match · chosen to fit both the sound and a meaning"
-        } else {
-            "a calque · meaning translated piece by piece"
-        };
-        Ok(InterestingItem {
-            lexeme_id: r.get(0)?,
-            variety: r.get(1)?,
-            headword: r.get(2)?,
-            reading: r.get(3)?,
-            gloss: r.get(4)?,
-            why: why.to_string(),
-            category: "calque".to_string(),
-        })
-    })?;
     let mut out = Vec::new();
-    for it in rows {
-        let it = it?;
-        if renderable_cjk(&it.headword) {
-            out.push(it);
-            if out.len() >= want {
-                break;
-            }
+    for row in rows {
+        let (id, headword, reading, gloss) = row?;
+        let Some(gloss) = gloss else { continue };
+        // the English lookalike for this headword, from the curated pairs
+        let Some((_, eng)) = ENGLISH_FALSE_FRIENDS.iter().find(|(h, _)| *h == headword) else {
+            continue;
+        };
+        out.push(InterestingItem {
+            lexeme_id: id,
+            variety: "ja".to_string(),
+            headword,
+            reading,
+            gloss: None,
+            why: format!("looks like English “{eng}” · actually means {}", divergent_meaning(&gloss, eng)),
+            category: "english-false-friend".to_string(),
+        });
+        if out.len() >= want {
+            break;
         }
     }
     Ok(out)
@@ -922,13 +928,13 @@ fn simplified_merge_items(conn: &rusqlite::Connection, want: usize) -> rusqlite:
 }
 
 /// Assemble the homepage showcase: a fresh-random pick from each category, round-robin merged so
-/// every category is represented, truncated to `limit`. The lineup is deliberately balanced across
-/// languages - Japan-side (kokuji, wasei), cross-language (false friends), and China/Cantonese-side
-/// (粵字, simplified merges, plus the mixed loanword/calque buckets) - rather than Japan-heavy.
+/// every category is represented, truncated to `limit`. Six categories (a symmetrical grid), balanced
+/// across languages - Japan-side (kokuji, wasei, English false friends), cross-language (日/中 false
+/// friends) and China/Cantonese-side (粵字, simplified merges) - rather than Japan-heavy.
 /// Fresh random on every call (SQL RANDOM()).
 fn build_interesting(conn: &rusqlite::Connection, limit: usize) -> rusqlite::Result<Vec<InterestingItem>> {
     // enough from each bucket to fill `limit` when some categories come up short (div_ceil, min 1)
-    const N_BUCKETS: usize = 7;
+    const N_BUCKETS: usize = 6;
     let per = ((limit + N_BUCKETS - 1) / N_BUCKETS).max(1);
     let buckets: Vec<Vec<InterestingItem>> = vec![
         simple_cat(
@@ -965,8 +971,7 @@ fn build_interesting(conn: &rusqlite::Connection, limit: usize) -> rusqlite::Res
         )?,
         cantoji_items(conn, per)?,
         simplified_merge_items(conn, per)?,
-        loanword_items(conn, per)?,
-        calque_items(conn, per)?,
+        english_false_friend_items(conn, per)?,
     ];
     // round-robin merge so a small limit still shows a variety of categories
     let mut out = Vec::new();

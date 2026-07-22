@@ -605,7 +605,7 @@
     window.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('popstate', onPop)
     // fresh-random homepage showcase (fails soft to []): loaded once on mount
-    interesting(7).then((items) => (interestingList = items))
+    interesting(6).then((items) => (interestingList = items))
     // deep link: a shared #/entry/<id> (id may be negative for a char-only page) reopens that entry
     const m = location.hash.match(/^#\/entry\/(-?\d+)$/)
     const term = new URLSearchParams(location.search).get('q')
@@ -1013,9 +1013,9 @@
         </dl>
 
         {#if interestingList.length}
-          <!-- homepage showcase: a fresh-random pick, one per category (kokuji, false friends coined
-               in Japan, 粵字, simplified merges, loanwords, calques). Reuses the canonical EntryRow;
-               the "why" rides its optional note caption. Tap opens the full entry. -->
+          <!-- homepage showcase: a fresh-random pick, one per category, six in all (kokuji, 日/中 false
+               friends, 和製漢語, 粵字, simplified merges, English false friends). Reuses the canonical
+               EntryRow; the "why" rides its optional note caption. Tap opens the full entry. -->
           <section class="showcase" data-testid="interesting">
             <h2 class="abh">Worth exploring</h2>
             <ul class="results">
