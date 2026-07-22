@@ -365,11 +365,20 @@ fn build_entry(
         ety_vars.insert(variety.clone());
         origins.push(origin_account(conn, &variety, &headword, t));
     }
+    // the page's own language, as it appears in a borrowing note: used to drop a circular cross-language
+    // account (a 中 account that only says "borrowed from Japanese" adds nothing on the Japanese page).
+    let page_lang = if variety == "ja" { "from japanese" } else { "from chinese" };
     for l in &same_form {
         if ety_vars.contains(&l.variety) {
             continue;
         }
         if let Some(t) = etymology_of(conn, l.lexeme_id) {
+            // an OTHER-language account that merely states it was borrowed FROM this page's language is
+            // circular here (象棋 zh's ja account "From Chinese …"; 霊長 ja's zh account "borrowed from
+            // Japanese …"), so it's skipped; a genuine account (the classical source, a native origin) stays.
+            if t.to_lowercase().contains(page_lang) {
+                continue;
+            }
             ety_vars.insert(l.variety.clone());
             origins.push(origin_account(conn, &l.variety, &l.headword, t));
         }
