@@ -327,17 +327,22 @@ fn build_entry(
     )?;
     let rows: Vec<(i64, String)> =
         s.query_map([id], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<Result<_, _>>()?;
+    // collect first, then float the CROSS-LANGUAGE equivalents to the top. "Related in meaning" exists
+    // to answer "what's this word in the other languages?", so a different-variety match (邪魔 ja →
+    // 打岔 zh) should lead over a same-language near-synonym (邪魔 → 妨害 ja) even when the same-language
+    // one has a slightly tighter concept. Stable partition preserves the conf/spec order within each side.
+    let mut syns = Vec::new();
     for (other, concept) in rows {
         if !seen.insert(other) {
             continue;
         }
         if let Some(l) = link_lite(conn, other, "synonym", Some(concept))? {
-            translations.push(l);
-        }
-        if translations.len() >= 30 {
-            break;
+            syns.push(l);
         }
     }
+    syns.sort_by_key(|l| l.variety == variety); // false (cross-language) sorts before true (same)
+    syns.truncate(30usize.saturating_sub(translations.len()));
+    translations.extend(syns);
 
     // 熟語 - for a single character, the common words that contain it (across all systems).
     let mut compounds = Vec::new();
