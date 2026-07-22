@@ -84,10 +84,6 @@ pub struct Entry {
     pub forms: Vec<Form>,
     pub readings: Vec<ReadingKV>,
     pub senses: Vec<Sense>,
-    /// For a single-character word: the part of the CHARACTER's dictionary meaning that adds senses
-    /// the WORD entry doesn't have (荷 the word = "cargo", but the character also means "lotus"). None
-    /// when the character gloss is fully covered by the word senses (羽 "feather" = "feather").
-    pub char_extra: Option<String>,
     pub characters: Vec<CharInfo>,
     /// 同字 - other lexemes sharing this word's backbone form, each labelled cognate / false-friend.
     pub same_form: Vec<LinkLite>,

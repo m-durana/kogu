@@ -1163,11 +1163,6 @@
           </div>
         {/each}
       </div>
-      {#if entry?.char_extra}
-        <!-- meanings the CHARACTER carries beyond the word above (荷 the word = "cargo", 荷 the character
-             also = "lotus"); only shown when it genuinely adds something. -->
-        <p class="charextra"><span class="cxlabel">as a character, also</span> {entry.char_extra}</p>
-      {/if}
       {#if hasFalseFriend}
         <p class="note"><AlertTriangle size={14} /> {head} is written the same in {falseFriendLangs} but means different things.</p>
       {/if}
@@ -1487,8 +1482,6 @@
   .rmore { background: none; border: none; padding: 0 0.25rem; font-family: var(--mono); font-size: 0.95rem; line-height: 1; color: var(--text); cursor: pointer; flex: none; }
   .rmore:hover { color: var(--hi); background: none; }
   /* extra character-dictionary meanings the word entry lacks (荷 → also "lotus") */
-  .charextra { margin: 0.5rem 0 0; font-size: 0.95rem; line-height: 1.5; color: var(--muted); }
-  .cxlabel { font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.02em; color: var(--faint); margin-right: 0.4rem; }
   .senses { margin: 0.5rem 0 0; padding: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 0.35rem; }
   /* collapsed: clip to ~2 lines and fade the cut, so a long definition doesn't wall off the page */
   .senses.clamp { max-height: 2.9rem; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 74%, transparent); mask-image: linear-gradient(to bottom, #000 74%, transparent); }

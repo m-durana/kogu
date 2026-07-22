@@ -824,13 +824,6 @@
             },
             "description": "For a radical/bound-component entry (彳, 辵, 氵…): the characters that CONTAIN it, replacing the\nword \"used in\" list (a radical isn't a morpheme in words). Empty for ordinary entries."
           },
-          "char_extra": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "For a single-character word: the part of the CHARACTER's dictionary meaning that adds senses\nthe WORD entry doesn't have (荷 the word = \"cargo\", but the character also means \"lotus\"). None\nwhen the character gloss is fully covered by the word senses (羽 \"feather\" = \"feather\")."
-          },
           "characters": {
             "type": "array",
             "items": {

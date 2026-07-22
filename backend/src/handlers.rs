@@ -380,16 +380,6 @@ fn build_entry(
     } else {
         Vec::new()
     };
-    // for a single character, surface the character-dictionary meanings the WORD entry lacks (荷 → lotus)
-    let char_extra = if single_char {
-        characters
-            .first()
-            .and_then(|c| c.gloss_en.as_deref())
-            .and_then(|g| additive_char_gloss(g, &senses))
-    } else {
-        None
-    };
-
     Ok(Some(Entry {
         lexeme_id: id,
         variety,
@@ -399,7 +389,6 @@ fn build_entry(
         forms,
         readings,
         senses,
-        char_extra,
         characters,
         same_form,
         translations,
@@ -411,58 +400,6 @@ fn build_entry(
     }))
 }
 
-/// A character-gloss clause that is metadata, not a meaning (Kangxi radical, surname, variant-of,
-/// cross-reference): dropped so "羽 also means: Kangxi radical 124" never shows.
-fn is_char_meta(clause: &str) -> bool {
-    let s = clause.to_lowercase();
-    ["radical", "kangxi", "surname", "variant", "see ", "abbr", "form of", "used in", "phonetic"]
-        .iter()
-        .any(|m| s.contains(m))
-}
-
-/// The part of a character's dictionary gloss that ADDS meaning beyond the word's own senses: 荷 the
-/// word is "cargo", but the character also means "lotus" - worth surfacing. Splits the char gloss into
-/// clauses, drops meta ones, and keeps those whose (stemmed) content words don't appear in ANY word
-/// sense. Returns None when the character gloss is fully covered (羽 "feather" = "feather").
-fn additive_char_gloss(char_gloss: &str, senses: &[Sense]) -> Option<String> {
-    let mut word_words: std::collections::HashSet<String> = std::collections::HashSet::new();
-    for s in senses {
-        for seg in s.gloss_en.split([';', ',']) {
-            if is_meta_segment(seg) {
-                continue;
-            }
-            for tok in seg.to_lowercase().split(|c: char| !c.is_ascii_alphabetic()) {
-                if tok.len() >= 3 && !GLOSS_STOPWORDS.contains(&tok) {
-                    word_words.insert(stem(tok).to_string());
-                }
-            }
-        }
-    }
-    if word_words.is_empty() {
-        return None; // no word meaning to compare against (radical-only entry): don't guess
-    }
-    let mut extra: Vec<String> = Vec::new();
-    for clause in char_gloss.split(';') {
-        let clause = clause.trim();
-        if clause.is_empty() || is_char_meta(clause) {
-            continue;
-        }
-        let cw: std::collections::HashSet<String> = clause
-            .to_lowercase()
-            .split(|c: char| !c.is_ascii_alphabetic())
-            .filter(|t| t.len() >= 3 && !GLOSS_STOPWORDS.contains(t))
-            .map(|t| stem(t).to_string())
-            .collect();
-        if !cw.is_empty() && cw.is_disjoint(&word_words) {
-            extra.push(clause.to_string());
-        }
-    }
-    if extra.is_empty() {
-        None
-    } else {
-        Some(extra.join("; "))
-    }
-}
 
 /// Identity-variant glyphs of a character in either direction (the SAME character in another script:
 /// 冰 ⇄ 氷, 漢 ⇄ 汉). Used to find words "written differently" with the cross-script form.
@@ -622,7 +559,6 @@ fn build_char_entry(conn: &rusqlite::Connection, cp: u32) -> rusqlite::Result<Op
         forms: vec![Form { form: ch.to_string(), script: "other".into(), region: None, is_primary: true }],
         readings: Vec::new(),
         senses,
-        char_extra: None,
         characters: vec![ci],
         same_form: Vec::new(),
         translations: Vec::new(),
@@ -1010,17 +946,22 @@ const GLOSS_STOPWORDS: &[&str] = &[
     "that", "this", "see", "also", "form", "kind", "type", "thing", "person", "make", "made",
     "way", "part", "abbr", "old", "pron", "var", "from", "into", "out", "off", "not", "any",
     "all", "such", "more", "less", "very", "his", "her", "its", "who", "whom", "way", "are",
+    // language / region LABELS: a gloss tag like "(Cantonese) steering wheel" or "(Cant.)" is not a
+    // content word, so it must never count toward meaning-overlap (else a region-tagged char gloss
+    // that merely restates a sense - 軚 "(Cant.) a steering wheel" vs sense "(Cantonese) steering
+    // wheel" - looks novel and gets shown). Paired with is_meta_segment no longer skipping these.
+    "cantonese", "mandarin", "japanese", "korean", "chinese", "cant",
 ];
 
 /// A gloss segment that is a cross-reference, not a meaning - "the Japanese word for company",
 /// "Mandarin equivalent: 的", "variant of X", "see also X". Its words must not count as shared
 /// meaning, or false friends whose dictionary gloss *describes the other language* slip through
-/// (会社: jp "company" vs zh "…the Japanese word for company").
+/// (会社: jp "company" vs zh "…the Japanese word for company"). Only POINTER phrases qualify: a bare
+/// region tag like "(Cantonese) steering wheel" is a real meaning (the language name is stopworded
+/// out instead), so language names are NOT listed here - matching one wiped a whole tagged sense.
 fn is_meta_segment(seg: &str) -> bool {
-    const META: &[&str] = &[
-        "word for", "term for", "equivalent", "variant of", "used in", "abbr", "see also",
-        "japanese", "mandarin", "cantonese", "korean",
-    ];
+    const META: &[&str] =
+        &["word for", "term for", "equivalent", "variant of", "used in", "abbr", "see also"];
     let s = seg.to_lowercase();
     META.iter().any(|m| s.contains(m))
 }
