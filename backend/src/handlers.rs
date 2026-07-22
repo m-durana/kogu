@@ -882,11 +882,13 @@ fn simplified_merge_items(conn: &rusqlite::Connection, want: usize) -> rusqlite:
         "SELECT l.id,l.variety,l.headword,l.reading, \
            (SELECT gloss_en FROM sense WHERE lexeme_id=l.id ORDER BY sense_order LIMIT 1), \
            (SELECT group_concat(char(parent_cp),' · ') FROM glyph_edge \
-              WHERE child_cp=unicode(l.headword) AND type='simplification') \
+              WHERE child_cp=unicode(l.headword) AND type='simplification' \
+                AND COALESCE(reform_id,'') != 'unihan-variant') \
          FROM lexeme l WHERE l.variety='zh' AND length(l.headword)=1 AND l.freq IS NOT NULL \
            AND substr(l.reading,1,1)=lower(substr(l.reading,1,1)) \
            AND (SELECT count(DISTINCT parent_cp) FROM glyph_edge \
-                WHERE child_cp=unicode(l.headword) AND type='simplification') >= 2 \
+                WHERE child_cp=unicode(l.headword) AND type='simplification' \
+                  AND COALESCE(reform_id,'') != 'unihan-variant') >= 2 \
          ORDER BY RANDOM() LIMIT 40",
     )?;
     let rows = stmt.query_map([], |r| {
@@ -950,12 +952,14 @@ fn build_interesting(conn: &rusqlite::Connection, limit: usize) -> rusqlite::Res
         false_friend_items(conn, per)?,
         simple_cat(
             conn,
-            // Chinese side only (the point is that it entered Chinese), and lowercase-pinyin readings
-            // to drop the transliterated Japanese place/person names (熊本, 沖繩, 岩倉) in this badge set.
+            // Chinese side only, and only the PRECISE `wasei-kango` badge: the broad
+            // `borrowed-from-japanese` flag also covers graphic/phonetic/slang loans and place names
+            // (丼, 引擎, 大洲=Ōzu, 山梨=Yamanashi, 靈長's non-borrowed sense), so it leaked into this
+            // 和製漢語 bucket. Lowercase-pinyin drops any remaining transliterated names.
             "SELECT l.id,l.variety,l.headword,l.reading, \
                (SELECT gloss_en FROM sense WHERE lexeme_id=l.id ORDER BY sense_order LIMIT 1) \
              FROM origin_badge ob JOIN lexeme l ON l.id=ob.lexeme_id \
-             WHERE l.variety='zh' AND ob.badge IN ('borrowed-from-japanese','wasei-kango') \
+             WHERE l.variety='zh' AND ob.badge='wasei-kango' \
                AND substr(l.reading,1,1)=lower(substr(l.reading,1,1)) \
              ORDER BY RANDOM() LIMIT 40",
             per,

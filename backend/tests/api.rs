@@ -2341,6 +2341,23 @@ async fn interesting_kokuji_cantoji_exclude_chinese_chars() {
     }
 }
 
+// I6e. the wasei (和製漢語) bucket must not surface words whose shown sense isn't Japan-coined - these
+//      leaked via the broad borrowed-from-japanese flag (place names, native senses, phonetic loans).
+#[tokio::test]
+async fn interesting_wasei_excludes_non_coinages() {
+    use std::collections::HashSet;
+    let leaked: HashSet<&str> =
+        ["丼", "引擎", "大洲", "山梨", "靈長", "相對", "趴", "麻糬", "屆"].into_iter().collect();
+    for _ in 0..15 {
+        for it in interesting(30).await["items"].as_array().unwrap() {
+            if it["category"] == "wasei" {
+                let hw = it["headword"].as_str().unwrap();
+                assert!(!leaked.contains(hw), "wasei leaked a non-coinage: {hw}");
+            }
+        }
+    }
+}
+
 // I7. the showcase is not Japan-only: the China/Cantonese-side categories (粵字, simplified merges)
 //     surface across calls, and Chinese-variety items appear - a guard against the old ja-heavy mix.
 #[tokio::test]
