@@ -96,7 +96,8 @@ the extracts up in step 3).
 A fresh full build already includes everything above. The `apply_*` modules
 (`kogupipe.apply_accents`, `apply_cantonese`, `apply_components`, `apply_confusables`,
 `apply_equivalents`, `apply_frequency`, `apply_gloss_clean`, `apply_kanji_ja`,
-`apply_loanwords`, `apply_mc`, `apply_translations`, `apply_etymology_dedup`) and the standalone
+`apply_loanwords`, `apply_mc`, `apply_translations`, `apply_etymology_dedup`, `apply_sense_clean`)
+and the standalone
 `refresh_char_readings.py`, `refresh_concepts.py`, `refresh_omw.py`, `migrate_canto_senses.py`,
 `refresh_aliases.py` (curated English search aliases: `lexeme_alias`, fills closed-class paradigm
 gaps so "her"/"him"/"them" reach 佢/佢哋; edit its `PARADIGMS` list to cover more; restart the
