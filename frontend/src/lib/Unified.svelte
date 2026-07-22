@@ -906,8 +906,11 @@
   let openTerm = $state<{ text: string; wiki?: string } | null>(null)
   // Wikipedia article for a glossary term (language families, historical stages). Wikipedia's
   // redirects resolve most linguistic terms (Sino-Tibetan → Sino-Tibetan languages, etc.).
+  // Wikipedia titles that don't match the plain "spaces→underscores" of our display term.
+  const WIKI_OVERRIDE: Record<string, string> = { 'Wasei eigo': 'Wasei-eigo' }
   function wikiUrl(term: string): string {
-    return `https://en.wikipedia.org/wiki/${encodeURIComponent(term.trim().replace(/ /g, '_'))}`
+    const t = WIKI_OVERRIDE[term.trim()] ?? term.trim().replace(/ /g, '_')
+    return `https://en.wikipedia.org/wiki/${encodeURIComponent(t)}`
   }
   function boundCompounds(r: Row): { lexeme_id: number; headword: string; glosses: string[] }[] {
     // never list the character itself as one of "its" compounds (之 → 之)

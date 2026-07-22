@@ -944,6 +944,10 @@ const ETY_GLOSSARY: GlossEntry[] = [
   // Ideogram…) still carry the plain-language tooltip for readers who don't tap through.
   { term: 'calque', title: 'A word translated piece by piece from another language.', word: true },
   { term: 'cognate', title: 'A word sharing a common ancestor with another.', word: true },
+  // English-looking words coined in Japan (the English-false-friend showcase category). "Wasei eigo"
+  // is the phrase these etymologies lead with; "pseudo-anglicism" is its English gloss.
+  { term: 'pseudo-anglicism', title: 'A word that looks English but was coined in another language and isn’t used that way in English — e.g. Japanese マンション “mansion” means an apartment.', word: true },
+  { term: 'Wasei eigo', title: 'Japanese-made pseudo-English (和製英語): an English-looking word coined in Japan, like ナイター “nighter” for a night baseball game.', word: true },
   { term: 'OC', title: 'Old Chinese (~1000 BCE).', word: true, cs: true },
   { term: 'MC', title: 'Middle Chinese (~600 CE).', word: true, cs: true },
   { term: 'OJ', title: 'Old Japanese (8th century).', word: true, cs: true },
