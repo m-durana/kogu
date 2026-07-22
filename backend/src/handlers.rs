@@ -1032,7 +1032,12 @@ fn glosses_overlap(a: &std::collections::HashSet<String>, b: &std::collections::
     }
     for x in a {
         for y in b {
-            if x.len() >= 5 && y.len() >= 5 && (x.starts_with(y.as_str()) || y.starts_with(x.as_str())) {
+            // the same root inflected differently: a shared prefix of >=5 chars. Covers both a token
+            // that IS a prefix (stimul + stimulant) and two siblings off the same root that only share
+            // one (stimulus/stimulant, natural/nature, unity/uniformity) - neither of which is a prefix
+            // of the other, so the old starts_with test missed them and split real cognates.
+            let common = x.chars().zip(y.chars()).take_while(|(cx, cy)| cx == cy).count();
+            if common >= 5 {
                 return true;
             }
         }

@@ -389,6 +389,19 @@ async fn translate_airport_groups_systems() {
     assert!(members.contains(&("zh".into(), "機場".into())), "missing zh 機場");
 }
 
+// P1b. same-root cognate: 刺激物 zh "stimulus" vs ja "stimulant" is a cognate, not a false friend.
+//      The overlap check used to require one gloss word be a prefix of the other; a shared >=5 char
+//      prefix (stimul-us / stimul-ant, natur-al / natur-e) now counts, so these stop being mislabeled.
+#[tokio::test]
+async fn cognate_shared_root_not_false_friend() {
+    let hit = entry_of(&search("刺激物").await, "zh", "刺激物");
+    let id = hit["lexeme_id"].as_i64().unwrap();
+    let e = get(&format!("/entry/{id}")).await.1;
+    let sf = &e["same_form"].as_array().unwrap()[0];
+    assert_eq!(sf["headword"], "刺激物");
+    assert_eq!(sf["relation"], "cognate", "same-root pair mislabeled false-friend");
+}
+
 // P2. cognate: 學校(zh) and 学校(ja) share the school concept -> labelled cognate.
 #[tokio::test]
 async fn cognate_label() {
