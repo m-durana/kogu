@@ -1738,6 +1738,9 @@
       top: 1.2rem;
       border-bottom: none;
     }
+    /* the right column's tab bar sits at the very top (level with the header glyph), filling the space
+       the save/share icons used to occupy - its mobile 1.5rem top margin would leave a gap here. */
+    article.u.split > .seg[role='tablist'] { margin-top: 0; }
     article.u:not(.split) { max-width: 780px; }
   }
 </style>

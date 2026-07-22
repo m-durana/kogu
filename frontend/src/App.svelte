@@ -1392,23 +1392,32 @@
        (they used to jump because entries were 1128px wide and everything else 880px). Entry pages
        split into two columns WITHIN this width; the About page and lists fill or sit inside it. */
     .wrap { max-width: 1200px; }
-    /* header is identical on every view: the search field keeps one measure, left-aligned, flush with
-       the content column beneath it - never re-centred, so it can't move between pages. */
-    .searchrow { max-width: 840px; margin-left: 0; margin-right: 0; }
-    /* result / list surfaces: one readable column, left-aligned (flush with the search bar) */
+    /* header is identical on every view: the search field fills the content width, left-aligned, so it
+       never re-centres or resizes between pages (no shift) and leaves no dead space to its right. */
+    .searchrow { max-width: none; margin-left: 0; margin-right: 0; }
+    /* result / list surfaces: one readable column, left-aligned (a full-width row would fling the glyph
+       and its gloss to opposite edges), so these stay at a scannable measure under the wide search bar */
     .results, .empty, .dym, .noword { max-width: 840px; }
-    /* the About page fills the full width. Its reference list is a real GRID where each term keeps
-       its own description (CSS multi-column used to orphan a heading like "Used in" from its text). */
+    /* the About page fills the full width. Its reference list flows as balanced multi-column: each
+       .abitem (dt+dd) is break-inside:avoid so a heading never orphans from its text, and columns pack
+       top-to-bottom instead of a 2-col GRID that row-aligns and left a dead void under the short
+       column (5 items split 3/2 -> empty cell under "Origin"). */
     .about { max-width: none; }
-    .about .introgloss { max-width: 62ch; }
-    .ablist { display: grid; grid-template-columns: 1fr 1fr; gap: 0.1rem 3rem; margin-top: 0.2rem; }
+    /* the intro spans the content width (was capped at 62ch, which left a wide void to its right) */
+    .about .introgloss { max-width: none; }
+    .ablist { columns: 2; column-gap: 3rem; margin-top: 0.2rem; }
     .abitem { break-inside: avoid; }
+    /* the first heading in each column shouldn't carry the inter-item top margin (it reads as a gap
+       above the column); the grid's row-1 items used to sit flush with the "On each page" label. */
+    .ablist .abitem:first-child dt { margin-top: 0; }
     .absrc { columns: 2; column-gap: 3rem; }
     .absrc li { break-inside: avoid; }
     .absrc li:first-child { border-top: none; }
     .showcase .results { display: grid; grid-template-columns: 1fr 1fr; column-gap: 3rem; max-width: none; }
-    /* sit the save/share icons level with the tab bar (they read as floating on desktop otherwise) */
-    .actions { margin: 0.45rem 0 -3.05rem; }
+    /* save/share sit to the RIGHT OF THE HEADER GLYPH, not at the far page edge: cap the row to the
+       entry's left column width (grid is 5fr/7fr with a 3.2rem gap) and right-align inside it, so the
+       icons hug the headword column instead of floating above the right column and leaving a gap. */
+    .actions { margin: 1.3rem 0 -3.05rem; max-width: calc((100% - 3.2rem) * 5 / 12); }
     .drawpanel {
       /* floor matches the wrap's own 1.5rem padding edge so the dock stays flush with the column */
       left: max(calc(50vw - 600px + 1.5rem), 1.5rem); right: auto;
