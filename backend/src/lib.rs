@@ -29,6 +29,7 @@ pub fn build_router(st: AppState) -> Router {
         .route("/suggest", get(handlers::suggest_handler))
         .route("/interesting", get(handlers::interesting_handler))
         .route("/entry/:id", get(handlers::entry_handler))
+        .route("/random", get(handlers::random_handler))
         .route("/recognize", post(recognize::recognize_handler))
         .route(
             "/ocr",

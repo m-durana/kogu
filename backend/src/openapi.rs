@@ -31,6 +31,7 @@ treat them as opaque and re-resolve through `/search` when in doubt.";
         crate::handlers::suggest_handler,
         crate::handlers::interesting_handler,
         crate::handlers::entry_handler,
+        crate::handlers::random_handler,
         crate::handlers::why_handler,
         crate::handlers::translate_handler,
         crate::handlers::segment_handler,

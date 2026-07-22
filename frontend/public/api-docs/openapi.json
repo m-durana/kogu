@@ -192,6 +192,30 @@
         }
       }
     },
+    "/random": {
+      "get": {
+        "tags": [
+          "dictionary"
+        ],
+        "summary": "A random reasonably-common word: powers the \"feeling lucky\" dice. Picks a uniform-random variety\nfirst (so zh's far larger corpus doesn't swamp the mix) then a uniform-random lexeme within it\nabove a light frequency floor, so you land on a real word rather than an obscure hapax. Returns\njust the id; the client navigates through the normal entry route.",
+        "operationId": "random_handler",
+        "responses": {
+          "200": {
+            "description": "A random common lexeme id, e.g. {\"lexeme_id\": 8502}"
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/search": {
       "get": {
         "tags": [
@@ -223,6 +247,15 @@
             "name": "scope",
             "in": "query",
             "description": "force how a romanized/ambiguous query is read: \"sound\" (phonetic only), \"meaning\" (English\ngloss only), or unset/\"auto\" to blend both",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "description": "restrict results to one language: \"zh\", \"yue\" or \"ja\"; unset/\"all\" returns every language",
             "required": false,
             "schema": {
               "type": "string"

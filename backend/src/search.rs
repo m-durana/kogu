@@ -491,6 +491,7 @@ fn wildcard_search(
     q: &str,
     pref_script: Option<&str>,
     scope: Scope,
+    lang: Option<&str>,
     limit: usize,
 ) -> rusqlite::Result<SearchResponse> {
     // normalise fullwidth ＊／？ → ASCII; wrap a literal '[' as GLOB's [[] (GLOB has no ESCAPE clause)
@@ -557,6 +558,9 @@ fn wildcard_search(
             .then(meaningful_gloss_count(&b.glosses).cmp(&meaningful_gloss_count(&a.glosses)))
             .then(a.lexeme_id.cmp(&b.lexeme_id))
     });
+    if let Some(v) = lang {
+        hits.retain(|h| h.variety == v);
+    }
     hits.truncate(limit);
     Ok(SearchResponse { query: q.to_string(), classified_as: "wildcard".to_string(), results: hits })
 }
@@ -567,13 +571,14 @@ pub fn search(
     q: &str,
     pref_script: Option<&str>,
     scope: Scope,
+    lang: Option<&str>,
     limit: usize,
 ) -> rusqlite::Result<SearchResponse> {
     let q = q.trim();
     // wildcard search (你* / *場 / 機?場): detected before classification since '*'/'?' aren't
     // Han/Kana/Latin. Always returns a plain list (no single headword to unify).
     if is_wildcard(q) {
-        return wildcard_search(conn, q, pref_script, scope, limit);
+        return wildcard_search(conn, q, pref_script, scope, lang, limit);
     }
     let kind = classify(q);
     // best base weight per lexeme + how it matched
@@ -829,6 +834,11 @@ pub fn search(
                 hits.push(hit);
             }
         }
+    }
+    // language filter (中/粵/日 pill): keep only the chosen variety, after ranking so the best hits of
+    // that language lead and the limit yields a full page.
+    if let Some(v) = lang {
+        hits.retain(|h| h.variety == v);
     }
     hits.truncate(limit);
 

@@ -69,6 +69,52 @@ async fn health_ok() {
     assert_eq!(v["status"], "ok");
 }
 
+// /random returns a valid lexeme id that resolves to a real, non-obscure entry.
+#[tokio::test]
+async fn random_resolves() {
+    let (st, v) = get("/random").await;
+    assert_eq!(st, StatusCode::OK);
+    let id = v["lexeme_id"].as_i64().expect("lexeme_id present");
+    assert!(id > 0, "id should be a positive lexeme id");
+    // and it must be a real entry
+    let (est, ev) = get(&format!("/entry/{id}")).await;
+    assert_eq!(est, StatusCode::OK);
+    assert!(ev["headword"].as_str().is_some_and(|h| !h.is_empty()));
+}
+
+// language filter (中/粵/日 pill): lang=zh|yue|ja restricts results to that variety only.
+#[tokio::test]
+async fn lang_filter_restricts_variety() {
+    // 水 has both a zh and a ja lexeme; the filter must return only the chosen one.
+    for lang in ["zh", "ja"] {
+        let v = get(&format!("/search?q=水&lang={lang}")).await.1;
+        let vs = varieties(&v);
+        assert!(!vs.is_empty(), "lang={lang} should still return hits for 水");
+        assert!(vs.iter().all(|x| x == lang), "lang={lang} leaked other varieties: {vs:?}");
+    }
+    // a Cantonese-only glyph, restricted to yue.
+    let vs = varieties(&get("/search?q=冇&lang=yue").await.1);
+    assert!(!vs.is_empty(), "冇 yue should return hits");
+    assert!(vs.iter().all(|x| x == "yue"), "lang=yue leaked: {vs:?}");
+}
+
+// the filter also applies to wildcard search.
+#[tokio::test]
+async fn lang_filter_wildcard() {
+    let v = get("/search?q=中*&lang=zh").await.1;
+    let vs = varieties(&v);
+    assert!(!vs.is_empty(), "中* zh should return hits");
+    assert!(vs.iter().all(|x| x == "zh"), "wildcard lang=zh leaked: {vs:?}");
+}
+
+// an unknown/absent lang value is ignored (returns every language, same as no filter).
+#[tokio::test]
+async fn lang_filter_all_is_noop() {
+    let all = varieties(&get("/search?q=水").await.1);
+    let explicit = varieties(&get("/search?q=水&lang=all").await.1);
+    assert_eq!(all, explicit, "lang=all must behave like no filter");
+}
+
 // 1. exact Han lookup, sensibly ranked, with the right gloss.
 #[tokio::test]
 async fn exact_han() {

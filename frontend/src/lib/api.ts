@@ -48,16 +48,20 @@ async function fetchRetry(input: URL | string, init: RequestInit, label: string)
 // scope forces how a romanized/ambiguous query is read: 'sound' = phonetic only (words pronounced
 // like the query), 'meaning' = English gloss only, 'auto' (default) = blend both.
 export type SearchScope = 'auto' | 'sound' | 'meaning'
+// lang restricts results to one language: 'zh' | 'yue' | 'ja'; 'all' (default) returns every language.
+export type SearchLang = 'all' | 'zh' | 'yue' | 'ja'
 export async function search(
   q: string,
   script?: string,
   scope: SearchScope = 'auto',
+  lang: SearchLang = 'all',
   signal?: AbortSignal,
 ): Promise<SearchResponse> {
   const u = new URL(BASE + '/search', location.origin)
   u.searchParams.set('q', q)
   if (script) u.searchParams.set('script', script)
   if (scope !== 'auto') u.searchParams.set('scope', scope)
+  if (lang !== 'all') u.searchParams.set('lang', lang)
   const r = await fetchRetry(u, { signal }, 'search')
   return r.json()
 }
@@ -80,6 +84,14 @@ export async function suggest(q: string, signal?: AbortSignal): Promise<Suggesti
 export async function entry(id: number, signal?: AbortSignal): Promise<Entry> {
   const r = await fetchRetry(`${BASE}/entry/${id}`, { signal }, 'entry')
   return r.json()
+}
+
+// "Feeling lucky": the id of a random reasonably-common word (variety-balanced server-side). The
+// caller navigates to it through the normal entry route.
+export async function randomEntry(signal?: AbortSignal): Promise<number> {
+  const r = await fetchRetry(`${BASE}/random`, { signal }, 'random')
+  const d = await r.json()
+  return d.lexeme_id as number
 }
 
 export interface InterestingItem {

@@ -33,6 +33,8 @@ pub struct SearchParams {
     /// force how a romanized/ambiguous query is read: "sound" (phonetic only), "meaning" (English
     /// gloss only), or unset/"auto" to blend both
     pub scope: Option<String>,
+    /// restrict results to one language: "zh", "yue" or "ja"; unset/"all" returns every language
+    pub lang: Option<String>,
     /// maximum number of hits (default 50, clamped to 1..=200)
     pub limit: Option<usize>,
 }
@@ -56,7 +58,10 @@ pub async fn search_handler(
     let conn = st.pool.get().map_err(internal)?;
     let limit = p.limit.unwrap_or(50).clamp(1, 200);
     let scope = search::Scope::from_param(p.scope.as_deref());
-    let resp = search::search(&st, &conn, &p.q, p.script.as_deref(), scope, limit).map_err(internal)?;
+    // language filter: only zh/yue/ja restrict; anything else (incl. "all") means no filter
+    let lang = p.lang.as_deref().filter(|l| matches!(*l, "zh" | "yue" | "ja"));
+    let resp =
+        search::search(&st, &conn, &p.q, p.script.as_deref(), scope, lang, limit).map_err(internal)?;
     Ok(Json(resp))
 }
 
@@ -112,6 +117,34 @@ pub async fn entry_handler(
         Some(e) => Ok(Json(e)),
         None => Err((StatusCode::NOT_FOUND, Json(json!({ "error": "not_found" })))),
     }
+}
+
+/// A random reasonably-common word: powers the "feeling lucky" dice. Picks a uniform-random variety
+/// first (so zh's far larger corpus doesn't swamp the mix) then a uniform-random lexeme within it
+/// above a light frequency floor, so you land on a real word rather than an obscure hapax. Returns
+/// just the id; the client navigates through the normal entry route.
+#[utoipa::path(
+    get, path = "/random", tag = "dictionary",
+    responses(
+        (status = 200, description = "A random common lexeme id, e.g. {\"lexeme_id\": 8502}"),
+        (status = 500, description = "Internal error", body = ApiError),
+    )
+)]
+pub async fn random_handler(
+    State(st): State<AppState>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let conn = st.pool.get().map_err(internal)?;
+    let id: i64 = conn
+        .query_row(
+            "SELECT id FROM lexeme WHERE freq >= 0.4 AND variety = ( \
+               SELECT v FROM (SELECT 'zh' AS v UNION ALL SELECT 'yue' UNION ALL SELECT 'ja') \
+               ORDER BY RANDOM() LIMIT 1 \
+             ) ORDER BY RANDOM() LIMIT 1",
+            [],
+            |r| r.get(0),
+        )
+        .map_err(internal)?;
+    Ok(Json(json!({ "lexeme_id": id })))
 }
 
 fn build_entry(

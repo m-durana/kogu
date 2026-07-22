@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { search, entry as fetchEntry, segment as fetchSegment, suggest as fetchSuggest, interesting, type SegmentPart, type Suggestion, type InterestingItem, type SearchScope } from './lib/api'
+  import { search, entry as fetchEntry, randomEntry, segment as fetchSegment, suggest as fetchSuggest, interesting, type SegmentPart, type Suggestion, type InterestingItem, type SearchScope, type SearchLang } from './lib/api'
   import { dialogFocus } from './lib/modal'
   import type { Entry, Hit, CharInfo } from './lib/types'
   import { primaryForm, varietyLabel, regionsOf, shortGloss, cleanGloss, langTag, hanFont, placeholderAt, formatReading } from './lib/display'
@@ -9,8 +9,8 @@
   import LookupPanel from './lib/LookupPanel.svelte'
   import Pad from './lib/Pad.svelte'
   import Ocr from './lib/Ocr.svelte'
-  import { Search, X, Brush, Camera, Bookmark, Clock, Share, Share2, Trash2, ArrowRight, Download, Settings, SquarePlus, ExternalLink, ChevronDown } from '@lucide/svelte'
-  import { settings, setRomanization, setPitchAccent, setAudio } from './lib/settings.svelte'
+  import { Search, X, Brush, Camera, Bookmark, Clock, Share, Share2, Trash2, ArrowRight, Download, Settings, SquarePlus, ExternalLink, ChevronDown, Dices } from '@lucide/svelte'
+  import { settings, setRomanization, setPitchAccent, setAudio, setJaRomaji } from './lib/settings.svelte'
   import { onMount } from 'svelte'
   import { getSaved, getHistory, isSaved, toggleSaved, recordHistory, clearHistory, type SavedItem } from './lib/store'
 
@@ -250,6 +250,8 @@
   // The toggle only appears for romanized queries (Latin letters, no Han/kana) since CJK input is
   // unambiguous; a non-roman query always searches in auto so a stale toggle can't silently filter it.
   let searchScope = $state<SearchScope>('auto')
+  // language filter (中/粵/日 pill): restrict results to one variety. 'all' = every language.
+  let searchLang = $state<SearchLang>('all')
   function isRoman(s: string): boolean {
     const t = s.trim()
     return t.length > 0 && /[a-zA-Z]/.test(t) && !HAN.test(t) && !/[぀-ヿ]/.test(t)
@@ -258,7 +260,15 @@
   function setScope(s: SearchScope) {
     if (s === searchScope) return
     searchScope = s
-    // re-run the current search under the new lens (bypass the "same term" guard in doSearch)
+    rerunSearch()
+  }
+  function setLang(l: SearchLang) {
+    if (l === searchLang) return
+    searchLang = l
+    rerunSearch()
+  }
+  // re-run the current search under the new lens/filter (bypass the "same term" guard in doSearch)
+  function rerunSearch() {
     if (q.trim() && view === 'results') {
       lastSearched = ''
       doSearch(q, 'replace')
@@ -300,7 +310,7 @@
     err = ''
     try {
       // a non-roman query is unambiguous, so it always searches in auto (a stale toggle can't filter it)
-      const res = await search(term, undefined, isRoman(term) ? searchScope : 'auto', ctrl.signal)
+      const res = await search(term, undefined, isRoman(term) ? searchScope : 'auto', searchLang, ctrl.signal)
       results = res.results
       classified = res.classified_as
       searched = true
@@ -459,6 +469,22 @@
       .finally(() => {
         if (q.trim() === term) enriching = false
       })
+  }
+
+  // "Feeling lucky": jump to a random reasonably-common word. Disabled while a roll is in flight so a
+  // double-tap doesn't fire two navigations.
+  let rolling = $state(false)
+  async function feelingLucky() {
+    if (rolling) return
+    rolling = true
+    try {
+      const id = await randomEntry()
+      await openEntry(id, 'push')
+    } catch {
+      err = 'Could not fetch a random word. Try again.'
+    } finally {
+      rolling = false
+    }
   }
 
   async function openEntry(id: number, mode: NavMode = 'push', anchor = '') {
@@ -757,6 +783,10 @@
       />
       {#if q}
         <button type="button" class="clearbtn" aria-label="clear search" onmousedown={(e) => e.preventDefault()} onclick={clearSearch} data-testid="clear"><X size={22} /></button>
+      {:else}
+        <!-- empty field only: a dice that opens a random word. It hides the moment you type (the clear
+             button takes its place), so it never gets in the way of a real search. -->
+        <button type="button" class="luckybtn" class:rolling aria-label="random word" title="I'm feeling lucky" onmousedown={(e) => e.preventDefault()} onclick={feelingLucky} data-testid="lucky"><Dices size={20} /></button>
       {/if}
       <button type="submit" class="searchbtn" aria-label="search" title="search" data-testid="search-go"><ArrowRight size={22} /></button>
       {#if loading}<span class="loadbar" aria-hidden="true"></span>{/if}
@@ -766,16 +796,26 @@
     <input bind:this={fileInput} type="file" accept="image/*" onchange={onPhotoFile} hidden />
   </div>
 
-  {#if romanQuery}
-    <!-- scope lens: a romanized query like "you" is ambiguous between a SOUND and a MEANING. Force one,
-         or leave Auto to blend both. Only shown for romanized input (CJK queries are unambiguous). -->
+  {#if romanQuery || (view === 'results' && q.trim())}
+    <!-- filter row: a language pill (restrict to 中/粵/日), plus - for a romanized query, which is
+         ambiguous between a SOUND and a MEANING - a "read as" lens. CJK queries only get the language
+         pill (they're unambiguous). -->
     <div class="scoperow" data-testid="scope">
-      <span class="scopelbl">read as</span>
-      <div class="seg scopeseg" role="radiogroup" aria-label="how to read this query">
-        <button role="radio" aria-checked={searchScope === 'auto'} class:on={searchScope === 'auto'} onclick={() => setScope('auto')} title="blend sound and meaning">Auto</button>
-        <button role="radio" aria-checked={searchScope === 'sound'} class:on={searchScope === 'sound'} onclick={() => setScope('sound')} title="only words pronounced like this">Sound</button>
-        <button role="radio" aria-checked={searchScope === 'meaning'} class:on={searchScope === 'meaning'} onclick={() => setScope('meaning')} title="only words that mean this in English">Meaning</button>
+      <span class="scopelbl">show</span>
+      <div class="seg langseg" role="radiogroup" aria-label="filter by language">
+        <button role="radio" aria-checked={searchLang === 'all'} class:on={searchLang === 'all'} onclick={() => setLang('all')} title="all languages">All</button>
+        <button role="radio" aria-checked={searchLang === 'zh'} class:on={searchLang === 'zh'} onclick={() => setLang('zh')} title="Mandarin only">中</button>
+        <button role="radio" aria-checked={searchLang === 'yue'} class:on={searchLang === 'yue'} onclick={() => setLang('yue')} title="Cantonese only">粵</button>
+        <button role="radio" aria-checked={searchLang === 'ja'} class:on={searchLang === 'ja'} onclick={() => setLang('ja')} title="Japanese only">日</button>
       </div>
+      {#if romanQuery}
+        <span class="scopelbl scopelbl-2">read as</span>
+        <div class="seg scopeseg" role="radiogroup" aria-label="how to read this query">
+          <button role="radio" aria-checked={searchScope === 'auto'} class:on={searchScope === 'auto'} onclick={() => setScope('auto')} title="blend sound and meaning">Auto</button>
+          <button role="radio" aria-checked={searchScope === 'sound'} class:on={searchScope === 'sound'} onclick={() => setScope('sound')} title="only words pronounced like this">Sound</button>
+          <button role="radio" aria-checked={searchScope === 'meaning'} class:on={searchScope === 'meaning'} onclick={() => setScope('meaning')} title="only words that mean this in English">Meaning</button>
+        </div>
+      {/if}
     </div>
   {/if}
 
@@ -1144,11 +1184,15 @@
   .brand .word { font-family: var(--sans); font-size: 1.15rem; letter-spacing: 0.04em; color: var(--muted); }
 
   /* scope lens row under the search field (romanized queries only) */
-  .scoperow { display: flex; align-items: center; gap: 0.6rem; margin: -0.2rem 0 0.9rem; }
+  .scoperow { display: flex; align-items: center; gap: 0.6rem; margin: -0.2rem 0 0.9rem; flex-wrap: wrap; }
   .scopelbl { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.02em; color: var(--faint); }
+  .scopelbl-2 { margin-left: 0.5rem; }
   /* a slightly more compact take on the settings segmented control */
-  .scopeseg { margin-top: 0; }
-  .scopeseg button { padding: 0.32rem 0.72rem; font-size: 0.72rem; }
+  .scopeseg, .langseg { margin-top: 0; }
+  .scopeseg button, .langseg button { padding: 0.32rem 0.72rem; font-size: 0.72rem; }
+  /* the 中/粵/日 pills use the Han font so the glyphs match the rest of the UI */
+  .langseg button { font-family: var(--han); }
+  .langseg button:first-child { font-family: var(--sans); }
 
   .searchrow { display: flex; align-items: stretch; margin-bottom: 0.7rem; }
   .field { position: relative; flex: 1; min-width: 0; display: flex; }
@@ -1176,6 +1220,17 @@
     border: none; background: transparent; color: var(--muted); padding: 0.4rem; border-radius: var(--r); display: inline-flex;
   }
   .clearbtn:hover { color: var(--hi); background: var(--surface-2); }
+  /* "feeling lucky" dice: shares the clear button's slot (only one shows at a time — clear when there's
+     a query, dice when the field is empty) */
+  .luckybtn {
+    position: absolute; right: 2.9rem; top: 50%; transform: translateY(-50%);
+    border: none; background: transparent; color: var(--faint); padding: 0.4rem; border-radius: var(--r); display: inline-flex;
+    transition: color 0.15s;
+  }
+  .luckybtn:hover { color: var(--hi); background: var(--surface-2); }
+  .luckybtn.rolling { color: var(--accent); animation: luckyroll 0.5s ease; }
+  @keyframes luckyroll { from { transform: translateY(-50%) rotate(0); } to { transform: translateY(-50%) rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .luckybtn.rolling { animation: none; } }
   /* item 1: search button to the right of the X */
   .searchbtn {
     position: absolute; right: 0.4rem; top: 50%; transform: translateY(-50%);
