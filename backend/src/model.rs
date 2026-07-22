@@ -109,6 +109,9 @@ pub struct OriginAccount {
     pub variety: String,
     pub headword: String,
     pub text: String,
+    /// pre-baked English machine translation, when the etymology text is not already English
+    /// (Chinese idiom 出處, native zh/ja Wiktionary 詞源/語源). None when text is English or untranslated.
+    pub text_en: Option<String>,
     /// which script this glyph is, when it diverges across reforms: "traditional" | "simplified".
     /// None when the glyph is the same in every script (山, 古): nothing to disambiguate.
     pub script: Option<String>,

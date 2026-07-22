@@ -94,6 +94,8 @@ export interface OriginAccount {
   variety: Variety
   headword: string
   text: string
+  /** pre-baked English machine translation when the etymology text isn't already English. */
+  text_en?: string | null
   /** "traditional" | "simplified" when the glyph diverges across scripts; null when identical. */
   script?: string | null
   /** clarifying note when the glyph doubles as the simplified form of a distinct character. */

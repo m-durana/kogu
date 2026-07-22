@@ -1370,7 +1370,12 @@ fn origin_account(
     } else {
         (None, None)
     };
-    OriginAccount { variety: variety.to_string(), headword: headword.to_string(), text, script, note }
+    // pre-baked English machine translation of a non-English etymology (Chinese 出處 / native 詞源·語源),
+    // keyed by the etymology text (identical text shares one translation across lexemes).
+    let text_en: Option<String> = conn
+        .query_row("SELECT text_en FROM etymology WHERE text=?1 AND text_en IS NOT NULL LIMIT 1", [&text], |r| r.get(0))
+        .ok();
+    OriginAccount { variety: variety.to_string(), headword: headword.to_string(), text, text_en, script, note }
 }
 
 /// Radical-variant forms → the parent character whose meaning they carry, so 亻/氵/扌… are glossed

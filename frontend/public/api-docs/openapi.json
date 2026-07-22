@@ -1145,6 +1145,13 @@
           "text": {
             "type": "string"
           },
+          "text_en": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "pre-baked English machine translation, when the etymology text is not already English\n(Chinese idiom 出處, native zh/ja Wiktionary 詞源/語源). None when text is English or untranslated."
+          },
           "variety": {
             "type": "string"
           }

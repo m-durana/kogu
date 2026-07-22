@@ -1339,7 +1339,12 @@
             <div class="olang"><span class="ovar" lang={langTag(acc.variety)} style="font-family:{hanFont(acc.variety)}">{varietyLabel(acc.variety)}</span> <span class="ohw" lang={langTag(acc.variety)} style="font-family:{hanFont(acc.variety)}">{#if acc.script}<span class="ftag">{scriptShort(acc.script)}</span>{/if}{acc.headword}</span></div>
           {/if}
           {#if acc.note}<p class="onote">{acc.note}</p>{/if}
-          {@render etyBody(acc.text, acc.variety)}
+          {#if acc.text_en}
+            {@render etyBody(acc.text_en, acc.variety)}
+            <p class="oorig" lang={langTag(acc.variety)} style="font-family:{hanFont(acc.variety)}"><span class="mtnote">machine translation of</span> {acc.text}</p>
+          {:else}
+            {@render etyBody(acc.text, acc.variety)}
+          {/if}
         </div>
       {/each}
     </section>
@@ -1657,6 +1662,9 @@
 
   .origin { margin-top: 0.4rem; }
   .etylist { margin-top: 0.5rem; }
+  /* the original (untranslated) etymology under a machine-translated one, quiet so the English leads */
+  .oorig { margin-top: 0.4rem; font-size: 0.85rem; line-height: 1.6; color: var(--faint); }
+  .mtnote { font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.02em; color: var(--faint); margin-right: 0.35rem; }
   /* "show deeper cognates" toggle + the collapsed deep block (kept at normal brightness) */
   .deeptoggle { display: inline-flex; background: none; border: none; padding: 0.3rem 0; margin-top: 0.6rem; font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.02em; color: var(--muted); }
   .deeptoggle:hover { color: var(--text); background: none; }
