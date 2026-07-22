@@ -10,11 +10,15 @@ Chinese Wiktionary is unified, so zh records match both zh and yue lexemes by fo
 from __future__ import annotations
 
 import json
+import re
 from collections import defaultdict
 
 from ..db import SOURCES_DIR
 
 LANG_TO_VARIETIES = {"zh": ("zh", "yue"), "ja": ("ja",)}
+
+# an English borrowing names its source word; used to route the etymon to the right homograph
+_ENG_BORROW = re.compile(r"\b(?:from|borrowed from|abbreviation of)\s+english\s+([a-z]{3,})", re.I)
 
 
 def ingest(conn) -> None:
@@ -24,6 +28,17 @@ def ingest(conn) -> None:
         "SELECT l.id, l.variety, sf.form FROM surface_form sf JOIN lexeme l ON l.id = sf.lexeme_id"
     ):
         index[(variety, form)].append(lid)
+
+    # first-sense gloss per lexeme, to keep a borrowing's etymon off same-spelling homographs it
+    # doesn't belong to (サイン "signature" must not inherit ムース-style "From English sine").
+    gloss: dict[int, str] = {}
+    for lid, g in conn.execute(
+        "SELECT lexeme_id, group_concat(lower(gloss_en),' ') FROM sense GROUP BY lexeme_id"
+    ):
+        gloss[lid] = g or ""
+
+    def owns(lid: int, word: str) -> bool:
+        return re.search(r"\b" + re.escape(word) + r"\b", gloss.get(lid, "")) is not None
 
     ety_rows: dict[int, tuple[int, str]] = {}  # lexeme_id -> (lexeme_id, text)
     badge_rows: set[tuple[int, str]] = set()
@@ -39,8 +54,15 @@ def ingest(conn) -> None:
             rec = json.loads(raw)
             word, ety, badges = rec.get("word"), rec.get("ety") or "", rec.get("badges") or []
             for variety in varieties:
-                for lid in index.get((variety, word), ()):
-                    if ety and lid not in ety_rows:
+                lids = index.get((variety, word), ())
+                # route an English borrowing to the homograph whose own meaning IS the source word;
+                # if none matches, skip the text rather than smear it onto every same-spelling lexeme.
+                ety_targets = lids
+                m = _ENG_BORROW.search(ety) if ety else None
+                if m and len(lids) > 1:
+                    ety_targets = [lid for lid in lids if owns(lid, m.group(1).lower())]
+                for lid in lids:
+                    if ety and lid in ety_targets and lid not in ety_rows:
                         ety_rows[lid] = (lid, ety)
                     for b in badges:
                         badge_rows.add((lid, b))
