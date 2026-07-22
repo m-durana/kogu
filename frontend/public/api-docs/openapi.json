@@ -4,8 +4,8 @@
     "title": "Kogu API",
     "description": "The JSON API behind [kogu](https://kogu.miro.build), an open-source dictionary of Mandarin (zh), Cantonese (yue) and Japanese (ja). Read-only, no keys, rate-limited.\n\nThe dictionary content is compiled from open datasets (CC-CEDICT, JMdict, Unihan, Wiktionary, Kanjium and others) and is licensed CC BY-SA 4.0; NOTICE.md in the repository has the full list.\n\nLexeme ids are stable within one database build but can change when the data is rebuilt, so treat them as opaque and re-resolve through `/search` when in doubt.",
     "license": {
-      "name": "MIT",
-      "identifier": "MIT"
+      "name": "CC BY-SA 4.0",
+      "url": "https://creativecommons.org/licenses/by-sa/4.0/"
     },
     "version": "0.0.0"
   },
@@ -137,11 +137,8 @@
             "description": "Service is up",
             "content": {
               "application/json": {
-                "schema": {},
-                "example": {
-                  "service": "kogu",
-                  "status": "ok",
-                  "version": "0.0.0"
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
                 }
               }
             }
@@ -201,7 +198,14 @@
         "operationId": "random_handler",
         "responses": {
           "200": {
-            "description": "A random common lexeme id, e.g. {\"lexeme_id\": 8502}"
+            "description": "A random common lexeme id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RandomResponse"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal error",
@@ -971,6 +975,29 @@
           }
         }
       },
+      "HealthResponse": {
+        "type": "object",
+        "description": "Liveness probe body (documentation-only; the handler builds it with `serde_json::json!`).",
+        "required": [
+          "status",
+          "service",
+          "version"
+        ],
+        "properties": {
+          "service": {
+            "type": "string",
+            "example": "kogu"
+          },
+          "status": {
+            "type": "string",
+            "example": "ok"
+          },
+          "version": {
+            "type": "string",
+            "example": "1.0.0"
+          }
+        }
+      },
       "Hit": {
         "type": "object",
         "required": [
@@ -1046,7 +1073,7 @@
         "properties": {
           "category": {
             "type": "string",
-            "description": "machine key for the category: kokuji | false-friend | wasei | loanword | calque"
+            "description": "machine key for the category: kokuji | false-friend | wasei | cantoji | merge | english-false-friend"
           },
           "gloss": {
             "type": [
@@ -1187,6 +1214,20 @@
           },
           "variety": {
             "type": "string"
+          }
+        }
+      },
+      "RandomResponse": {
+        "type": "object",
+        "description": "`/random` body: the id of a random common lexeme, to open through `/entry/{id}`.",
+        "required": [
+          "lexeme_id"
+        ],
+        "properties": {
+          "lexeme_id": {
+            "type": "integer",
+            "format": "int64",
+            "example": 8502
           }
         }
       },

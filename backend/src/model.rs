@@ -27,7 +27,7 @@ pub struct InterestingItem {
     pub gloss: Option<String>,
     /// short human label for what makes this entry interesting ("国字 · a kanji invented in Japan")
     pub why: String,
-    /// machine key for the category: kokuji | false-friend | wasei | loanword | calque
+    /// machine key for the category: kokuji | false-friend | wasei | cantoji | merge | english-false-friend
     pub category: String,
 }
 
@@ -367,6 +367,24 @@ pub struct ApiError {
     /// short machine-readable code ("not_found", "bad_image") or an error message
     #[schema(example = "not_found")]
     pub error: String,
+}
+
+/// Liveness probe body (documentation-only; the handler builds it with `serde_json::json!`).
+#[derive(Serialize, ToSchema)]
+pub struct HealthResponse {
+    #[schema(example = "ok")]
+    pub status: String,
+    #[schema(example = "kogu")]
+    pub service: String,
+    #[schema(example = "1.0.0")]
+    pub version: String,
+}
+
+/// `/random` body: the id of a random common lexeme, to open through `/entry/{id}`.
+#[derive(Serialize, ToSchema)]
+pub struct RandomResponse {
+    #[schema(example = 8502)]
+    pub lexeme_id: i64,
 }
 
 #[derive(Serialize, ToSchema)]

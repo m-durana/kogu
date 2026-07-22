@@ -16,8 +16,7 @@ use crate::state::AppState;
 /// Liveness probe: service name and version.
 #[utoipa::path(
     get, path = "/health", tag = "meta",
-    responses((status = 200, description = "Service is up", body = Value,
-        example = json!({"status": "ok", "service": "kogu", "version": "0.0.0"})))
+    responses((status = 200, description = "Service is up", body = HealthResponse))
 )]
 pub async fn health() -> Json<Value> {
     Json(json!({ "status": "ok", "service": "kogu", "version": env!("CARGO_PKG_VERSION") }))
@@ -126,7 +125,7 @@ pub async fn entry_handler(
 #[utoipa::path(
     get, path = "/random", tag = "dictionary",
     responses(
-        (status = 200, description = "A random common lexeme id, e.g. {\"lexeme_id\": 8502}"),
+        (status = 200, description = "A random common lexeme id", body = RandomResponse),
         (status = 500, description = "Internal error", body = ApiError),
     )
 )]

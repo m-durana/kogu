@@ -23,7 +23,13 @@ treat them as opaque and re-resolve through `/search` when in doubt.";
 
 #[derive(OpenApi)]
 #[openapi(
-    info(title = "Kogu API", description = DESCRIPTION),
+    info(
+        title = "Kogu API",
+        description = DESCRIPTION,
+        // info.license describes the DATA the API returns, not the source code: the compiled
+        // dictionary is CC BY-SA 4.0 (the MIT in Cargo.toml is the code licence). See NOTICE.md.
+        license(name = "CC BY-SA 4.0", url = "https://creativecommons.org/licenses/by-sa/4.0/"),
+    ),
     servers((url = "https://kogu.miro.build/api", description = "nginx adds the /api prefix")),
     paths(
         crate::handlers::health,
@@ -64,6 +70,8 @@ treat them as opaque and re-resolve through `/search` when in doubt.";
         crate::model::SegmentResponse,
         crate::model::SegmentPart,
         crate::model::ApiError,
+        crate::model::HealthResponse,
+        crate::model::RandomResponse,
     )),
     tags(
         (name = "meta", description = "Service metadata"),
