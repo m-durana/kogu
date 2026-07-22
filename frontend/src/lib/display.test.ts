@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, varietyName, headwordGlyphSize, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle, reformLabel, scriptChangeNote, scriptChangeFromForms, scSwitchTarget, glyphWikiUrl, SEARCH_PLACEHOLDERS, placeholderAt, isAlwaysBound, jyutpingToYale, mcSoundLink, regionTags, expandSenses, pitchPattern, moraSplit } from './display'
+import { pickForms, primaryForm, matchLabel, regionsOf, shortGloss, varietyLabel, varietyName, headwordGlyphSize, ocrSelectedText, furiganaTokens, pinyinMarks, cleanIds, cleanGloss, glossLine, briefGloss, isMinorGloss, meaningfulGlossCount, splitRecon, scriptShort, orderBranches, formTag, glossParts, linkifyHan, isBoundForm, describeIds, numWord, etymologyTokens, langTag, hanFont, isSoundLoan, soundLoanSource, soundLoanTitle, reformLabel, scriptChangeNote, scriptChangeFromForms, scSwitchTarget, glyphWikiUrl, SEARCH_PLACEHOLDERS, placeholderAt, isAlwaysBound, jyutpingToYale, mcSoundLink, regionTags, expandSenses, pitchPattern, moraSplit, kanaToRomaji, formatReading } from './display'
 import type { Form, Hit } from './types'
 
 const f = (form: string, script: Form['script'], region: string | null = null, is_primary = false): Form =>
@@ -143,6 +143,44 @@ describe('furiganaTokens - readings become ruby on the kanji', () => {
   })
   it('plain text passes through', () => {
     expect(furiganaTokens('no readings here')).toEqual([{ t: 'text', v: 'no readings here' }])
+  })
+})
+
+describe('kanaToRomaji - modified Hepburn for ja readings', () => {
+  it('basic gojūon (hiragana + katakana)', () => {
+    expect(kanaToRomaji('はいかい')).toBe('haikai')
+    expect(kanaToRomaji('マンション')).toBe('manshon')
+  })
+  it('youon digraphs', () => {
+    expect(kanaToRomaji('きょう')).toBe('kyō')
+    expect(kanaToRomaji('しゃしん')).toBe('shashin')
+  })
+  it('long vowels: chōonpu ー and おう/うう runs', () => {
+    expect(kanaToRomaji('れいちょう')).toBe('reichō')
+    expect(kanaToRomaji('ストーブ')).toBe('sutōbu')
+    expect(kanaToRomaji('とうきょう')).toBe('tōkyō')
+  })
+  it('sokuon geminates the next consonant (っち → tchi)', () => {
+    expect(kanaToRomaji('がっこう')).toBe('gakkō')
+    expect(kanaToRomaji('こっち')).toBe('kotchi')
+  })
+  it('syllabic n, with apostrophe before a vowel', () => {
+    expect(kanaToRomaji('しんぶん')).toBe('shinbun')
+    expect(kanaToRomaji('しんいち')).toBe("shin'ichi")
+  })
+  it('empty / non-kana passes through', () => {
+    expect(kanaToRomaji('')).toBe('')
+  })
+})
+
+describe('formatReading - ja kana vs rōmaji per the setting', () => {
+  it('ja stays kana by default, romanises when jaRomaji is on', () => {
+    expect(formatReading('ja', 'はいかい', false)).toBe('はいかい')
+    expect(formatReading('ja', 'はいかい', false, true)).toBe('haikai')
+  })
+  it('jaRomaji does not touch zh or yue', () => {
+    expect(formatReading('zh', 'ling2 zhang3', false, true)).toBe('líng zhǎng')
+    expect(formatReading('yue', 'taai5', false, true)).toBe('taai5')
   })
 })
 

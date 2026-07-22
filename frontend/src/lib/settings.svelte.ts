@@ -25,6 +25,8 @@ export const settings = $state({
   pitchAccent: loadBool('kogu:pitch', true),
   // play readings aloud (tap the speaker): when off, the speaker buttons are hidden
   audio: loadBool('kogu:audio', true),
+  // show Japanese readings as rōmaji (Hepburn) instead of kana. Default off (kana).
+  jaRomaji: loadBool('kogu:jaromaji', false),
 })
 
 export function setRomanization(v: Romanization): void {
@@ -49,6 +51,15 @@ export function setAudio(v: boolean): void {
   settings.audio = v
   try {
     localStorage.setItem('kogu:audio', v ? '1' : '0')
+  } catch {
+    /* private mode: in-memory only */
+  }
+}
+
+export function setJaRomaji(v: boolean): void {
+  settings.jaRomaji = v
+  try {
+    localStorage.setItem('kogu:jaromaji', v ? '1' : '0')
   } catch {
     /* private mode: in-memory only */
   }

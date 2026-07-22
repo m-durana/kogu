@@ -216,11 +216,102 @@ export function jyutpingToYale(reading: string): string {
 // A reading shown in the user's chosen romanisation, for ANY list row or entry: pinyin tone-marks for
 // 中, jyutping or Yale for 粵 (per the setting), kana left as-is for 日. The single source so result/
 // saved/history rows and the entry's Related/Used-in/Characters rows all match the headword.
-export function formatReading(variety: string, reading: string | null | undefined, yale: boolean): string {
+export function formatReading(
+  variety: string,
+  reading: string | null | undefined,
+  yale: boolean,
+  jaRomaji = false,
+): string {
   if (!reading) return ''
   if (variety === 'zh') return pinyinMarks(reading)
   if (variety === 'yue') return yale ? jyutpingToYale(reading) : reading
-  return reading
+  return jaRomaji ? kanaToRomaji(reading) : reading // ja: kana as-is, or romaji per the setting
+}
+
+// Modified-Hepburn romanisation of a Japanese kana reading (the ja-readings setting). Covers the
+// gojūon, youon (きゃ→kya), sokuon (っ→ geminate / tch), the katakana chōonpu ー, long vowels
+// (おう/おお→ō, うう→ū) and syllabic ん (n, with n' before a vowel or y). Readings are plain kana so
+// this needn't be a general transliterator; unknown / non-kana runs pass through unchanged.
+const HIRA_ROMAJI: Record<string, string> = {
+  あ: 'a', い: 'i', う: 'u', え: 'e', お: 'o',
+  か: 'ka', き: 'ki', く: 'ku', け: 'ke', こ: 'ko',
+  が: 'ga', ぎ: 'gi', ぐ: 'gu', げ: 'ge', ご: 'go',
+  さ: 'sa', し: 'shi', す: 'su', せ: 'se', そ: 'so',
+  ざ: 'za', じ: 'ji', ず: 'zu', ぜ: 'ze', ぞ: 'zo',
+  た: 'ta', ち: 'chi', つ: 'tsu', て: 'te', と: 'to',
+  だ: 'da', ぢ: 'ji', づ: 'zu', で: 'de', ど: 'do',
+  な: 'na', に: 'ni', ぬ: 'nu', ね: 'ne', の: 'no',
+  は: 'ha', ひ: 'hi', ふ: 'fu', へ: 'he', ほ: 'ho',
+  ば: 'ba', び: 'bi', ぶ: 'bu', べ: 'be', ぼ: 'bo',
+  ぱ: 'pa', ぴ: 'pi', ぷ: 'pu', ぺ: 'pe', ぽ: 'po',
+  ま: 'ma', み: 'mi', む: 'mu', め: 'me', も: 'mo',
+  や: 'ya', ゆ: 'yu', よ: 'yo',
+  ら: 'ra', り: 'ri', る: 'ru', れ: 're', ろ: 'ro',
+  わ: 'wa', ゐ: 'wi', ゑ: 'we', を: 'wo', ん: 'n', ゔ: 'vu',
+  きゃ: 'kya', きゅ: 'kyu', きょ: 'kyo',
+  しゃ: 'sha', しゅ: 'shu', しょ: 'sho',
+  ちゃ: 'cha', ちゅ: 'chu', ちょ: 'cho',
+  にゃ: 'nya', にゅ: 'nyu', にょ: 'nyo',
+  ひゃ: 'hya', ひゅ: 'hyu', ひょ: 'hyo',
+  みゃ: 'mya', みゅ: 'myu', みょ: 'myo',
+  りゃ: 'rya', りゅ: 'ryu', りょ: 'ryo',
+  ぎゃ: 'gya', ぎゅ: 'gyu', ぎょ: 'gyo',
+  じゃ: 'ja', じゅ: 'ju', じょ: 'jo',
+  ぢゃ: 'ja', ぢゅ: 'ju', ぢょ: 'jo',
+  びゃ: 'bya', びゅ: 'byu', びょ: 'byo',
+  ぴゃ: 'pya', ぴゅ: 'pyu', ぴょ: 'pyo',
+  // small-vowel combos for katakana loanwords (ファ→ふぁ, ティ→てぃ, チェ→ちぇ …)
+  ふぁ: 'fa', ふぃ: 'fi', ふぇ: 'fe', ふぉ: 'fo',
+  うぃ: 'wi', うぇ: 'we', うぉ: 'wo',
+  ゔぁ: 'va', ゔぃ: 'vi', ゔぇ: 've', ゔぉ: 'vo',
+  てぃ: 'ti', でぃ: 'di', とぅ: 'tu', どぅ: 'du',
+  ちぇ: 'che', じぇ: 'je', しぇ: 'she',
+}
+const VOWEL_MACRON: Record<string, string> = { a: 'ā', i: 'ī', u: 'ū', e: 'ē', o: 'ō' }
+function kataToHira(s: string): string {
+  let out = ''
+  for (const ch of s) {
+    const c = ch.codePointAt(0)!
+    out += c >= 0x30a1 && c <= 0x30f6 ? String.fromCodePoint(c - 0x60) : ch // katakana → hiragana
+  }
+  return out
+}
+export function kanaToRomaji(kana: string): string {
+  if (!kana) return ''
+  const syl: string[] = []
+  let gem = false // pending sokuon (っ): double the next consonant
+  for (const raw of moraSplit(kana)) {
+    if (raw === 'ー' || raw === 'ｰ') {
+      // chōonpu: lengthen the previous syllable's final vowel to a macron
+      const prev = syl[syl.length - 1]
+      const last = prev?.[prev.length - 1]
+      if (prev && VOWEL_MACRON[last]) syl[syl.length - 1] = prev.slice(0, -1) + VOWEL_MACRON[last]
+      continue
+    }
+    if (raw === 'っ' || raw === 'ッ') {
+      gem = true
+      continue
+    }
+    let r = HIRA_ROMAJI[kataToHira(raw)]
+    if (r === undefined) {
+      syl.push(raw) // already romaji / punctuation: pass through
+      gem = false
+      continue
+    }
+    if (gem) {
+      r = (r.startsWith('ch') ? 't' : r[0]) + r // っち → tchi, っか → kka
+      gem = false
+    }
+    syl.push(r)
+  }
+  let out = ''
+  for (let i = 0; i < syl.length; i++) {
+    out += syl[i]
+    // syllabic ん takes an apostrophe before a vowel or y (しんいち → shin'ichi)
+    if (syl[i] === 'n' && /^[aiueoy]/.test(syl[i + 1] ?? '')) out += "'"
+  }
+  // long o/u from vowel runs (おう/おお → ō, うう → ū); Hepburn leaves えい/いい as-is
+  return out.replace(/ou/g, 'ō').replace(/oo/g, 'ō').replace(/uu/g, 'ū')
 }
 
 // recognized script abbreviations (TC = Traditional Chinese, SC = Simplified Chinese), English until

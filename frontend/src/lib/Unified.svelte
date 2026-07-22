@@ -30,7 +30,7 @@
 
   // a reading shown in the user's chosen romanisation (shared with the result/saved lists via display.ts)
   function dispReading(variety: string, reading: string): string {
-    return formatReading(variety, reading, settings.romanization === 'yale')
+    return formatReading(variety, reading, settings.romanization === 'yale', settings.jaRomaji)
   }
   // Japanese pitch-accent contour for a ja kana reading: per-mora cells flagged high/low, with the
   // mora after which the pitch drops (the downstep). Returns null when there's no usable accent, so the
@@ -38,6 +38,7 @@
   type PitchCell = { mora: string; high: boolean; drop: boolean }
   function pitchCells(reading: string, accent: string | null | undefined): PitchCell[] | null {
     if (!settings.pitchAccent) return null // user turned the contour off (Settings)
+    if (settings.jaRomaji) return null // romaji mode: the kana-mora contour doesn't apply; show rōmaji
     const p = pitchPattern(reading, accent)
     if (!p) return null
     const morae = moraSplit(reading)
@@ -1128,7 +1129,7 @@
                        (kana + romaji), clamped to one line with a "+" (and horizontally scrollable). A
                        REAL ja word-row shows its OWN reading instead. The readings are plain text; the
                        single speaker icon plays them: one consistent speech affordance across 中/粵/日. -->
-                  <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe={(v) => (jaReadOver = v)}>{#each jaReadItems as it, i}{@const cells = pitchCells(it.main, it.accent)}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{#if cells}<span class="pitch" title="pitch accent (Kanjium)">{#each cells as c}<span class="pmora" class:phigh={c.high} class:pdrop={c.drop}>{c.mora}</span>{/each}</span>{:else}{it.main}{/if}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{#if speakOn}<button class="spk spk-sm" class:speaking={playingKey === 'ja:' + it.main} onclick={() => speak('ja:' + it.main, it.main, 'ja', undefined, it.accent)} aria-label="listen to {it.main}" title="listen"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{#if jaReadOpen}<Minus size={15} />{:else}<Plus size={15} />{/if}</button>{/if}
+                  <span class="dread dreads" class:clamp={!jaReadOpen} class:faded={jaReadOver && !jaReadOpen} use:readProbe={(v) => (jaReadOver = v)}>{#each jaReadItems as it, i}{@const cells = pitchCells(it.main, it.accent)}{#if i}<span class="rsep">·</span>{/if}<span class="rdg">{#if cells}<span class="pitch" title="pitch accent (Kanjium)">{#each cells as c}<span class="pmora" class:phigh={c.high} class:pdrop={c.drop}>{c.mora}</span>{/each}</span>{:else}{dispReading('ja', it.main)}{/if}{#if it.sub}<span class="rsub">{it.sub}</span>{/if}{#if speakOn}<button class="spk spk-sm" class:speaking={playingKey === 'ja:' + it.main} onclick={() => speak('ja:' + it.main, it.main, 'ja', undefined, it.accent)} aria-label="listen to {it.main}" title="listen"><Volume2 size={13} /></button>{/if}</span>{/each}</span>{#if jaReadOver}<button class="rmore" onclick={toggleJaRead} aria-label={jaReadOpen ? 'show fewer readings' : 'show more readings'}>{#if jaReadOpen}<Minus size={15} />{:else}<Plus size={15} />{/if}</button>{/if}
                 {:else if r.reading}
                   {@const cells = r.variety === 'ja' ? pitchCells(r.reading, r.accent) : null}
                   <!-- plain reading text + speaker, wrapped in .rdg so the speaker sits tight to the

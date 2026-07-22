@@ -855,7 +855,7 @@
       glyph={it.headword}
       font={hanFont(it.variety)}
       lang={langTag(it.variety)}
-      reading={formatReading(it.variety, it.reading, settings.romanization === 'yale')}
+      reading={formatReading(it.variety, it.reading, settings.romanization === 'yale', settings.jaRomaji)}
       tags={/^[\x20-\x7e]+$/.test(it.headword) ? [] : [varietyLabel(it.variety)]}
       gloss={it.gloss ? shortGloss([it.gloss]) : ''}
       onclick={() => (it.query ? doSearch(it.headword) : openEntry(it.id, 'push', it.headword))}
@@ -932,7 +932,7 @@
           font={hanFont(r.variety)}
           lang={langTag(r.variety)}
           alt={d?.alternate?.form ?? null}
-          reading={formatReading(r.variety, r.reading, settings.romanization === 'yale')}
+          reading={formatReading(r.variety, r.reading, settings.romanization === 'yale', settings.jaRomaji)}
           tags={[varietyLabel(r.variety)]}
           regions={regionsOf(r).filter((rg) => rg === 'TW' || rg === 'HK')}
           gloss={shortGloss(r.glosses)}
@@ -981,7 +981,7 @@
               {#each didYouMean as s (s.headword + '|' + s.variety)}
                 <li><button class="dym-item" onclick={() => doSearch(s.headword)}>
                   <span class="dym-hw" lang={langTag(s.variety as Hit['variety'])} style="font-family:{hanFont(s.variety as Hit['variety'])}">{s.headword}</span>
-                  {#if s.reading}<span class="dym-rd">{formatReading(s.variety as Hit['variety'], s.reading, settings.romanization === 'yale')}</span>{/if}
+                  {#if s.reading}<span class="dym-rd">{formatReading(s.variety as Hit['variety'], s.reading, settings.romanization === 'yale', settings.jaRomaji)}</span>{/if}
                   <span class="dym-var">{varietyLabel(s.variety as Hit['variety'])}</span>
                 </button></li>
               {/each}
@@ -1024,7 +1024,7 @@
                   glyph={it.headword}
                   font={hanFont(it.variety)}
                   lang={langTag(it.variety)}
-                  reading={formatReading(it.variety, it.reading, settings.romanization === 'yale')}
+                  reading={formatReading(it.variety, it.reading, settings.romanization === 'yale', settings.jaRomaji)}
                   tags={[varietyLabel(it.variety)]}
                   gloss={it.gloss ? shortGloss([it.gloss]) : ''}
                   note={it.why}
@@ -1092,6 +1092,14 @@
           <div class="seg">
             <button class:on={settings.romanization === 'jyutping'} onclick={() => setRomanization('jyutping')}>Jyutping</button>
             <button class:on={settings.romanization === 'yale'} onclick={() => setRomanization('yale')}>Yale</button>
+          </div>
+        </div>
+        <div class="setrow">
+          <span class="setlabel">Japanese readings</span>
+          <span class="setsub">Show readings as kana (はいかい) or rōmaji (haikai).</span>
+          <div class="seg">
+            <button class:on={!settings.jaRomaji} onclick={() => setJaRomaji(false)}>Kana</button>
+            <button class:on={settings.jaRomaji} onclick={() => setJaRomaji(true)}>Rōmaji</button>
           </div>
         </div>
         <div class="setrow">
