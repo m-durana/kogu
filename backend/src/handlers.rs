@@ -118,6 +118,45 @@ pub async fn entry_handler(
     }
 }
 
+#[derive(Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct EntriesParams {
+    /// comma-separated lexeme ids (negative = character entry), e.g. `ids=8502,93996,-27700`.
+    /// Up to 50 per call; unknown ids are skipped, so the array can be shorter than the request.
+    pub ids: String,
+}
+
+/// Fetch several entries in one request (a batch of `/entry/{id}`), for tools that resolve many words
+/// at once without hammering the per-item endpoint. Order follows the request; unknown ids are omitted.
+#[utoipa::path(
+    get, path = "/entries", tag = "dictionary",
+    params(EntriesParams),
+    responses(
+        (status = 200, description = "The found entries, in request order", body = [Entry]),
+        (status = 400, description = "No valid ids given", body = ApiError),
+        (status = 500, description = "Internal error", body = ApiError),
+    )
+)]
+pub async fn entries_handler(
+    State(st): State<AppState>,
+    Query(p): Query<EntriesParams>,
+) -> Result<Json<Vec<Entry>>, (StatusCode, Json<Value>)> {
+    let mut ids: Vec<i64> = p.ids.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+    ids.dedup();
+    ids.truncate(50);
+    if ids.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(json!({ "error": "no valid ids" }))));
+    }
+    let conn = st.pool.get().map_err(internal)?;
+    let mut out = Vec::with_capacity(ids.len());
+    for id in ids {
+        if let Some(e) = build_entry(&st, &conn, id).map_err(internal)? {
+            out.push(e);
+        }
+    }
+    Ok(Json(out))
+}
+
 /// A random reasonably-common word: powers the "feeling lucky" dice. Picks a uniform-random variety
 /// first (so zh's far larger corpus doesn't swamp the mix) then a uniform-random lexeme within it
 /// above a light frequency floor, so you land on a real word rather than an obscure hapax. Returns

@@ -82,6 +82,22 @@ async fn random_resolves() {
     assert!(ev["headword"].as_str().is_some_and(|h| !h.is_empty()));
 }
 
+// /entries: batch lookup returns the found entries in request order; unknown ids are skipped.
+#[tokio::test]
+async fn entries_batch_lookup() {
+    // resolve two real ids via search, then fetch both plus a bogus id in one call
+    let a = search("水").await["results"][0]["lexeme_id"].as_i64().unwrap();
+    let b = search("山").await["results"][0]["lexeme_id"].as_i64().unwrap();
+    let (st, v) = get(&format!("/entries?ids={a},{b},999999999")).await;
+    assert_eq!(st, StatusCode::OK);
+    let arr = v.as_array().expect("array of entries");
+    assert_eq!(arr.len(), 2, "the bogus id should be skipped");
+    assert_eq!(arr[0]["lexeme_id"], a);
+    assert_eq!(arr[1]["lexeme_id"], b);
+    // no valid ids -> 400
+    assert_eq!(get("/entries?ids=abc").await.0, StatusCode::BAD_REQUEST);
+}
+
 // language filter (中/粵/日 pill): lang=zh|yue|ja restricts results to that variety only.
 #[tokio::test]
 async fn lang_filter_restricts_variety() {

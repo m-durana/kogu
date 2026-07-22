@@ -28,6 +28,7 @@ fn all_public_paths_documented() {
         "/search",
         "/suggest",
         "/entry/{id}",
+        "/entries",
         "/random",
         "/why/{id}",
         "/translate",

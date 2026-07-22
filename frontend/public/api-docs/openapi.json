@@ -71,6 +71,61 @@
         }
       }
     },
+    "/entries": {
+      "get": {
+        "tags": [
+          "dictionary"
+        ],
+        "summary": "Fetch several entries in one request (a batch of `/entry/{id}`), for tools that resolve many words\nat once without hammering the per-item endpoint. Order follows the request; unknown ids are omitted.",
+        "operationId": "entries_handler",
+        "parameters": [
+          {
+            "name": "ids",
+            "in": "query",
+            "description": "comma-separated lexeme ids (negative = character entry), e.g. `ids=8502,93996,-27700`.\nUp to 50 per call; unknown ids are skipped, so the array can be shorter than the request.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The found entries, in request order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Entry"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No valid ids given",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/entry/{id}": {
       "get": {
         "tags": [

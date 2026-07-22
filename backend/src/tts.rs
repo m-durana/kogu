@@ -44,12 +44,12 @@ pub async fn clip_handler(
     let base = match variety.as_str() {
         "zh" => ZH_BASE,
         "yue" => YUE_BASE,
-        _ => return (StatusCode::NOT_FOUND, "unknown variety").into_response(),
+        _ => return (StatusCode::NOT_FOUND, axum::Json(serde_json::json!({"error": "unknown variety"}))).into_response(),
     };
     // strict whitelist: "<letters><tone-digit>.mp3" (zh tones 1-5, yue 1-6): nothing else.
     let syl = match file.strip_suffix(".mp3") {
         Some(s) => s,
-        None => return (StatusCode::BAD_REQUEST, "bad clip").into_response(),
+        None => return (StatusCode::BAD_REQUEST, axum::Json(serde_json::json!({"error": "bad clip"}))).into_response(),
     };
     let ok = !syl.is_empty()
         && syl.len() <= 12
@@ -59,7 +59,7 @@ pub async fn clip_handler(
             .all(|(i, c)| if i + 1 == syl.len() { c.is_ascii_digit() } else { c.is_ascii_lowercase() })
         && syl.chars().next().is_some_and(|c| c.is_ascii_lowercase());
     if !ok {
-        return (StatusCode::BAD_REQUEST, "bad clip").into_response();
+        return (StatusCode::BAD_REQUEST, axum::Json(serde_json::json!({"error": "bad clip"}))).into_response();
     }
 
     let key = format!("{variety}/{syl}");
@@ -72,7 +72,7 @@ pub async fn clip_handler(
             let ctype = resp.headers().get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
             // jyutping.org answers a missing syllable with a 200 text/html SPA page: accept only audio.
             if !ctype.starts_with("audio") {
-                return (StatusCode::NOT_FOUND, "no clip").into_response();
+                return (StatusCode::NOT_FOUND, axum::Json(serde_json::json!({"error": "no clip"}))).into_response();
             }
             match resp.bytes().await {
                 Ok(b) => {
@@ -87,11 +87,11 @@ pub async fn clip_handler(
                     }
                     clip_ok(bytes)
                 }
-                Err(_) => (StatusCode::BAD_GATEWAY, "clip read failed").into_response(),
+                Err(_) => (StatusCode::BAD_GATEWAY, axum::Json(serde_json::json!({"error": "clip read failed"}))).into_response(),
             }
         }
-        Ok(_) => (StatusCode::NOT_FOUND, "no clip").into_response(),
-        Err(_) => (StatusCode::BAD_GATEWAY, "clip upstream failed").into_response(),
+        Ok(_) => (StatusCode::NOT_FOUND, axum::Json(serde_json::json!({"error": "no clip"}))).into_response(),
+        Err(_) => (StatusCode::BAD_GATEWAY, axum::Json(serde_json::json!({"error": "clip upstream failed"}))).into_response(),
     }
 }
 
@@ -167,7 +167,7 @@ pub async fn ja_handler(State(st): State<AppState>, Query(p): Query<TtsParams>) 
     let kana = p.kana.trim();
     // guard: a single reading is short; reject anything that isn't (keeps the synth fed clean input)
     if kana.is_empty() || kana.chars().count() > 32 {
-        return (StatusCode::BAD_REQUEST, "bad kana").into_response();
+        return (StatusCode::BAD_REQUEST, axum::Json(serde_json::json!({"error": "bad kana"}))).into_response();
     }
     let mut query: Vec<(&str, &str)> = vec![("kana", kana)];
     if let Some(a) = p.accent.as_deref().filter(|a| !a.is_empty()) {
@@ -185,8 +185,8 @@ pub async fn ja_handler(State(st): State<AppState>, Query(p): Query<TtsParams>) 
                 bytes,
             )
                 .into_response(),
-            Err(_) => (StatusCode::BAD_GATEWAY, "synth read failed").into_response(),
+            Err(_) => (StatusCode::BAD_GATEWAY, axum::Json(serde_json::json!({"error": "synth read failed"}))).into_response(),
         },
-        _ => (StatusCode::BAD_GATEWAY, "synth unavailable").into_response(),
+        _ => (StatusCode::BAD_GATEWAY, axum::Json(serde_json::json!({"error": "synth unavailable"}))).into_response(),
     }
 }
