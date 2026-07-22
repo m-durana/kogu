@@ -2294,6 +2294,24 @@ async fn interesting_no_loanword_or_calque() {
     }
 }
 
+// I6d. kokuji/cantoji must not surface real historical Chinese characters. Each of these leaked before
+//      (they carry a 廣韻 MC reading, so they're attested Chinese, not Japan/Cantonese-only inventions).
+#[tokio::test]
+async fn interesting_kokuji_cantoji_exclude_chinese_chars() {
+    use std::collections::HashSet;
+    let leaked: HashSet<&str> =
+        ["姫", "靫", "狢", "筬", "鰄", "瑒", "磾", "滀", "蓨", "嫳", "嗢", "腷", "匼"].into_iter().collect();
+    for _ in 0..15 {
+        for it in interesting(30).await["items"].as_array().unwrap() {
+            let cat = it["category"].as_str().unwrap();
+            if cat == "kokuji" || cat == "cantoji" {
+                let hw = it["headword"].as_str().unwrap();
+                assert!(!leaked.contains(hw), "{cat} leaked a historical Chinese char: {hw}");
+            }
+        }
+    }
+}
+
 // I7. the showcase is not Japan-only: the China/Cantonese-side categories (粵字, simplified merges)
 //     surface across calls, and Chinese-variety items appear - a guard against the old ja-heavy mix.
 #[tokio::test]

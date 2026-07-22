@@ -818,6 +818,7 @@ fn cantoji_items(conn: &rusqlite::Connection, want: usize) -> rusqlite::Result<V
            (SELECT gloss_en FROM sense WHERE lexeme_id=l.id ORDER BY sense_order LIMIT 1) \
          FROM lexeme l WHERE l.variety='yue' AND length(l.headword)=1 AND l.freq IS NOT NULL \
            AND NOT EXISTS (SELECT 1 FROM lexeme o WHERE o.variety IN ('zh','ja') AND o.headword=l.headword) \
+           AND unicode(l.headword) NOT IN (SELECT cp FROM char_reading WHERE kind IN ('mc','onyomi','kunyomi')) \
          ORDER BY RANDOM() LIMIT 40",
         want,
         "cantoji",
@@ -882,11 +883,15 @@ fn build_interesting(conn: &rusqlite::Connection, limit: usize) -> rusqlite::Res
             conn,
             // true kokuji: a Japanese single-char word, kunyomi-bearing, with NO Chinese/Cantonese
             // lexeme of the same glyph AND no identity edge to an orthodox parent (which would make it
-            // a mere shinjitai/simplified FORM of an existing character - 徴←徵, 厨←廚 - not invented in Japan).
+            // a mere shinjitai/simplified FORM of an existing character - 徴←徵, 厨←廚 - not invented in Japan)
+            // AND no Middle Chinese (廣韻) reading and no on'yomi - either means it's an attested
+            // historical Chinese character read into Japanese (靫/狢/筬/鰄 have MC; 姫 has an on'yomi),
+            // whereas a true kokuji is native and kun-only (峠/凪/榊).
             "SELECT l.id,l.variety,l.headword,l.reading, \
                (SELECT gloss_en FROM sense WHERE lexeme_id=l.id ORDER BY sense_order LIMIT 1) \
              FROM lexeme l WHERE l.variety='ja' AND length(l.headword)=1 \
                AND unicode(l.headword) IN (SELECT cp FROM char_reading WHERE kind='kunyomi') \
+               AND unicode(l.headword) NOT IN (SELECT cp FROM char_reading WHERE kind IN ('mc','onyomi')) \
                AND NOT EXISTS (SELECT 1 FROM lexeme z WHERE z.variety IN ('zh','yue') AND z.headword=l.headword) \
                AND NOT EXISTS (SELECT 1 FROM glyph_edge WHERE child_cp=unicode(l.headword) \
                  AND type IN ('simplification','shinjitai','z-variant')) \
