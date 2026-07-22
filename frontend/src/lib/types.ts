@@ -131,6 +131,8 @@ export interface Entry {
   forms: Form[]
   readings: ReadingKV[]
   senses: Sense[]
+  /** character-dictionary meanings the word entry lacks (荷 word "cargo" + char "lotus"); null when covered. */
+  char_extra?: string | null
   characters: CharInfo[]
   same_form: LinkLite[]
   translations: LinkLite[]
