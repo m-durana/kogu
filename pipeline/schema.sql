@@ -51,6 +51,17 @@ CREATE TABLE character (
 );
 CREATE INDEX idx_character_orthodox ON character(is_orthodox);
 
+-- Ancient-script forms available per character (oracle/bronze/seal), filled by scripts/fetch_ancient.py
+-- from Wikimedia Commons (public domain). The image file lives on the scratch volume; this just records
+-- which periods exist so the entry response can list them. `char_ancient_seen` marks scanned codepoints.
+CREATE TABLE IF NOT EXISTS char_ancient (
+    cp     INTEGER NOT NULL,
+    period TEXT    NOT NULL,   -- 'oracle' | 'bronze' | 'seal'
+    src    TEXT    NOT NULL,   -- 'commons' | 'evobc'
+    PRIMARY KEY (cp, period)
+);
+CREATE TABLE IF NOT EXISTS char_ancient_seen (cp INTEGER PRIMARY KEY);
+
 -- Per-character readings across varieties.
 CREATE TABLE char_reading (
     cp      INTEGER NOT NULL REFERENCES character(cp),

@@ -44,6 +44,7 @@ treat them as opaque and re-resolve through `/search` when in doubt.";
         crate::handlers::segment_handler,
         crate::tts::ja_handler,
         crate::tts::clip_handler,
+        crate::handlers::ancient_handler,
     ),
     components(schemas(
         crate::model::SearchResponse,
@@ -78,6 +79,7 @@ treat them as opaque and re-resolve through `/search` when in doubt.";
         (name = "meta", description = "Service metadata"),
         (name = "dictionary", description = "Lookups over the kogu database"),
         (name = "audio", description = "Pronunciation audio"),
+        (name = "media", description = "Character images"),
     )
 )]
 pub struct ApiDoc;

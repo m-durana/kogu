@@ -16,6 +16,51 @@
     }
   ],
   "paths": {
+    "/ancient/{cp}/{period}": {
+      "get": {
+        "tags": [
+          "media"
+        ],
+        "summary": "Serve the public-domain ancient-script SVG (甲骨文/金文/篆書) for a character, fetched from\nWikimedia Commons by `scripts/fetch_ancient.py` and stored on the scratch volume. The entry\nresponse's `characters[].ancient` lists which periods exist; this streams one. Immutable, so it\ncaches hard. Numeric codepoint + whitelisted period only (no path traversal).",
+        "operationId": "ancient_handler",
+        "parameters": [
+          {
+            "name": "cp",
+            "in": "path",
+            "description": "Unicode codepoint of the character",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "period",
+            "in": "path",
+            "description": "oracle | bronze | seal",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SVG image (image/svg+xml)"
+          },
+          "404": {
+            "description": "No such form",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/clip/{variety}/{file}": {
       "get": {
         "tags": [
@@ -641,9 +686,17 @@
           "is_radical",
           "used_count",
           "used_by_variety",
-          "freq_by_variety"
+          "freq_by_variety",
+          "ancient"
         ],
         "properties": {
+          "ancient": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "ancient-script periods with an image for this glyph, in chronological order, a subset of\n[\"oracle\",\"bronze\",\"seal\"] (甲骨文/金文/篆書). Each is served at /ancient/{cp}/{period}. Empty\nwhen Commons has no ancient form for the character."
+          },
           "ch": {
             "type": "string"
           },
@@ -1545,6 +1598,10 @@
     {
       "name": "audio",
       "description": "Pronunciation audio"
+    },
+    {
+      "name": "media",
+      "description": "Character images"
     }
   ]
 }

@@ -41,6 +41,7 @@ pub fn build_router(st: AppState) -> Router {
         .route("/mt", get(mt::translate_handler))
         .route("/tts/ja", get(tts::ja_handler))
         .route("/clip/:variety/:file", get(tts::clip_handler))
+        .route("/ancient/:cp/:period", get(handlers::ancient_handler))
         .route("/why/:id", get(handlers::why_handler))
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())

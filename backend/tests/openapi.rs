@@ -36,6 +36,7 @@ fn all_public_paths_documented() {
         "/interesting",
         "/tts/ja",
         "/clip/{variety}/{file}",
+        "/ancient/{cp}/{period}",
     ];
     for p in expected {
         assert!(paths.contains_key(p), "path {p} missing from the spec");

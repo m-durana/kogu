@@ -2,7 +2,8 @@
 
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{header, StatusCode},
+    response::IntoResponse,
     Json,
 };
 use serde::Deserialize;
@@ -183,6 +184,39 @@ pub async fn random_handler(
         )
         .map_err(internal)?;
     Ok(Json(json!({ "lexeme_id": id })))
+}
+
+/// Serve the public-domain ancient-script SVG (甲骨文/金文/篆書) for a character, fetched from
+/// Wikimedia Commons by `scripts/fetch_ancient.py` and stored on the scratch volume. The entry
+/// response's `characters[].ancient` lists which periods exist; this streams one. Immutable, so it
+/// caches hard. Numeric codepoint + whitelisted period only (no path traversal).
+#[utoipa::path(
+    get, path = "/ancient/{cp}/{period}", tag = "media",
+    params(
+        ("cp" = i64, Path, description = "Unicode codepoint of the character"),
+        ("period" = String, Path, description = "oracle | bronze | seal"),
+    ),
+    responses(
+        (status = 200, description = "SVG image (image/svg+xml)"),
+        (status = 404, description = "No such form", body = ApiError),
+    )
+)]
+pub async fn ancient_handler(Path((cp, period)): Path<(i64, String)>) -> impl IntoResponse {
+    if cp <= 0 || !matches!(period.as_str(), "oracle" | "bronze" | "seal") {
+        return (StatusCode::NOT_FOUND, Json(json!({ "error": "not_found" }))).into_response();
+    }
+    let path = format!("/mnt/HC_Volume_102319212/kogu/ancient/{cp}/{period}.svg");
+    match tokio::fs::read(&path).await {
+        Ok(bytes) => (
+            [
+                (header::CONTENT_TYPE, "image/svg+xml"),
+                (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
+            ],
+            bytes,
+        )
+            .into_response(),
+        Err(_) => (StatusCode::NOT_FOUND, Json(json!({ "error": "not_found" }))).into_response(),
+    }
 }
 
 fn build_entry(
@@ -1737,6 +1771,14 @@ fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<C
     let parent = radical_parent(ch);
     let standalone = if is_radical && parent != ch { Some(parent.to_string()) } else { None };
 
+    // ancient-script forms (甲骨文→金文→篆書) that Commons has an image for; served at /ancient/{cp}/…
+    let mut anc_stmt = conn.prepare(
+        "SELECT period FROM char_ancient WHERE cp=?1 ORDER BY \
+         CASE period WHEN 'oracle' THEN 0 WHEN 'bronze' THEN 1 WHEN 'seal' THEN 2 ELSE 3 END",
+    )?;
+    let ancient: Vec<String> =
+        anc_stmt.query_map([ch as i64], |r| r.get(0))?.collect::<Result<_, _>>()?;
+
     Ok(Some(CharInfo {
         ch: ch.to_string(),
         is_orthodox,
@@ -1757,6 +1799,7 @@ fn char_info(conn: &rusqlite::Connection, ch: char) -> rusqlite::Result<Option<C
         used_count,
         used_by_variety,
         freq_by_variety,
+        ancient,
     }))
 }
 

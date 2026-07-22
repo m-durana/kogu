@@ -88,6 +88,8 @@ export interface CharInfo {
   used_by_variety: Record<string, number>
   /** per-language MAX word-frequency (0..1) among words containing this glyph; drives the rarity tag */
   freq_by_variety: Record<string, number>
+  /** ancient-script periods with an image (subset of oracle/bronze/seal), served at /api/ancient/{cp}/{period} */
+  ancient: string[]
 }
 
 export interface OriginAccount {

@@ -460,6 +460,9 @@
   const roleParts = $derived(single && headChar ? headChar.components : [])
   const hasRoles = $derived(roleParts.some((c) => c.role === 'semantic' || c.role === 'phonetic'))
 
+  // ancient-script evolution strip (甲骨文 → 金文 → 篆書 → today), from public-domain Commons SVGs
+  const PERIOD_LABEL: Record<string, string> = { oracle: '甲骨文', bronze: '金文', seal: '篆書' }
+
   // phonological "why": the character's own Middle Chinese reading(s) and, for the phonetic component,
   // whether they shared a sound back then (銅 duwng from 同 duwng). Baxter transcription of the 廣韻.
   const charMc = $derived((headChar?.readings ?? []).filter((r) => r.kind === 'mc').map((r) => r.value))
@@ -1228,6 +1231,24 @@
           {#if headChar.standalone}<span class="dim">· written</span> <button class="part" onclick={() => onsearch(headChar.standalone!)} title="look up {headChar.standalone}"><Glyph ch={headChar.standalone} font="var(--han)" /></button> <span class="dim">when standalone</span>{/if}
         </p>
       {/if}
+      {#if headChar.ancient?.length}
+        {@const cp = headChar.ch.codePointAt(0)}
+        <!-- how the glyph looked in the oldest scripts: oracle-bone, bronze, seal, then today. The
+             images are public-domain (Richard Sears / Wikimedia Commons); black ink, inverted to the
+             app's light-on-dark. -->
+        <div class="strip substep ancient">
+          <div class="sublabel">ancient forms</div>
+          <ol class="ancrow">
+            {#each headChar.ancient as period}
+              <li class="anc">
+                <img class="ancimg" src="/api/ancient/{cp}/{period}" alt="{PERIOD_LABEL[period] ?? period} form of {headChar.ch}" loading="lazy" />
+                <span class="anclbl">{PERIOD_LABEL[period] ?? period}</span>
+              </li>
+            {/each}
+            <li class="anc ancnow"><span class="ancglyph"><Glyph ch={headChar.ch} font="var(--han)" /></span><span class="anclbl">今</span></li>
+          </ol>
+        </div>
+      {/if}
       {#if headChar.script_forms}
         <div class="strip substep">
           <div class="sublabel">across scripts</div>
@@ -1528,6 +1549,14 @@
   .substep { margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--border); }
   /* the first sub-section (the forms strip) follows the heading directly: no rule above it */
   .substep:first-of-type { margin-top: 0.6rem; padding-top: 0; border-top: none; }
+  /* ancient-form evolution strip: oracle-bone → bronze → seal → today */
+  .ancrow { display: flex; align-items: flex-end; gap: 1rem; list-style: none; margin: 0.2rem 0 0; padding: 0; flex-wrap: wrap; }
+  .anc { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
+  .ancimg { width: 3rem; height: 3rem; object-fit: contain; filter: invert(1); opacity: 0.92; }
+  .ancglyph { display: inline-flex; align-items: center; justify-content: center; width: 3rem; height: 3rem; font-size: 2.3rem; color: var(--text); }
+  .anclbl { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.02em; color: var(--faint); }
+  .anc:not(:first-child)::before { content: '→'; position: absolute; margin-left: -0.85rem; margin-top: 1.1rem; color: var(--faint); font-size: 0.8rem; }
+  .anc { position: relative; }
   .note { color: var(--faint); font-size: 0.82rem; margin: 0.5rem 0 0; line-height: 1.5; display: flex; align-items: flex-start; gap: 0.4rem; }
   /* align the warning triangle with the cap of the first text line (was sitting a touch low) */
   .note :global(svg) { flex: none; margin-top: 0.02rem; color: var(--muted); }

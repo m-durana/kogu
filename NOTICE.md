@@ -90,6 +90,13 @@ Cross-language concept links from shared synsets: Japanese Wordnet (`omw-ja`, CC
 Chinese Open Wordnet (`omw-cmn`, wordnet licence). Each wordnet carries its own licence; see
 <https://omwn.org/> and <https://github.com/goodmami/wn>.
 
+### Ancient character forms (oracle / bronze / seal)
+The character-evolution strip shows 甲骨文 / 金文 / 篆書 images fetched by `scripts/fetch_ancient.py`
+from the **"Ancient Chinese characters"** project on Wikimedia Commons, which mirrors **Richard Sears
+(hanziyuan.net)**'s forms. The image files are **public domain / CC0** (Commons category `PD ancient
+script`); the underlying data derives from the Academia Sinica database and Sears's work.
+<https://commons.wikimedia.org/wiki/Commons:Ancient_Chinese_characters>
+
 The GPLv2 classical datasets sometimes bundled with CJKV tooling (Guangyun, Shuowen Jiezi,
 Kangxi via cjkvi-dict) are **not** ingested; Middle Chinese data comes from the CC0 tshet-uinh
 corpus instead.

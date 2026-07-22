@@ -192,6 +192,10 @@ pub struct CharInfo {
     /// The real rarity signal that drives the "rarely used"/"uncommon" tag; a count mislabels common
     /// particles (嗎/也). Absent variety = no scored word in that language.
     pub freq_by_variety: std::collections::HashMap<String, f64>,
+    /// ancient-script periods with an image for this glyph, in chronological order, a subset of
+    /// ["oracle","bronze","seal"] (甲骨文/金文/篆書). Each is served at /ancient/{cp}/{period}. Empty
+    /// when Commons has no ancient form for the character.
+    pub ancient: Vec<String>,
 }
 
 #[derive(Serialize, ToSchema)]
