@@ -1001,7 +1001,7 @@
         </p>
         <p class="intropos"><span class="intropron">/ko.gu/</span> <span class="introtag">noun</span></p>
 
-        <p class="introgloss">A dictionary for the living Han script: one word across <b>中文</b> (Mandarin), <b>粵語</b> (Cantonese), and <b>日本語</b> (Japanese) at once, and why the written forms differ.</p>
+        <p class="introgloss">A dictionary for the Han script: one word across <b>中文</b> (Mandarin), <b>粵語</b> (Cantonese), and <b>日本語</b> (Japanese) at once, and why the written forms differ.</p>
 
         <h2 class="abh">On each page</h2>
         <dl class="ablist">
